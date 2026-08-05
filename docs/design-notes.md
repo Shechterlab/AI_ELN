@@ -150,6 +150,11 @@ retrieving and citing experiment records that already contain one. That's
 the point of keeping the metadata structured instead of leaving everything
 as free text.
 
+Stage 1 already works today, for free: [`AGENTS.md`](../AGENTS.md) gives any
+AI coding agent (Claude Code, Codex CLI, Gemini CLI) the lab's own rules the
+moment it's pointed at this folder — no server, no vendor lock-in. See
+[`ai-agents.md`](ai-agents.md) for why that file is structured the way it is.
+
 ## What this repo builds now vs. later
 
 **Now (Phase 1 — this repo):** `scripts/new_experiment.py`, the four

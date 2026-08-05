@@ -91,10 +91,14 @@ plain Markdown, readable and greppable with or without Obsidian installed.
 Structured, linked Markdown notes are far easier for an AI assistant to
 search and reason over than PDFs or LabArchives pages — every answer can
 cite the actual experiment ID it came from instead of being a free-floating
-guess. This repo doesn't wire that up yet; it's the intended next layer once
-enough real experiments exist to search over. See
+guess. Any AI coding agent (Claude Code, Codex CLI, Gemini CLI) already
+works here today with zero setup beyond running it inside this folder —
+[`AGENTS.md`](AGENTS.md) is what tells it the lab's own rules (cite
+experiment IDs, never fabricate a result, always create experiments through
+the script). See [`docs/ai-agents.md`](docs/ai-agents.md) for how that's
+meant to stay vendor-agnostic, and
 ["AI integration, in stages"](docs/design-notes.md#ai-integration-in-stages)
-for the plan.
+for the fuller plan (semantic search, project synthesis, ingestion).
 
 ## Read more
 
@@ -103,5 +107,8 @@ for the plan.
 - [`docs/design-notes.md`](docs/design-notes.md) — the full reasoning: why not
   just adopt an existing Obsidian ELN plugin, how LabArchives fits in, the
   collaboration model, and the staged AI plan
+- [`docs/ai-agents.md`](docs/ai-agents.md) / [`AGENTS.md`](AGENTS.md) — how any
+  AI coding agent (Claude Code, Codex CLI, Gemini CLI) gets lab-specific
+  context without locking the lab into one vendor
 - [`reference/jacob-original-system/`](reference/jacob-original-system/) —
   the spreadsheet, R Markdown, and slide deck this whole system is built from
