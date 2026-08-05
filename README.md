@@ -1,57 +1,107 @@
-# DataManagement
-Some of my acquired systems for improving data management and record-keeping.
+# AI_ELN — Shechter Lab Research Record System
 
-## It all runs because of the "mkdir" line of code
+A laboratory notebook built on plain Markdown files instead of a proprietary
+ELN — designed to be searchable, linkable, AI-readable, and roughly zero
+effort to start using today.
 
-Adapt the following code to create a multi-level document for each new experiment:
+> **Status:** pilot. This is a small, working scaffold, not a finished
+> product — the point is to try it on real experiments and let it evolve.
 
-mkdir -p ~/OneDrive/RothJacob_PhDFiles/1-Projects/2-Experiments/JSRe0002-T_Cellular-WB_NB02-153_Chromatin analysis of PRMTi cells: titration of KCl for fractionation validation/{1-notes,2-data_raw,3-code,4-data_processed,5-figures}
+## Why
 
-If you utilize an InventorySheet, all you need to do is enter the data for each new experiment into the excel file and the mkdir code is concatenated:
-1. copy this code from the excel file
-2. hit "cmd+spacebar" on mac to open the terminal
-3. paste and execute code
-4. observe new folder set for your experiment
+Our site-licensed LabArchives works, but its editing interface makes people
+avoid writing things down until they have to. Meanwhile, one lab member
+(Jacob Roth) independently built a better information architecture using
+nothing but a spreadsheet and a folder-naming convention: every experiment
+gets a stable ID, a standard folder layout, and a short results summary
+written while it's still fresh. That system already works. What it's
+missing is a format that's easy to search, link, and hand to an AI
+assistant — which is exactly what plain Markdown + a little YAML metadata
+is good at.
 
-## My unique ID system
-Ubiquitiously throughout all of my projects, I include these unique naming schemas:
+So this repo doesn't replace Jacob's system or LabArchives. It translates
+the former into Markdown, and demotes the latter to an archival snapshot
+instead of the daily working tool. The full reasoning is in
+[`docs/design-notes.md`](docs/design-notes.md); the original spreadsheet and
+folder system it's based on is preserved in
+[`reference/jacob-original-system/`](reference/jacob-original-system/).
 
-### JSRe####-T_
-- “Top” folder for any given experiment; useful to search “JSRe####-T” for any experiment to immediately navigate to an experiment of interest
-  - I also utilize "cmd+up/down arrow" and "option+up/down arrow" all the time to navigate my folders (on a mac). I hate clicking with a mouse.
+## Try it in one command
 
-### JSRe####-R_
-- “Results” file; useful to search “JSRe####-R” for any experiment to immediately navigate to the summary results of an exp. This is so helpful when talking to my PI and I want to quickly pull up the digital results of an experiment to show him in lab meeting.
-- Once I have found that file, the filename will also have the NB##-### reference number to immediately navigate to the relevant physical NB page. If coded into Rmd file, better to have png vs pdf images for viewing, but I recommend saving results in both formats.
+```bash
+python3 scripts/new_experiment.py \
+  --initials ABC \
+  --researcher "Your Name" \
+  --title "Whatever you're doing today"
+```
 
-### JSRg###
-- Any gel I have ever run has a unique ID; agarose gels, western blots, Coomassie stains, everything. Massively simplifies keeping track of western blots as well. Save this name with every image for the named gel (along with the experiment number)
+That's it — no account, no plugin, no setup beyond Python 3, which is
+already on every lab computer. It creates a new experiment ID, the standard
+folder set, a Markdown note with the metadata already filled in, and an
+entry in the lab-wide inventory. See
+[`docs/getting-started.md`](docs/getting-started.md) for the full walkthrough,
+or look at `Experiments/DSLe0001_.../1-notes/DSLe0001.md` to see exactly
+what that command produces.
 
-### JSRp###
-- Any plasmid I’ve ever collected/created
+## Layout
 
-### JSRi###
-- Any oligo I order: primers/DNA sequences, RNA, etc
+```
+AI_ELN/
+├── Experiments/    one folder per experiment, auto-generated
+├── Projects/       rolled-up current state of each research thread
+├── Protocols/      living, versioned protocol documents
+├── Samples/        plasmids, oligos, antibodies, cell lines, ...
+├── Inventory/       experiments.csv — the lab-wide index
+├── templates/       the four Markdown+YAML templates everything above is built from
+├── scripts/         new_experiment.py — the one command that creates an experiment
+├── docs/            getting-started, the data-management SOP, and the design rationale
+└── reference/        Jacob's original spreadsheet/folder system, kept for provenance
+```
 
-### JSRs####
-- Immunofluorescence slides; I add more meta data to each slide, with with this code + an excel file with the metadata, a singular annotation on a slide is sufficient to communicate all data (so long as excel file is updated and you use an EtOH-resistant marking device)
+Each experiment folder looks like this — same shape every time:
 
-### JSRe####-I_
-- How I start the name of any “Illustrator” file that is processing data for an experiment; useful to search “JSRe####-I” for any experiment to immediately navigate to an adobe illustrator data sheet of interest.
+```
+DSLe0123_short-slug-of-the-title/
+├── 1-notes/           the experiment's Markdown note
+├── 2-data_raw/        untouched instrument output (or a pointer to where it lives)
+├── 3-code/            analysis
+├── 4-data_processed/  derived data
+└── 5-figures/         exported panels
+```
 
-### JSRe####-G_
-- Graphpad Prism file for a project
+## What's required, what's not
 
+**Required:** an experiment ID, project, researcher, date, objective, where
+the raw data lives, which protocol version was used, results, and an
+interpretation. That's it — see [`docs/SOP.md`](docs/SOP.md).
 
+**Everything else is yours to decide:** prose style, how many images you
+embed, whether you analyze in R, Python, or Prism, how you take daily notes.
+The system standardizes the interface between experiments, not how anyone
+thinks or writes.
 
-## Protocol naming
-All protocol saved file names start with a “P_” call so that I can search for them quickly. In my protocols folder I keep a living/continuously updated protocol (save archived versions with appended date for when they were archived into an "archive" subfolder). Then when I use it for an experiment I copy it into the “1-notes” folder for that particular experiment folder, renaming it “JSRe####-P_...” to enable me to rapidly search and pull up the protocol for that exp, as well as see any new changes I made to the protocol for that experiment.
+## Optional: open it in Obsidian
 
+If you want backlinks, a graph view, and Dataview tables, open this repo
+folder as an Obsidian vault. Nothing here depends on it — every file is
+plain Markdown, readable and greppable with or without Obsidian installed.
 
-## Using the rmd file to create a living document of what you're currently working on
-After growing incredibly tired of wasting time formatting and reformating a powerpoint for each check-in meeting with my PI, I created a living rmd document that includes my main objectives at that time, highlights what we need to talk about at the meeting, and dynamically updates with the experiments I want to focus on for a particular meeting based on the status in my InventorySheet.
+## Where AI fits in
 
-See the example in this repo, with a template InventorySheet and example results image.
+Structured, linked Markdown notes are far easier for an AI assistant to
+search and reason over than PDFs or LabArchives pages — every answer can
+cite the actual experiment ID it came from instead of being a free-floating
+guess. This repo doesn't wire that up yet; it's the intended next layer once
+enough real experiments exist to search over. See
+["AI integration, in stages"](docs/design-notes.md#ai-integration-in-stages)
+for the plan.
 
-Since the rmd only knits together the experiments that I want to include, I can retain all entries for historical experiments and always explore the rmd file for the most recent developments for each experiment.
+## Read more
 
+- [`docs/getting-started.md`](docs/getting-started.md) — how to actually use this, today
+- [`docs/SOP.md`](docs/SOP.md) — the two-page data-management SOP
+- [`docs/design-notes.md`](docs/design-notes.md) — the full reasoning: why not
+  just adopt an existing Obsidian ELN plugin, how LabArchives fits in, the
+  collaboration model, and the staged AI plan
+- [`reference/jacob-original-system/`](reference/jacob-original-system/) —
+  the spreadsheet, R Markdown, and slide deck this whole system is built from

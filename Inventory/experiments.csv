@@ -1,0 +1,2 @@
+experiment_id,title,researcher,project,experiment_type,protocol,samples,notebook_reference,date,status,folder
+DSLe0001,SNRPB chromatin retention after PRMT5 inhibition,David Shechter,PRMT5-ChromatinRelease,WesternBlot,P_WesternBlot_v2026-07-16,,NB01-001,2026-08-05,active,Experiments/DSLe0001_SNRPB-chromatin-retention-after-PRMT5-inhibition
