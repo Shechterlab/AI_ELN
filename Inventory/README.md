@@ -11,3 +11,7 @@ bookkeeping — the experiment note is the source of truth; this CSV is a
 derived view for sorting, filtering, and building dashboards (a
 "which experiments are still active" report, an Rmd check-in doc like
 Jacob's, a Dataview table in Obsidian, etc.).
+
+Like `Experiments/`, this folder may live somewhere other than inside this
+repo — see `--root`/`AI_ELN_ROOT` in
+[`docs/getting-started.md`](../docs/getting-started.md#0-where-does-your-data-actually-live).

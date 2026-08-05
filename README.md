@@ -43,6 +43,13 @@ entry in the lab-wide inventory. See
 or look at `Experiments/DSLe0001_.../1-notes/DSLe0001.md` to see exactly
 what that command produces.
 
+By default it all lands inside this repo. Point it at wherever the lab
+actually keeps its shared files instead — a synced OneDrive/Dropbox folder,
+a shared Obsidian vault, a server mount — with `--root PATH` or an
+`AI_ELN_ROOT` environment variable. Which storage to use is the lab's call,
+not this tool's; every interface (this script, an AI agent, Obsidian, a
+future website) just needs to agree on the one location.
+
 ## Layout
 
 ```

@@ -1,6 +1,9 @@
 # Experiments
 
 One subfolder per experiment, created by `scripts/new_experiment.py` — never by hand.
+(This folder may just be a local, in-repo example — a real lab deployment can
+point the script at shared storage instead; see `--root`/`AI_ELN_ROOT` in
+[`docs/getting-started.md`](../docs/getting-started.md#0-where-does-your-data-actually-live).)
 
 ```
 {ID}_{slug-of-title}/

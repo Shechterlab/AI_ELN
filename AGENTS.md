@@ -23,6 +23,14 @@ this repo) is the compliance/archival record.
 - `templates/` — the four note schemas everything above is built from
 - `scripts/new_experiment.py` — the only way experiments get created
 
+**Where the data actually lives is configurable.** `Experiments/` and
+`Inventory/` above may not be inside this checkout at all — a lab can point
+`new_experiment.py` at whatever shared storage it has already chosen (a
+synced OneDrive/Dropbox folder, a shared Obsidian vault, a server mount)
+via `--root PATH` or the `AI_ELN_ROOT` environment variable. Check for
+`AI_ELN_ROOT` in the environment before assuming paths are repo-relative;
+if it's set, that's where `Experiments/` and `Inventory/` are, not here.
+
 ## Ground rules
 
 1. **Cite experiment IDs.** Any factual claim about a lab result must name
@@ -38,8 +46,12 @@ this repo) is the compliance/archival record.
    `Projects/`, `Protocols/`, `Samples/` rather than guessing from one file.
 4. **Never create an experiment folder by hand.** Always run
    `python3 scripts/new_experiment.py ...` — it assigns the ID and appends
-   the inventory row atomically. A hand-made folder will collide with a
-   future ID or be invisible to the inventory.
+   the inventory row. A hand-made folder won't show up in the inventory
+   and risks reusing an ID. IDs are assigned per researcher initials by
+   scanning the inventory for the highest existing number, which is fine
+   in practice — it's not lock-protected against two people creating an
+   experiment with the same initials in the same instant, which shouldn't
+   come up in normal use.
 5. **Treat `2-data_raw/` as immutable.** Don't edit, rename, or "clean up"
    raw data. Processed/derived data goes in `4-data_processed/`.
 6. **Match the existing schema.** New notes should follow `templates/*.md`.

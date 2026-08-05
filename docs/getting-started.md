@@ -3,6 +3,23 @@
 No Obsidian, no plugins, no account required to try this. All you need is a
 text editor and Python 3 (already on your Mac/lab computer).
 
+## 0. Where does your data actually live?
+
+Up to the lab — the tooling doesn't care. By default, everything lands
+inside this repo, which is fine for trying it out. For real use, most labs
+will want experiments landing in whatever shared storage they've already
+settled on (a synced OneDrive/Dropbox folder, a shared Obsidian vault, a
+server mount). Point the script at it once:
+
+```bash
+export AI_ELN_ROOT="$HOME/OneDrive/ShechterLab/ELN"
+```
+
+(add that line to your `.zshrc`/`.bashrc` so it's permanent), or pass
+`--root PATH` on any individual call. Whichever storage the lab elects,
+this is the only thing every tool — this script, an AI agent, Obsidian, a
+future website — needs to agree on.
+
 ## 1. Create your first experiment (one command)
 
 ```bash
