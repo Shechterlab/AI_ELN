@@ -1,27 +1,26 @@
 # Experiments
 
-One subfolder per experiment, created by `scripts/new_experiment.py` — never by hand.
-(This folder may just be a local, in-repo example — a real lab deployment can
-point the script at shared storage instead; see `--root`/`AI_ELN_ROOT` in
-[`docs/getting-started.md`](../docs/getting-started.md#0-where-does-your-data-actually-live).)
+One subfolder per experiment, created by `launchers/New Experiment` or
+`python3 scripts/eln.py new experiment`, never by hand.
 
 ```
 {ID}_{slug-of-title}/
-├── 1-notes/          the experiment .md note lives here
-├── 2-data_raw/       untouched instrument/acquisition output
-├── 3-code/           analysis scripts
-├── 4-data_processed/ derived data (quantification tables, etc.)
-└── 5-figures/        exported panels
+├── 1-notes/          {ID}.md, plus {ID}_P_{Protocol}_{date}.md snapshots the tool copies in
+├── 2-data_raw/       untouched instrument output, original filenames, never edited
+├── 3-code/           {ID}_analysis.R and the like
+├── 4-data_processed/ {ID}_quantification.csv and the like
+└── 5-figures/        {ID}_R_{what-it-shows}_{YYYYMMDD}.png is the results summary
 ```
 
 `DSLe0001_SNRPB-chromatin-retention-after-PRMT5-inhibition/` is a worked
-example — it's exactly what running the command in
-[`docs/getting-started.md`](../docs/getting-started.md) produces. Open its
-note to see the shape; it's intentionally still blank so it doesn't get
-mistaken for real data.
+example: exactly what the tool produces, unedited apart from one sentence
+in Objective saying so. It is not real data.
 
-Large raw data (microscopy, sequencing, mass spec) should not actually live
-in `2-data_raw/` inside this repo — see
-[`docs/design-notes.md`](../docs/design-notes.md#data-lives-outside-the-notebook)
-for where it belongs instead. `2-data_raw/` can hold a pointer file if the
-data lives elsewhere.
+Large raw data (microscopy, sequencing, mass spec) does not live in
+`2-data_raw/` here; it stays on institutional storage and the note's
+`raw_data_path` says where. A short `README.md` in `2-data_raw/` pointing
+there is welcome.
+
+This folder may live somewhere other than inside this repo; see
+`--root` / `init` in [`docs/getting-started.md`](../docs/getting-started.md) §8.
+Rules: [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md).

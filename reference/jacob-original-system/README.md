@@ -31,4 +31,4 @@ Kept here unmodified, for provenance:
 
 The prefix (`JSR`) is just Jacob's initials — the new system in this repo keeps
 the same shape but makes the prefix per-researcher (see `../../templates` and
-`../../scripts/new_experiment.py`).
+`../../scripts/eln.py`).

@@ -1,18 +1,22 @@
 # Protocols
 
-One living Markdown file per protocol, from [`templates/protocol.md`](../templates/protocol.md).
-Keep exactly one current copy per protocol — edit it in place as it improves,
-and use the **Change log** section to track what changed and when, rather
-than keeping multiple dated files around.
+One living Markdown file per protocol, `P_{Name}.md`, from
+[`templates/protocol.md`](../templates/protocol.md). Create one with
+`launchers/New Protocol` or `python3 scripts/eln.py new protocol --name WesternBlot`.
 
-When an experiment actually uses a protocol, copy the version you followed
-into that experiment's `1-notes/` folder and record any on-the-day
-deviations in the experiment note, not here. This file stays the
-"living/current best version"; the copy in the experiment folder is a
-snapshot of what was actually done.
+**Edit it in place** as the procedure improves. When the *procedure*
+changes, bump the `version` date in the header and add a line to the
+**Change log**. Don't keep dated copies here; version history is git's job
+and the experiment snapshots' job:
 
-To start one:
+When an experiment is created with `--protocol P_WesternBlot`, the tool
+copies this file into that experiment's `1-notes/` as
+`{EXPERIMENT_ID}_P_WesternBlot_{YYYYMMDD}.md`. That copy is the permanent
+record of what was actually followed on the day. Deviations on the day go
+in the experiment note's **Deviations from protocol** section, never here.
 
-```bash
-cp templates/protocol.md Protocols/P_WesternBlot.md
-```
+`status: archived` marks a protocol the lab no longer uses. `supersedes:`
+names an older protocol this one replaces, if any.
+
+Which experiments used a protocol: `Inventory/protocols.csv`, or
+`python3 scripts/eln.py find --protocol P_WesternBlot`.

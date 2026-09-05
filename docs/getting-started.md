@@ -1,101 +1,156 @@
 # Getting started
 
-No Obsidian, no plugins, no account required to try this. All you need is a
-text editor and Python 3 (already on your Mac/lab computer).
+Ten minutes, once. After that, creating an experiment is one double-click.
 
-## 0. Where does your data actually live?
+## 0. Get the folder onto your computer
 
-Up to the lab — the tooling doesn't care. By default, everything lands
-inside this repo, which is fine for trying it out. For real use, most labs
-will want experiments landing in whatever shared storage they've already
-settled on (a synced OneDrive/Dropbox folder, a shared Obsidian vault, a
-server mount). Point the script at it once:
+Either the lab's shared copy (a synced OneDrive/Dropbox folder — ask
+whoever set it up), or download this repository (green **Code** button →
+**Download ZIP**, then unzip), or `git clone` it if you know what that is.
+Wherever it ends up, that folder is your notebook. Don't move things inside
+it around by hand.
 
-```bash
-export AI_ELN_ROOT="$HOME/OneDrive/ShechterLab/ELN"
+## 1. One-time setup for your computer
+
+**Mac.** Python is already there. The first time you double-click a
+launcher, macOS will say it's from an unidentified developer: right-click
+(or Control-click) the launcher, choose **Open**, then **Open** again. Only
+needed once per launcher. If a window offers to install *command line
+developer tools*, click **Install**; that is Python being set up and takes
+a few minutes.
+
+**Windows.** Install Python once from <https://www.python.org/downloads/>
+and tick **Add python.exe to PATH** on the first screen of the installer.
+Then the launchers just work.
+
+**Linux.** Python 3 is already there; run the `.command` files from a
+terminal or use the commands in §6.
+
+## 2. Create your first experiment
+
+Double-click **`launchers/New Experiment`**. A small window asks:
+
+```
+First time here. Two quick questions (asked only once):
+  Your initials (2-4 letters, e.g. JSR): JSR
+  Your full name: Jacob Roth
+
+New experiment. Only the title is required; press Enter to skip the rest.
+  Title (what are you doing?): SNRPB chromatin retention after PRMT5 inhibition
+  Project ID (existing: PRMT5-ChromatinRelease):
+  Experiment type (e.g. WesternBlot, IF, qPCR): WesternBlot
+  Protocol ID (existing: P_WesternBlot): P_WesternBlot
+  Sample IDs, comma-separated (existing: DSLp0001):
+  Physical notebook page (e.g. NB02-153): NB02-153
+  Flag this for the next lab meeting? (y/N): y
+
+Created JSRe0001
+  Experiments/JSRe0001_SNRPB-chromatin-retention-after-PRMT5-inhibition/1-notes/JSRe0001.md
+  Experiments/JSRe0001_.../1-notes/JSRe0001_P_WesternBlot_20260901.md  (snapshot of P_WesternBlot)
+Opening the note. Fill in the Objective; everything else can wait.
 ```
 
-(add that line to your `.zshrc`/`.bashrc` so it's permanent), or pass
-`--root PATH` on any individual call. Whichever storage the lab elects,
-this is the only thing every tool — this script, an AI agent, Obsidian, a
-future website — needs to agree on.
+You now have a folder with the five standard subfolders, a note with the
+header filled in, a copy of the protocol as it was on that day, and a row
+in `Inventory/experiments.csv`. The note opens in whatever your computer
+uses for `.md` files.
 
-## 1. Create your first experiment (one command)
+## 3. Write in the note
 
-```bash
-python3 scripts/new_experiment.py \
-  --initials ABC \
-  --researcher "Your Name" \
-  --title "Whatever you're doing today"
+It's a text file. The header at the top is filled in for you; the parts
+that matter are the `##` section titles — keep them so every experiment in
+the lab reads the same way. Between them, write however you like.
+
+Fill in **Objective** before you start. Fill in **Results**,
+**Interpretation**, and **Decision** when you have them. Leave a section as
+"None" rather than deleting it.
+
+Any editor works, including TextEdit (Mac: Format → Make Plain Text once)
+or Notepad. A free Markdown editor such as VS Code or Typora shows
+headings and images nicely; none of them is required.
+
+## 4. Put files where they belong, named with the ID
+
+```
+2-data_raw/         instrument output. Original filenames. Never edit, never rename.
+3-code/             JSRe0001_analysis.R
+4-data_processed/   JSRe0001_quantification.csv
+5-figures/          JSRe0001_R_fractionation-KCl_20260904.png   <- the results figure (R = "results")
 ```
 
-That's the only required information. Everything else — project, protocol,
-notebook reference, samples — is optional and can be added later, either as
-flags or by editing the note directly:
+Start every file you make with the experiment ID; join words with hyphens.
+That single habit is what makes "find me the blot from that experiment" a
+one-second search forever. Full grammar: [`CONVENTIONS.md`](CONVENTIONS.md) §3.
 
-```bash
-python3 scripts/new_experiment.py \
-  --initials ABC \
-  --researcher "Your Name" \
-  --project PRMT5-ChromatinRelease \
-  --type WesternBlot \
-  --title "SNRPB chromatin retention after PRMT5 inhibition" \
-  --protocol P_WesternBlot_v2026-07-16 \
-  --notebook NB01-001
+If the raw data is too large to keep here (microscopy, sequencing), leave
+it on the institutional storage and put its location in the note's
+`raw_data_path` line.
+
+## 5. The other launchers
+
+| Launcher | What it does |
+|---|---|
+| **New Sample** | A record for a plasmid, oligo, antibody, cell line, mouse line, peptide, protein prep, slide, or gel. Gets an ID like `JSRp0001`. Reuse that ID in every experiment that touches it. |
+| **New Protocol** | One living file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
+| **New Project** | The rolled-up state of a research thread; conclusions cite experiment IDs. |
+| **Check Everything** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
+| **Lab Meeting Brief** | Writes `Inventory/meeting-brief_<date>.md` from everything tagged `meeting`, plus the active-experiments table. |
+| **Export for ChatGPT** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
+
+## 6. When an experiment is finished
+
+Open the note and change two header lines:
+
+```yaml
+status: complete
+date_completed: 2026-09-12
 ```
 
-Run it with `--dry-run` first if you just want to see what it would do.
+Make sure Results and Interpretation are written and `raw_data_path` is
+somewhere backed up. Then run **Check Everything**; it will tell you if
+you forgot one of those.
 
-This gives you:
+## 7. The same thing from a terminal
 
-- a new experiment ID (`ABCe0001`, incrementing automatically per researcher)
-- a standard folder: `Experiments/ABCe0001_.../{1-notes,2-data_raw,3-code,4-data_processed,5-figures}`
-- a Markdown note in `1-notes/` with the metadata already filled in
-- a new row in `Inventory/experiments.csv`
-
-Open the note, fill in the **Objective**, and go run your experiment.
-Everything else in the note can wait until you have something to write.
-
-## 2. Write in it like a notebook, not a form
-
-The note is plain Markdown. Write in whatever style you naturally would.
-The only parts that matter for search and AI later are:
-
-- the YAML block at the top (already filled in for you)
-- the section headers (`## Results`, `## Interpretation`, etc. — keep them
-  so notes stay comparable across the lab)
-
-Everything else — how much detail, how many images, bullet points vs.
-prose — is up to you.
-
-## 3. Optional: open it in Obsidian
-
-If you want backlinks, graph view, and Dataview tables, open this whole
-repo folder as an Obsidian vault (`File → Open folder as vault`). Nothing
-here requires it — it's just a nicer window onto the same Markdown files.
-Nothing about the files changes if you never install Obsidian at all.
-
-## 4. When you're done with an experiment
-
-Update `status: complete` and `date_completed` in the note's YAML, fill in
-**Results**, **Interpretation**, and **Decision**, and link the figures in
-`5-figures/`. That note is now the thing you pull up in lab meeting —
-same instinct as Jacob's `JSRe####-R` files, just one note instead of two.
-
-## 5. Starting a project, protocol, or sample record
-
-These aren't auto-numbered like experiments, so just copy the template:
+The launchers just run one script. If you prefer typing:
 
 ```bash
-cp templates/project.md  Projects/PRMT5-ChromatinRelease.md
-cp templates/protocol.md Protocols/P_WesternBlot.md
-cp templates/sample.md   Samples/JSRp072.md
+python3 scripts/eln.py init                                # initials, name, where files live
+python3 scripts/eln.py new experiment --title "..."         # add --project, --protocol, --samples, --tags meeting ...
+python3 scripts/eln.py new experiment --interactive         # the same questions the launcher asks
+python3 scripts/eln.py new sample --type plasmid --title "..."
+python3 scripts/eln.py validate                            # --strict makes warnings fail too
+python3 scripts/eln.py find --status active --project PRMT5-ChromatinRelease
+python3 scripts/eln.py report
+python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
 ```
 
-## Where to read more
+## 8. Where the files live
 
-- [`docs/SOP.md`](SOP.md) — the short version of what's required vs. optional
-- [`docs/design-notes.md`](design-notes.md) — why the system is shaped this way,
-  how it fits with LabArchives, and where AI comes in
-- [`reference/jacob-original-system/`](../reference/jacob-original-system/) —
-  the original spreadsheet/folder system this is all based on
+By default, inside this folder — simplest, and fine for a synced OneDrive
+or Dropbox copy of the whole folder. If the lab keeps notes somewhere else
+(a server mount, a different shared folder), tell the tool once:
+
+```bash
+python3 scripts/eln.py init --root "/path/to/ShechterLab/ELN"
+```
+
+That writes `~/.ai_eln.json`; the launchers and every command use it from
+then on. `AI_ELN_ROOT` in the environment or `--root` on a command
+overrides it for one shell or one call.
+
+## If something doesn't work
+
+- **Mac: "cannot be opened because it is from an unidentified developer"** —
+  right-click → Open (once per launcher).
+- **Mac: double-clicking opens the file in a text editor instead of running
+  it** — the executable bit was lost in a download or sync. In Terminal:
+  `chmod +x` followed by a space, then drag the `launchers` folder into the
+  window, add `/*.command`, press Enter. Or use the commands in §7.
+- **Windows: a window flashes and closes, or "python is not recognized"** —
+  install Python (§1) with *Add to PATH* ticked, then try again.
+- **"No initials"** — run `launchers/New Experiment` once (it asks), or
+  `python3 scripts/eln.py init`.
+- **Check Everything says a folder "does not match {ID}_{slug}"** — someone
+  made or renamed an experiment folder by hand. Rename it to
+  `{ID}_{words-with-hyphens}` or recreate it with the launcher.

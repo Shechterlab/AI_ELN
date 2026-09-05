@@ -1,20 +1,26 @@
 # Samples
 
-One Markdown file per durable physical/biological asset — plasmid, oligo,
-antibody, cell line, mouse line, peptide, protein prep — from
-[`templates/sample.md`](../templates/sample.md). `sample_type` in the front
-matter says which kind it is; there's one template because the questions
-that matter (what is it, where did it come from, how do we know it works,
-what should a labmate know before using it) are the same for all of them.
+One Markdown file per durable physical or biological thing, from
+[`templates/sample.md`](../templates/sample.md): plasmid, oligo, antibody,
+cell line, mouse line, peptide, protein prep, slide, or gel. Create one with
+`launchers/New Sample` or `python3 scripts/eln.py new sample --type plasmid --title "..."`.
 
-This is what replaces Jacob's `JSRg###` / `JSRp###` / `JSRi###` / `JSRs####`
-ID prefixes — same idea (one stable ID per physical thing, reused in every
-experiment note that touches it), just without a different prefix per
-sample type. Pick whatever ID scheme the lab likes; it just needs to be
-stable and unique.
+The ID is your initials + a type letter + four digits, assigned by the tool:
 
-To start one:
+| letter | type | letter | type |
+|---|---|---|---|
+| `p` | plasmid | `m` | mouse-line |
+| `i` | oligo | `t` | peptide |
+| `a` | antibody | `r` | protein-prep |
+| `c` | cell-line | `s` | slide |
+| `g` | gel / blot | | |
 
-```bash
-cp templates/sample.md Samples/JSRp072.md
-```
+This is Jacob's `JSRg###` / `JSRp###` / `JSRi###` / `JSRs####` idea with a
+uniform width and a few more letters. The point is the same: one stable ID
+per physical thing, reused in every experiment note (`samples: [JSRp0001]`)
+and every filename that touches it.
+
+Which experiments used a sample is **derived**, so it can't go stale: see
+`Inventory/samples.csv` or `python3 scripts/eln.py find --sample JSRp0001`.
+
+`status`: `active` | `depleted` | `retired`.

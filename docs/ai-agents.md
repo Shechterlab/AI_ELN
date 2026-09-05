@@ -1,79 +1,120 @@
-# Getting AI features without picking a vendor
+# Using AI with the record — without API keys
 
-The question this answers: how does anyone in the lab actually get AI to
-read and reason over this vault, in a way that still works in two years if
-today's favorite tool isn't the one everyone's using?
+Everything here runs on subscriptions the lab already has (the ChatGPT
+site license, or a Claude plan). There is no server, no vector database,
+no key to manage, and nothing to install beyond the AI tool itself.
 
-## The trick: the vault is already agent-ready
+## Why the record is already AI-ready
 
-Claude Code, OpenAI's Codex CLI, and Gemini CLI are all, underneath,
-the same shape of tool: a coding agent that can read, search, and edit
-local files, and run shell commands, in whatever directory you point it
-at. None of them need this repo to expose an API, a database, or a plugin.
-Any of them already works today if a lab member with a license for one
-just runs it from inside this folder (or their synced copy of it) and
-asks a question. That's the entire integration — there is no server to
-stand up.
+Three properties do all the work:
 
-What's missing without any extra work is *context*: an agent dropped into
-an unfamiliar folder doesn't know that experiments are created with
-`scripts/new_experiment.py` and never by hand, or that every scientific
-claim needs to cite an experiment ID. That's what `AGENTS.md` fixes.
+1. **Plain Markdown with a fixed header.** Any model can read it cold. The
+   header (`project`, `researcher`, `status`, `samples`, `tags`) lets a
+   tool filter before it reads, so a vault of hundreds of notes is still
+   navigable.
+2. **Fixed section titles.** `## Results` means the same thing in every
+   note, so "draft a results paragraph from JSRe0002" is unambiguous.
+3. **IDs everywhere.** Every claim the AI makes can name the experiment it
+   came from. That is the rule this whole setup exists to enforce: AI is
+   for retrieving and citing what the record already says, never for
+   producing a conclusion.
 
-## One instructions file, not three
+## Path A — ChatGPT, copy and paste
 
-`AGENTS.md` is an emerging convention — the same idea as a `README` but
-addressed to an agent instead of a human, and it's already read by
-multiple tools (OpenAI's Codex CLI, Cursor, and others). Claude Code
-separately auto-loads a file named `CLAUDE.md`; Gemini CLI auto-loads
-`GEMINI.md`. Rather than maintaining three copies of the same rules and
-watching them drift, this repo keeps one canonical file —
-[`../AGENTS.md`](../AGENTS.md) — and `CLAUDE.md` / `GEMINI.md` are a few
-lines each, pointing back at it plus any tool-specific tool-name notes
-(Claude Code's `Grep`/`Glob`/`Bash` vs. Gemini CLI's `search_file_content`/
-`run_shell_command`).
+Works with the ChatGPT web app or desktop app, no terminal.
 
-That's the future-proofing: the investment is in one plain-text file
-describing the lab's own rules (cite experiment IDs, never fabricate
-results, don't touch raw data, always use the script to create
-experiments), not in a config format that only works with whichever tool
-is popular this year. If a fourth agent shows up next year and adopts
-`AGENTS.md` too — increasingly likely, since that's the direction this is
-converging — it gets the same grounding for free. If it doesn't, adding
-a three-line pointer file for it costs nothing.
+1. **Once:** open ChatGPT, create a Project called something like
+   *Shechter Lab ELN*, and paste the contents of
+   [`ai-briefing.md`](ai-briefing.md) into its instructions. (If your
+   ChatGPT doesn't offer Projects or the instruction box is too small,
+   paste the briefing as the first message of each new chat instead.)
+2. **Each time:** double-click `launchers/Export for ChatGPT`. It asks for
+   a project ID or experiment IDs (Enter = all active experiments) and
+   writes one file, `Inventory/export_<scope>_<date>.md`, that contains the
+   selected notes, everything they reference (protocols, samples, project
+   page), and a short primer on how to read them. It opens the file;
+   select all, copy, paste into the chat — or attach the file.
+3. **Ask.** Things that work well:
+   - *Summarize what these experiments established, one bullet per
+     conclusion, citing experiment IDs. Flag anything based on a single
+     experiment.*
+   - *Draft the Results paragraph for JSRe0002 using only its Results and
+     Interpretation sections.*
+   - *Which experiments used sample JSRa0003, and what did each find?*
+   - *Write the "Current state" section of the project page from these
+     notes.* Then paste the answer into `Projects/<ID>.md` yourself.
+   - *What is missing from JSRe0007 before it can be marked complete?*
 
-## What this does and doesn't require
+The export is a snapshot; regenerate it when notes change. If the file is
+very large, export one project at a time. What you paste goes to a hosted
+model, so apply the same judgement you would to emailing it.
 
-**Doesn't require:** a shared server, an API key the lab manages centrally,
-a vector database, or picking one AI tool for everyone. Each person uses
-whatever CLI they already have a license/subscription for, pointed at
-their own clone or their synced copy of the vault.
+## Path B — Codex CLI
 
-**Does require:** the vault actually being on each person's machine (or a
-synced folder), and — same as any AI tool — attention to data
-classification before pasting anything sensitive into a hosted model. That
-consideration is orthogonal to which of these three tools is used.
+OpenAI's Codex CLI signs in with a ChatGPT account and works directly in a
+folder. Open a terminal in this repository (or your synced copy) and start
+it. It reads [`AGENTS.md`](../AGENTS.md) automatically: the lab's rules,
+the `eln.py` commands, and where the skills are. Then talk to it:
 
-## Why no retrieval/embeddings layer yet
+- *Create an experiment for the KCl titration repeat, project
+  PRMT5-ChromatinRelease, protocol P_Fractionation.* (It runs `eln.py`,
+  never makes a folder by hand.)
+- *What do we know about SNRPB retention? Cite experiment IDs.*
+- *Update the PRMT5-ChromatinRelease project page from its experiments.*
+- *Run the validator and fix the warnings in my notes.*
 
-Coding agents already do their own file search (grep/glob) well enough to
-answer questions over a vault of dozens to low hundreds of well-tagged
-Markdown notes — that's the same mechanism they use to navigate any
-codebase. A dedicated semantic-search index only starts earning its keep
-once the vault is large enough that keyword/tag search misses relevant
-notes, which is a "revisit this later" problem, not a day-one one. See
-["AI integration, in stages"](design-notes.md#ai-integration-in-stages) in
-`design-notes.md` for where that fits into the overall plan.
+Skills live in `.agents/skills/` (see below). Codex reads project skills
+from the folder its documentation names for your version; if that is
+`.codex/skills/`, a symlink or copy of `.agents/skills/` there is enough.
 
-## For lab members who don't want a terminal
+## Path C — Claude Code and Cowork
 
-Not everyone wants to run a CLI. Two lower-effort on-ramps, in rough order
-of effort:
+Claude Code (terminal) and Cowork (desktop) read [`CLAUDE.md`](../CLAUDE.md),
+which points at `AGENTS.md`, and pick up the skills in `.agents/skills/`.
+Same conversations as Path B. Gemini CLI reads
+[`GEMINI.md`](../GEMINI.md) the same way.
 
-- **Obsidian AI plugins** (e.g. Smart Connections, Copilot for Obsidian) —
-  read the same local Markdown files, no separate sync or export step, and
-  give a chat panel inside the same app used for editing.
-- **A small hosted chat app** — worth building only once there's a clear,
-  recurring query pattern (e.g. "search the whole lab's history") that
-  outgrows what an individual pointed-at-a-folder CLI session comfortably
-  handles. Not needed for the pilot.
+## The skills
+
+A skill is a folder with a `SKILL.md`: instructions an agent reads when a
+task matches the skill's description. They are plain Markdown, work across
+Codex, Claude Code, Cowork, and Cursor, and cost nothing to run. Two groups:
+
+**`.agents/skills/lab/`** — written for this record.
+
+| skill | what it teaches the agent |
+|---|---|
+| `eln-record-experiment` | create records only through `eln.py`; what goes in each section; file naming; closing out |
+| `eln-search-and-cite` | filter with `eln.py find` and the CSV index first; answer with IDs; say when nothing is there |
+| `eln-project-synthesis` | rewrite a project page's *Current state* from its experiments, every conclusion cited |
+
+**`.agents/skills/vendor/`** — pinned copies from
+[K-Dense's scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills)
+(v2.66.0) and [science-superpowers](https://github.com/K-Dense-AI/science-superpowers):
+`experimental-design`, `statistical-analysis`, `scientific-writing`,
+`citation-management`, `labarchive-integration`, `preregistering-analysis`,
+`verifying-results-before-claiming`. These are methodology, not lab rules:
+how to lay out a factorial design, which test and effect size to report,
+how to write a manuscript section with provenance, how to talk to the
+LabArchives API when the archival bridge is built.
+
+They are **pinned, not tracked**. `skills.lock.json` names the upstream
+release; `scripts/sync_skills.py` copies exactly those skill folders (a
+sparse checkout, about 1 MB, not the 500 MB repository); a weekly GitHub
+Action reports when a newer release exists. Updating is a maintainer
+running `sync_skills.py --update`, reading `git diff`, and committing. A
+skill is instructions an agent will follow against the lab's data, so it
+gets reviewed like code. Nothing under `vendor/` is ever hand-edited;
+lab-specific behaviour goes in `AGENTS.md` or a `lab/` skill.
+
+## What this deliberately doesn't do
+
+- **No API keys.** Usage is covered by the subscriptions people already
+  have; nothing here bills per token.
+- **No server, no embeddings index.** Coding agents already search files
+  well, and the header fields let them filter first. Revisit when the
+  vault is large enough that keyword search misses things
+  (`design-notes.md`, *AI integration, in stages*).
+- **No editor-specific AI plugins.** The record is files; every tool above
+  reads the same files.
+- **No AI-written conclusions.** The AI cites; people conclude.
