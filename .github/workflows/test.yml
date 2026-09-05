@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests (standard library only)
+        run: python -m unittest discover -s tests -v
+      - name: The repo's own example vault follows its own conventions
+        run: python scripts/eln.py validate --strict
+      - name: Inventory CSVs are current
+        shell: bash
+        run: |
+          python scripts/eln.py index --quiet
+          git diff --exit-code -- Inventory/ || { echo "Inventory/*.csv is stale: run 'python scripts/eln.py index' and commit."; exit 1; }

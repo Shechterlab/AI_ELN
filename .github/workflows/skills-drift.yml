@@ -1,0 +1,28 @@
+name: vendored skills drift
+
+# Once a week, ask whether the upstream skill libraries pinned in
+# skills.lock.json have newer releases. A red run here is the signal that a
+# maintainer should run `python3 scripts/sync_skills.py --update`, read the
+# diff, and commit it. Nothing is updated automatically - skills are
+# instructions an agent follows against lab data, so they get reviewed.
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"   # Mondays 12:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Compare pins to upstream
+        run: |
+          set +e
+          python scripts/sync_skills.py --check | tee check.txt
+          status=${PIPESTATUS[0]}
+          { echo '### Vendored skills'; echo; echo '```'; cat check.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
