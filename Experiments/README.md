@@ -12,6 +12,10 @@ One subfolder per experiment, created by `launchers/New Experiment` or
 └── 5-figures/        {ID}_R_{what-it-shows}_{YYYYMMDD}.png is the results summary
 ```
 
+Each subfolder starts with a one-paragraph `README.md` saying what belongs
+in it (and keeping the folder from disappearing in git, which ignores empty
+directories). `README.md` is exempt from the filename rule everywhere.
+
 `DSLe0001_SNRPB-chromatin-retention-after-PRMT5-inhibition/` is a worked
 example: exactly what the tool produces, unedited apart from one sentence
 in Objective saying so. It is not real data.

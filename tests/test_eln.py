@@ -218,6 +218,9 @@ class TestNew(TempVault):
         self.assertEqual(folder.name, "TSTe0001_X-retention-after-Y-KCl-titration")
         for sub in eln.SUBFOLDERS:
             self.assertTrue((folder / sub).is_dir(), sub)
+            readme = (folder / sub / "README.md").read_text(encoding="utf-8")
+            self.assertTrue(readme.startswith(f"# {sub}"), sub)  # keeps the folder alive in git
+        self.assertIn("TSTe0001_R_", (folder / "5-figures" / "README.md").read_text(encoding="utf-8"))
         note = folder / "1-notes" / "TSTe0001.md"
         fields, body, problems = eln.parse_front_matter(note.read_text(encoding="utf-8"))
         self.assertEqual(problems, [])

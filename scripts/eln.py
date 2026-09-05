@@ -825,6 +825,29 @@ def ensure_vault_dirs(root: Path) -> None:
         (root / d).mkdir(parents=True, exist_ok=True)
 
 
+SUBFOLDER_READMES = {
+    "1-notes": "Your experiment note `{ID}.md` lives here, next to the protocol snapshot(s) `{ID}_P_...md`\n"
+               "the tool copied in. Extra notes are welcome; name them `{ID}_something.md`.\n",
+    "2-data_raw": "Instrument output goes here **with its original filename**. Never edit, rename, or\n"
+                  "reorganize anything in this folder. If the data is too large to live here, leave it on\n"
+                  "institutional storage and put that location in `raw_data_path` in the note.\n",
+    "3-code": "Analysis scripts and notebooks, named `{ID}_what-it-does.R` / `.py` / `.ipynb`.\n",
+    "4-data_processed": "Anything derived from the raw data by a script or by hand (quantification tables,\n"
+                        "cropped images, normalized values), named `{ID}_what-it-is.csv` and the like.\n",
+    "5-figures": "Exported panels. The results summary you show in lab meeting is\n"
+                 "`{ID}_R_what-it-shows_YYYYMMDD.png` (the `R` is what makes it findable in one search).\n",
+}
+
+
+def write_subfolder_readmes(folder: Path, exp_id: str) -> None:
+    """A one-paragraph README in each subfolder: tells people what goes there, and keeps the
+    folder alive in git, which does not track empty directories."""
+    for sub, text in SUBFOLDER_READMES.items():
+        p = folder / sub / "README.md"
+        if not p.exists():
+            p.write_text(f"# {sub}\n\n{text.replace('{ID}', exp_id)}", encoding="utf-8")
+
+
 def _wizard_experiment(args, root: Path) -> None:
     """Fill in args by asking plain questions. Enter skips anything optional."""
     print("New experiment. Only the title is required; press Enter to skip the rest.\n")
@@ -875,6 +898,7 @@ def cmd_new_experiment(args) -> int:
     ensure_vault_dirs(root)
     for sub in SUBFOLDERS:
         (folder / sub).mkdir(parents=True, exist_ok=True)
+    write_subfolder_readmes(folder, exp_id)
 
     note_path.write_text(render_template("experiment", {
         "EXPERIMENT_ID": exp_id, "TITLE": args.title, "RESEARCHER": researcher,
