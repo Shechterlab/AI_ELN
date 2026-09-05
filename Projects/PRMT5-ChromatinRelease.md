@@ -1,19 +1,19 @@
 ---
 type: project
-project_id: {{PROJECT_ID}}
-title: {{TITLE}}
-lead: {{LEAD}}
+project_id: PRMT5-ChromatinRelease
+title: PRMT5 inhibition and chromatin release of snRNP proteins
+lead: David Shechter
 contributors: []
 status: active            # active | complete | paused
-date_started: {{DATE}}
+date_started: 2026-09-05
 grants: []
 publications: []
-tags: [{{TAGS}}]
+tags: []
 ---
 
-# {{TITLE}}
+# PRMT5 inhibition and chromatin release of snRNP proteins
 
-`{{PROJECT_ID}}`
+`PRMT5-ChromatinRelease`
 
 ## Aim / hypothesis
 
@@ -34,7 +34,7 @@ tags: [{{TAGS}}]
 
 ## Experiments
 
-<!-- The live list is `eln.py find --project {{PROJECT_ID}}` or Inventory/projects.csv.
+<!-- The live list is `eln.py find --project PRMT5-ChromatinRelease` or Inventory/projects.csv.
      List the key ones here with one line each. -->
 
 ## Reagents in use

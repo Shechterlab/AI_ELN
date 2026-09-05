@@ -13,7 +13,7 @@ samples: [{{SAMPLES}}]
 notebook_reference: {{NOTEBOOK_REF}}
 raw_data_path: {{RAW_DATA_PATH}}
 related_experiments: [{{RELATED}}]
-tags: []
+tags: [{{TAGS}}]          # add meeting to flag this for the next lab meeting
 ---
 
 # {{TITLE}}
@@ -26,11 +26,12 @@ tags: []
 
 ## Experimental design
 
-<!-- Conditions, groups, replicates, controls. -->
+<!-- Conditions, groups, replicates, controls. What would a positive result look like? -->
 
 ## Methods
 
-<!-- Link the protocol version actually used. Note any deviations below, not here. -->
+<!-- The protocol you followed is snapshotted next to this file as {{EXPERIMENT_ID}}_P_... .
+     Only write what is not in the protocol. Deviations go in the next section. -->
 
 ## Deviations from protocol
 
@@ -38,11 +39,12 @@ tags: []
 
 ## Results
 
-<!-- Link figures/tables in 5-figures/. Describe what happened, not what it means yet. -->
+<!-- What happened, not what it means. Link the summary figure:
+     ![](../5-figures/{{EXPERIMENT_ID}}_R_short-description.png) -->
 
 ## Interpretation
 
-<!-- What does this tell us? Does it support, contradict, or refine a hypothesis? -->
+<!-- What does this tell us? Does it support, contradict, or refine the hypothesis? -->
 
 ## Decision
 
@@ -54,7 +56,7 @@ tags: []
 
 ## Files
 
-- Raw data: `{{RAW_DATA_PATH}}/2-data_raw/`
-- Analysis: `{{RAW_DATA_PATH}}/3-code/`
-- Processed data: `{{RAW_DATA_PATH}}/4-data_processed/`
-- Figures: `{{RAW_DATA_PATH}}/5-figures/`
+- Raw data: `{{RAW_DATA_PATH}}`
+- Analysis: `3-code/`
+- Processed data: `4-data_processed/`
+- Figures: `5-figures/`

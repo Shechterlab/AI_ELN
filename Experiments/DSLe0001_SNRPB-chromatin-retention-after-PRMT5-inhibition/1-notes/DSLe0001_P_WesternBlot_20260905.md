@@ -1,17 +1,17 @@
 ---
 type: protocol
-protocol_id: P_{{NAME}}
-title: {{TITLE}}
-version: {{DATE}}         # bump this date whenever the procedure changes; add a Change log line
+protocol_id: P_WesternBlot
+title: Western blot
+version: 2026-09-05         # bump this date whenever the procedure changes; add a Change log line
 status: current           # current | archived
 supersedes:
 references: []
-tags: [{{TAGS}}]
+tags: []
 ---
 
-# {{TITLE}}
+# Western blot
 
-`P_{{NAME}}` · version {{DATE}}
+`P_WesternBlot` · version 2026-09-05
 
 ## Purpose
 
@@ -27,11 +27,11 @@ tags: [{{TAGS}}]
 
 ## Change log
 
-- {{DATE}}: initial version
+- 2026-09-05: initial version
 
 ---
 This is the living copy: one file per protocol, edited in place. When an
 experiment uses it, `eln.py` copies this file into that experiment's
-`1-notes/` as `{EXPERIMENT_ID}_P_{{NAME}}_{date}.md` - that snapshot is the
+`1-notes/` as `{EXPERIMENT_ID}_P_WesternBlot_{date}.md` - that snapshot is the
 record of what was actually followed. Note deviations on the day in the
 experiment note, not here.

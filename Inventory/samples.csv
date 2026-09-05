@@ -1,0 +1,2 @@
+sample_id,sample_type,title,source,storage_location,date_created,status,used_in_experiments
+DSLp0001,plasmid,pcDNA3-FLAG-SNRPB (example record),in-house (example),"Freezer B, box 3 (example)",2026-09-05,active,DSLe0001
