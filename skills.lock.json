@@ -1,0 +1,31 @@
+{
+  "sources": [
+    {
+      "name": "k-dense-scientific",
+      "repo": "https://github.com/K-Dense-AI/scientific-agent-skills.git",
+      "ref": "v2.66.0",
+      "resolved": "1e5eeffbdad3749125afe7ab48a39694e27f181c",
+      "path": "skills",
+      "skills": [
+        "experimental-design",
+        "statistical-analysis",
+        "scientific-writing",
+        "citation-management",
+        "labarchive-integration"
+      ],
+      "synced": "2026-09-05"
+    },
+    {
+      "name": "k-dense-superpowers",
+      "repo": "https://github.com/K-Dense-AI/science-superpowers.git",
+      "ref": "main",
+      "resolved": "9e348a43976639bfd2858ca70400bf199b24e1dd",
+      "path": "skills",
+      "skills": [
+        "preregistering-analysis",
+        "verifying-results-before-claiming"
+      ],
+      "synced": "2026-09-05"
+    }
+  ]
+}
