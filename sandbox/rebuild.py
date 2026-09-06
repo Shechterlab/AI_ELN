@@ -48,19 +48,7 @@ def backdate(path: Path, to: str) -> None:
         path.write_text(path.read_text(encoding="utf-8").replace(today, to), encoding="utf-8")
 
 
-def set_field(path: Path, key: str, value: str) -> None:
-    """Replace one header line's value, keeping any trailing comment."""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    end = lines.index("---", 1)
-    for i in range(1, end):
-        if lines[i].startswith(key + ":"):
-            rest = lines[i][len(key) + 1:]
-            _, comment = eln._split_value_comment(rest)
-            lines[i] = f"{key}: {eln.format_value(value)}{comment}".rstrip()
-            break
-    else:
-        raise KeyError(key)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+set_field = eln.set_header_field  # line-level header edit, shared with the tool
 
 
 def fill(path: Path, section: str, text: str) -> None:
@@ -221,8 +209,9 @@ def build() -> None:
     fill(e2.path, "Experimental design", "A549 treated 48 h with DMSO or PRMT5 inhibitor (EPZ015666, 1 uM). Fractionation at 300 mM KCl "
          "(ALXe0001). Blots: SNRPB, U1-70K, H3, GAPDH. Three independent biological replicates on separate days. "
          "Quantification: chromatin / (chromatin + nucleoplasm) signal per replicate.")
-    fill(e2.path, "Results", "SNRPB chromatin fraction rose from 0.31 +/- 0.05 (DMSO) to 0.58 +/- 0.07 (PRMT5i), mean +/- SD, n = 3, "
-         "paired t-test p = 0.01. U1-70K shifted in the same direction but less (0.40 to 0.49). Loading controls behaved.\n\n"
+    fill(e2.path, "Results", "SNRPB chromatin fraction rose from 0.31 +/- 0.04 (DMSO) to 0.58 +/- 0.07 (PRMT5i), mean +/- SD, n = 3; "
+         "mean paired difference 0.27, 95% CI [0.20, 0.34], paired t(2) = 17.7, p = 0.003. U1-70K shifted in the same "
+         "direction but less (0.40 to 0.49). Loading controls behaved.\n\n"
          "![](../5-figures/ALXe0002_R_SNRPB-chromatin-fraction_20260708.png)\n\nQuantification: `4-data_processed/ALXe0002_chromatin-fraction.csv`.")
     fill(e2.path, "Interpretation", "Consistent with the hypothesis: loss of PRMT5 activity keeps more SNRPB on chromatin. "
          "Symmetric dimethyl-arginine loss was not directly confirmed in this experiment (no SDMA blot).")
@@ -343,6 +332,9 @@ def build() -> None:
          "ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, JORp0001, JORp0002")
     fill(root / "Projects" / "PRMT5-ChromatinRelease.md", "Related protocols",
          "P_CellularFractionation, P_WesternBlot, P_Immunofluorescence")
+
+    # ALXe0002 closed out the way the tool does it: snapshot + manifest, dated to its completion.
+    eln.complete_experiment(root, "ALXe0002", when="2026-07-08")
 
     eln.write_index(eln.load_vault(root), quiet=True)
 

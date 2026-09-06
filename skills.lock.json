@@ -11,9 +11,17 @@
         "statistical-analysis",
         "scientific-writing",
         "citation-management",
-        "labarchive-integration"
+        "labarchive-integration",
+        "scientific-visualization",
+        "exploratory-data-analysis",
+        "paper-lookup",
+        "scientific-slides",
+        "scientific-critical-thinking",
+        "pyopenms",
+        "pydeseq2",
+        "pathway-enrichment"
       ],
-      "synced": "2026-09-05"
+      "synced": "2026-09-06"
     },
     {
       "name": "k-dense-superpowers",

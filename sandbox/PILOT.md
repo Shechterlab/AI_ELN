@@ -33,7 +33,7 @@ that mention SNRPB were read. The answer:
 
 > **Supported.** 48 h PRMT5 inhibition (EPZ015666, 1 µM) roughly doubles
 > the chromatin-bound fraction of SNRPB in A549: 0.31 ± 0.05 (DMSO) to
-> 0.58 ± 0.07, n = 3, paired t-test p = 0.01 (ALXe0002). The same direction
+> 0.58 ± 0.07, n = 3, paired t-test p = 0.01 (ALXe0002).\* The same direction
 > is seen in HeLa with a smaller effect, 0.28/0.30 to 0.41/0.46, n = 2, and
 > one of the two fractionations showed slight chromatin carry-over
 > (ALXe0003). The fractionation method itself was validated at 300 mM KCl
@@ -73,6 +73,12 @@ $ eln.py --root sandbox find --text "protein level" --ids
 The correct answer per the skill, and the one given, is: *nothing in the
 record addresses total SNRPB protein levels; ALXe0002 quantified fraction
 ratios, not abundance.* No guess was offered.
+
+\* Those are the figures the ALXe0002 note stated when this was run. §6
+below re-analysed the data file with a vendored skill, found the note's
+SD and p-value did not match it, and the note was corrected (now SD 0.04,
+p = 0.003). The answer above was faithful to the note; the note was wrong.
+That order of events is the point of §6.
 
 ## 2. "Update the project page for SNRPB-ArginineMethylation"
 
@@ -234,3 +240,40 @@ find?"*, the answer given was:
   exercised by the same agent that wrote the answers, following the
   briefing's rules. The first real test is pasting an export into the
   lab's ChatGPT and asking §1's question.
+
+## 6. Using a vendored K-Dense skill: re-analysing ALXe0002's data
+
+Skill: `statistical-analysis` (from `.agents/skills/vendor/k-dense-scientific/`,
+scientific-agent-skills v2.66.0). Its test-selection guide says: two paired
+groups, continuous outcome, normal → paired t-test; non-normal → Wilcoxon
+signed-rank. Its reporting standard asks for means and SDs, `t(df)`, `p`,
+an effect size, and a confidence interval. Following that on
+`4-data_processed/ALXe0002_chromatin-fraction.csv` with SciPy:
+
+```
+condition  DMSO  PRMT5i          n = 3 paired replicates
+1          0.29    0.55          DMSO   0.31 +/- 0.04 (mean +/- SD)
+2          0.36    0.66          PRMT5i 0.58 +/- 0.07
+3          0.28    0.53          mean paired difference 0.27, 95% CI [0.20, 0.34]
+                                 paired t(2) = 17.7, p = 0.003; Cohen's dz = 10.2
+                                 Shapiro-Wilk on differences p = 0.36 (uninformative at n = 3)
+                                 Wilcoxon signed-rank p = 0.25 (the floor for n = 3)
+```
+
+**What it caught.** As first written, the note said "0.31 ± 0.05 … paired
+t-test p = 0.01". The data file gives an SD of 0.04 and p = 0.003. The
+note was corrected in `rebuild.py`. A stated statistic that does not match
+the data file next to it is the most common kind of notebook error, and an
+agent holding both can catch it in seconds; that is what the vendored
+`verifying-results-before-claiming` skill asks for before any claim is
+repeated. (The absurd dz of 10 also says the sandbox data are too clean to
+be real, which they are.)
+
+**What it needed.** The skill's guidance is Markdown and needed nothing.
+The skill's own script, `assumption_checks.py`, imports numpy, pandas,
+scipy, matplotlib, and seaborn, none of which ship with Python. It ran
+unchanged under `uv run --with numpy --with pandas --with scipy --with
+matplotlib --with seaborn python …`, which downloads them into a throwaway
+environment on first use and leaves the system Python untouched. That one
+command is the whole "installation" story for the script layer of these
+skills; see `docs/ai-agents.md`.
