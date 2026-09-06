@@ -304,6 +304,12 @@ class TestNew(TempVault):
         self.assertTrue((self.root / "Experiments").is_dir())
         self.ok("new", "experiment", "--title", "flag root", "--root", str(other))
         self.assertTrue((other / "Experiments").is_dir())
+        # --root before the command works too, and is not clobbered by the per-command default
+        before = self.tmp / "before"
+        self.ok("--root", str(before), "new", "experiment", "--title", "root first")
+        self.assertTrue((before / "Experiments").is_dir())
+        out, _ = self.ok("--root", str(before), "find", "--ids")
+        self.assertEqual(out.split(), ["TSTe0001"])
         del os.environ["AI_ELN_ROOT"]
         cfg_root = self.tmp / "cfg"
         self.config.write_text(json.dumps({"root": str(cfg_root)}), encoding="utf-8")
@@ -608,6 +614,12 @@ class TestRepoExample(unittest.TestCase):
     def test_example_vault_validates_strict(self):
         code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT))
         self.assertEqual(code, 0, out)
+        self.assertIn("0 errors, 0 warnings", out)
+
+    def test_sandbox_validates_strict(self):
+        code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT / "sandbox"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("7 experiments", out)
         self.assertIn("0 errors, 0 warnings", out)
 
     def test_templates_parse_and_match_schema(self):

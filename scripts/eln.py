@@ -863,36 +863,30 @@ def _wizard_experiment(args, root: Path) -> None:
     print()
 
 
-def cmd_new_experiment(args) -> int:
-    config = load_config()
-    root = resolve_root(args.root, config)
-    interactive = bool(args.interactive)
-    if not (args.title or "").strip():
-        if not interactive:
-            raise ElnError("give a title with --title \"...\", or run with --interactive to be asked")
-    initials, researcher = resolve_person(args, config, interactive=interactive)
-    if interactive:
-        _wizard_experiment(args, root)
-    today = date.today().isoformat()
+class Created:
+    """What a create_* call produced: the ID, the note path, extra files, and any warnings."""
+    __slots__ = ("id", "path", "extra", "warnings")
 
+    def __init__(self, id_: str, path: Path):
+        self.id, self.path = id_, path
+        self.extra: List[Path] = []
+        self.warnings: List[str] = []
+
+
+def create_experiment(root: Path, initials: str, researcher: str, title: str, project: str = "",
+                      exp_type: str = "", protocol: str = "", samples: str = "", related: str = "",
+                      notebook: str = "", tags: str = "", raw_data_path: str = "", index: bool = True) -> Created:
+    """The one way an experiment comes into existence. Used by the CLI, the wizard, and the web page."""
+    title = (title or "").strip()
+    if not title:
+        raise ElnError("an experiment needs a title")
+    if not RE_INITIALS.match(initials or ""):
+        raise ElnError(f"initials must be 2-4 letters, e.g. JSR (got {initials!r})")
+    today = date.today().isoformat()
     exp_id = next_experiment_id(root, initials)
-    slug = slugify(args.title)
+    slug = slugify(title)
     folder_name = f"{exp_id}_{slug}" if slug else exp_id
     folder = root / "Experiments" / folder_name
-    note_path = folder / "1-notes" / f"{exp_id}.md"
-    raw_path = args.raw_data_path or f"Experiments/{folder_name}/2-data_raw"
-    protocols = csv_items(args.protocol)
-
-    if args.dry_run:
-        print(f"Root:   {root}")
-        print(f"Would create {exp_id}:")
-        print(f"  Experiments/{folder_name}/{{{','.join(SUBFOLDERS)}}}")
-        print(f"  Experiments/{folder_name}/1-notes/{exp_id}.md")
-        for pid in protocols:
-            print(f"  snapshot of {pid} into 1-notes/ (if Protocols/{pid}.md exists)")
-        print("  then re-index Inventory/*.csv")
-        return 0
-
     if folder.exists():
         raise ElnError(f"{folder} already exists. Aborting.")
     ensure_vault_dirs(root)
@@ -900,31 +894,133 @@ def cmd_new_experiment(args) -> int:
         (folder / sub).mkdir(parents=True, exist_ok=True)
     write_subfolder_readmes(folder, exp_id)
 
+    note_path = folder / "1-notes" / f"{exp_id}.md"
     note_path.write_text(render_template("experiment", {
-        "EXPERIMENT_ID": exp_id, "TITLE": args.title, "RESEARCHER": researcher,
-        "PROJECT": args.project or "", "DATE": today, "EXPERIMENT_TYPE": args.exp_type or "",
-        "PROTOCOL": args.protocol or "", "SAMPLES": args.samples or "", "NOTEBOOK_REF": args.notebook or "",
-        "RAW_DATA_PATH": raw_path, "RELATED": args.related or "", "TAGS": args.tags or "",
+        "EXPERIMENT_ID": exp_id, "TITLE": title, "RESEARCHER": researcher or initials,
+        "PROJECT": project or "", "DATE": today, "EXPERIMENT_TYPE": exp_type or "",
+        "PROTOCOL": protocol or "", "SAMPLES": samples or "", "NOTEBOOK_REF": notebook or "",
+        "RAW_DATA_PATH": raw_data_path or f"Experiments/{folder_name}/2-data_raw",
+        "RELATED": related or "", "TAGS": tags or "",
     }), encoding="utf-8")
+    result = Created(exp_id, note_path)
 
-    print(f"Created {exp_id}")
-    print(f"  {note_path.relative_to(root).as_posix()}")
-    for pid in protocols:
+    for pid in csv_items(protocol):
         src = root / "Protocols" / f"{pid}.md"
         if not src.exists():
-            err(f"  warning: {pid} not found in Protocols/, no snapshot copied "
-                f"(create it with: eln.py new protocol --name {pid[2:] if pid.startswith('P_') else pid})")
+            result.warnings.append(f"{pid} not found in Protocols/, no snapshot copied "
+                                   f"(create it with: eln.py new protocol --name {pid[2:] if pid.startswith('P_') else pid})")
             continue
         fields, _, _ = parse_front_matter(src.read_text(encoding="utf-8"))
         version = str(fields.get("version") or today).replace("-", "")
         name = pid[2:] if pid.startswith("P_") else pid
         dst = folder / "1-notes" / f"{exp_id}_P_{name}_{version}.md"
         shutil.copyfile(src, dst)
-        print(f"  {dst.relative_to(root).as_posix()}  (snapshot of {pid})")
+        result.extra.append(dst)
 
-    if not args.no_index:
+    if index:
         write_index(load_vault(root), quiet=True)
-    if args.open and open_path(note_path):
+    return result
+
+
+def create_sample(root: Path, initials: str, sample_type: str, title: str, source: str = "",
+                  storage: str = "", tags: str = "", index: bool = True) -> Created:
+    if not RE_INITIALS.match(initials or ""):
+        raise ElnError(f"initials must be 2-4 letters, e.g. JSR (got {initials!r})")
+    stype = (sample_type or "").strip().lower()
+    if stype in SAMPLE_LETTERS:
+        letter, stype = stype, SAMPLE_LETTERS[stype]
+    elif stype in SAMPLE_TYPES:
+        letter = SAMPLE_TYPES[stype]
+    else:
+        raise ElnError(f"type must be one of {', '.join(SAMPLE_TYPES)} (or a letter {', '.join(SAMPLE_LETTERS)})")
+    if not (title or "").strip():
+        raise ElnError("a sample needs a title")
+    sample_id = next_sample_id(root, initials, letter)
+    path = root / "Samples" / f"{sample_id}.md"
+    ensure_vault_dirs(root)
+    path.write_text(render_template("sample", {
+        "SAMPLE_ID": sample_id, "SAMPLE_TYPE": stype, "TITLE": title.strip(), "DATE": date.today().isoformat(),
+        "SOURCE": source or "", "STORAGE": storage or "", "TAGS": tags or "",
+    }), encoding="utf-8")
+    if index:
+        write_index(load_vault(root), quiet=True)
+    return Created(sample_id, path)
+
+
+def create_protocol(root: Path, name: str, title: str = "", tags: str = "", index: bool = True) -> Created:
+    name = (name or "").strip()
+    if name.startswith("P_"):
+        name = name[2:]
+    if not RE_PROTOCOL_NAME.match(name):
+        raise ElnError("a protocol name is letters, digits, and hyphens, e.g. WesternBlot or Cellular-Fractionation")
+    pid = f"P_{name}"
+    path = root / "Protocols" / f"{pid}.md"
+    if path.exists():
+        raise ElnError(f"{path} already exists. Edit it in place and bump its version instead.")
+    title = (title or "").strip() or re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name).replace("-", " ")
+    ensure_vault_dirs(root)
+    path.write_text(render_template("protocol", {
+        "NAME": name, "TITLE": title, "DATE": date.today().isoformat(), "TAGS": tags or "",
+    }), encoding="utf-8")
+    if index:
+        write_index(load_vault(root), quiet=True)
+    return Created(pid, path)
+
+
+def create_project(root: Path, project_id: str, title: str = "", lead: str = "", tags: str = "",
+                   index: bool = True) -> Created:
+    pid = (project_id or "").strip()
+    if not RE_PROJECT_ID.match(pid):
+        raise ElnError("a project ID starts with a letter and contains only letters, digits, and hyphens")
+    path = root / "Projects" / f"{pid}.md"
+    if path.exists():
+        raise ElnError(f"{path} already exists.")
+    ensure_vault_dirs(root)
+    path.write_text(render_template("project", {
+        "PROJECT_ID": pid, "TITLE": (title or "").strip() or pid, "LEAD": lead or "",
+        "DATE": date.today().isoformat(), "TAGS": tags or "",
+    }), encoding="utf-8")
+    if index:
+        write_index(load_vault(root), quiet=True)
+    return Created(pid, path)
+
+
+def _report_created(root: Path, result: Created, label: Optional[str] = None) -> None:
+    print(f"Created {result.id}")
+    print(f"  {result.path.relative_to(root).as_posix()}")
+    for p in result.extra:
+        print(f"  {p.relative_to(root).as_posix()}  (snapshot)")
+    for w in result.warnings:
+        err(f"  warning: {w}")
+
+
+def cmd_new_experiment(args) -> int:
+    config = load_config()
+    root = resolve_root(args.root, config)
+    interactive = bool(args.interactive)
+    if not (args.title or "").strip() and not interactive:
+        raise ElnError("give a title with --title \"...\", or run with --interactive to be asked")
+    initials, researcher = resolve_person(args, config, interactive=interactive)
+    if interactive:
+        _wizard_experiment(args, root)
+    if args.dry_run:
+        exp_id = next_experiment_id(root, initials)
+        folder_name = f"{exp_id}_{slugify(args.title)}"
+        print(f"Root:   {root}")
+        print(f"Would create {exp_id}:")
+        print(f"  Experiments/{folder_name}/{{{','.join(SUBFOLDERS)}}}")
+        print(f"  Experiments/{folder_name}/1-notes/{exp_id}.md")
+        for pid in csv_items(args.protocol):
+            print(f"  snapshot of {pid} into 1-notes/ (if Protocols/{pid}.md exists)")
+        print("  then re-index Inventory/*.csv")
+        return 0
+    result = create_experiment(root, initials, researcher, args.title, project=args.project or "",
+                               exp_type=args.exp_type or "", protocol=args.protocol or "",
+                               samples=args.samples or "", related=args.related or "",
+                               notebook=args.notebook or "", tags=args.tags or "",
+                               raw_data_path=args.raw_data_path or "", index=not args.no_index)
+    _report_created(root, result)
+    if args.open and open_path(result.path):
         print("Opening the note. Fill in the Objective; everything else can wait.")
     else:
         print("Open the note and fill in the Objective. Everything else can wait.")
@@ -956,28 +1052,19 @@ def cmd_new_sample(args) -> int:
         _wizard_sample(args, root)
     if not (args.sample_type or "").strip() or not (args.title or "").strip():
         raise ElnError("give --type and --title, or run with --interactive to be asked")
-    stype = args.sample_type.strip().lower()
-    if stype in SAMPLE_LETTERS:
-        letter, stype = stype, SAMPLE_LETTERS[stype]
-    elif stype in SAMPLE_TYPES:
-        letter = SAMPLE_TYPES[stype]
-    else:
-        raise ElnError(f"--type must be one of {', '.join(SAMPLE_TYPES)} (or a letter {', '.join(SAMPLE_LETTERS)})")
-    sample_id = next_sample_id(root, initials, letter)
-    path = root / "Samples" / f"{sample_id}.md"
     if args.dry_run:
-        print(f"Root:   {root}\nWould create {sample_id} ({stype}) at Samples/{sample_id}.md")
+        stype = args.sample_type.strip().lower()
+        letter = stype if stype in SAMPLE_LETTERS else SAMPLE_TYPES.get(stype)
+        if not letter:
+            raise ElnError(f"--type must be one of {', '.join(SAMPLE_TYPES)}")
+        sample_id = next_sample_id(root, initials, letter)
+        print(f"Root:   {root}\nWould create {sample_id} ({SAMPLE_LETTERS[letter]}) at Samples/{sample_id}.md")
         return 0
-    ensure_vault_dirs(root)
-    path.write_text(render_template("sample", {
-        "SAMPLE_ID": sample_id, "SAMPLE_TYPE": stype, "TITLE": args.title, "DATE": date.today().isoformat(),
-        "SOURCE": args.source or "", "STORAGE": args.storage or "", "TAGS": args.tags or "",
-    }), encoding="utf-8")
-    print(f"Created {sample_id}\n  Samples/{sample_id}.md")
-    if not args.no_index:
-        write_index(load_vault(root), quiet=True)
+    result = create_sample(root, initials, args.sample_type, args.title, source=args.source or "",
+                           storage=args.storage or "", tags=args.tags or "", index=not args.no_index)
+    _report_created(root, result)
     if args.open:
-        open_path(path)
+        open_path(result.path)
     return 0
 
 
@@ -991,28 +1078,17 @@ def cmd_new_protocol(args) -> int:
         print()
     if not (args.name or "").strip():
         raise ElnError("give --name, or run with --interactive to be asked")
-    name = args.name.strip()
-    if name.startswith("P_"):
-        name = name[2:]
-    if not RE_PROTOCOL_NAME.match(name):
-        raise ElnError("--name must be letters, digits, and hyphens, e.g. WesternBlot or Cellular-Fractionation")
-    pid = f"P_{name}"
-    path = root / "Protocols" / f"{pid}.md"
-    title = args.title or re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name).replace("-", " ")
     if args.dry_run:
-        print(f"Root:   {root}\nWould create {pid} at Protocols/{pid}.md")
+        name = args.name.strip()
+        name = name[2:] if name.startswith("P_") else name
+        if not RE_PROTOCOL_NAME.match(name):
+            raise ElnError("--name must be letters, digits, and hyphens, e.g. WesternBlot or Cellular-Fractionation")
+        print(f"Root:   {root}\nWould create P_{name} at Protocols/P_{name}.md")
         return 0
-    if path.exists():
-        raise ElnError(f"{path} already exists. Edit it in place and bump its version instead.")
-    ensure_vault_dirs(root)
-    path.write_text(render_template("protocol", {
-        "NAME": name, "TITLE": title, "DATE": date.today().isoformat(), "TAGS": args.tags or "",
-    }), encoding="utf-8")
-    print(f"Created {pid}\n  Protocols/{pid}.md")
-    if not args.no_index:
-        write_index(load_vault(root), quiet=True)
+    result = create_protocol(root, args.name, title=args.title or "", tags=args.tags or "", index=not args.no_index)
+    _report_created(root, result)
     if args.open:
-        open_path(path)
+        open_path(result.path)
     return 0
 
 
@@ -1029,26 +1105,18 @@ def cmd_new_project(args) -> int:
         print()
     if not (args.project_id or "").strip():
         raise ElnError("give --id, or run with --interactive to be asked")
-    pid = args.project_id.strip()
-    if not RE_PROJECT_ID.match(pid):
-        raise ElnError("--id must start with a letter and contain only letters, digits, and hyphens")
-    path = root / "Projects" / f"{pid}.md"
-    lead = args.lead or config.get("researcher") or ""
     if args.dry_run:
+        pid = args.project_id.strip()
+        if not RE_PROJECT_ID.match(pid):
+            raise ElnError("--id must start with a letter and contain only letters, digits, and hyphens")
         print(f"Root:   {root}\nWould create {pid} at Projects/{pid}.md")
         return 0
-    if path.exists():
-        raise ElnError(f"{path} already exists.")
-    ensure_vault_dirs(root)
-    path.write_text(render_template("project", {
-        "PROJECT_ID": pid, "TITLE": args.title or pid, "LEAD": lead,
-        "DATE": date.today().isoformat(), "TAGS": args.tags or "",
-    }), encoding="utf-8")
-    print(f"Created {pid}\n  Projects/{pid}.md")
-    if not args.no_index:
-        write_index(load_vault(root), quiet=True)
+    result = create_project(root, args.project_id, title=args.title or "",
+                            lead=args.lead or config.get("researcher") or "", tags=args.tags or "",
+                            index=not args.no_index)
+    _report_created(root, result)
     if args.open:
-        open_path(path)
+        open_path(result.path)
     return 0
 
 
@@ -1392,9 +1460,11 @@ def cmd_index(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    root_help = "where Experiments/ etc. live (default: $AI_ELN_ROOT, then ~/.ai_eln.json, then this repo)"
+    # --root is accepted both before and after the subcommand. SUPPRESS on the per-command copy
+    # keeps argparse from overwriting a value given before the subcommand with None.
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--root", default=None,
-                        help="where Experiments/ etc. live (default: $AI_ELN_ROOT, then ~/.ai_eln.json, then this repo)")
+    common.add_argument("--root", default=argparse.SUPPRESS, help=root_help)
 
     p = argparse.ArgumentParser(
         prog="eln.py", description="The one tool for the lab research record. See docs/CONVENTIONS.md.",
@@ -1405,8 +1475,10 @@ def build_parser() -> argparse.ArgumentParser:
                "  eln.py new sample --type plasmid --title \"pcDNA3-FLAG-SNRPB\"\n"
                "  eln.py validate --strict\n"
                "  eln.py find --status active --tag meeting\n"
+               "  eln.py --root sandbox find --text SNRPB      # --root works before or after the command\n"
                "  eln.py export --project PRMT5-ChromatinRelease --out brief.md\n")
     p.add_argument("--version", action="version", version=f"eln.py {__version__}")
+    p.add_argument("--root", default=None, help=root_help)
     sub = p.add_subparsers(dest="command", metavar="command")
 
     s = sub.add_parser("init", parents=[common], help="one-time setup: your initials, name, and where files live")
