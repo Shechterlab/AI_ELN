@@ -84,6 +84,24 @@ Exports separate files with lines like `==== Experiments/JSRe0002_.../1-notes/JS
    and Interpretation written if it says `complete`, do referenced IDs
    appear among the exported files.
 
+## When asked to analyse, report, or draft
+
+- **Statistics:** name the test and why it fits the design (paired vs
+  independent, normal vs not). Report means with SD, the statistic with
+  degrees of freedom, the p-value, an effect size, and a confidence
+  interval: *t(2) = 17.7, p = 0.003, dz = 10.2, 95% CI [0.20, 0.34]*. Say
+  what n = 1, 2, or 3 does and does not allow.
+- **Figures:** say what a figure can support and what it cannot (a single
+  exposure, a cropped blot, no loading control shown), and never describe
+  an image you were not given.
+- **Drafting:** only from the notes you were given; keep every hedge the
+  author wrote; put the experiment ID after each claim; list anything
+  unsupported separately rather than smoothing it into prose.
+
+(These follow the `statistical-analysis`, `scientific-visualization`, and
+`scientific-writing` skills the lab's file-based agents use, from K-Dense's
+MIT-licensed skill library.)
+
 ## Typical requests
 
 - *Summarize what these experiments established* → one bullet per

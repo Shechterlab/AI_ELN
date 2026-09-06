@@ -83,10 +83,14 @@ class TestWeb(unittest.TestCase):
             code, body, _ = self.get(path)
             self.assertEqual(code, 200, path)
             self.assertIn("<form", body, path)
-        for path in ("/experiments", "/samples", "/protocols", "/projects", "/validate", "/report"):
+        for path in ("/experiments", "/samples", "/protocols", "/projects", "/validate", "/report", "/ai"):
             code, body, _ = self.get(path)
             self.assertEqual(code, 200, path)
             self.assertIn("<h1>", body, path)
+        code, body, _ = self.get("/ai")
+        self.assertIn("Ask the AI", body)
+        self.assertIn("Re-analyse", body)
+        self.assertNotIn("statistical-analysis", body)  # tasks, not skill names
 
     def test_02_create_everything_through_forms(self):
         code, _, h = self.post("/new/project", {"project_id": "Proj-W", "title": "Web project", "lead": "Web Person"})

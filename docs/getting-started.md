@@ -119,6 +119,7 @@ Results section shows up on the note's page.
 | **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. One click saves it as a file. |
 | **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
 | **Experiments / Samples / Protocols / Projects** | Browse and filter. Every ID on every page is a link. |
+| **Ask the AI** | What to ask an AI assistant about the record, and which of the two no-cost paths each ask works on. Start with "do the numbers in my Results match the data file?" |
 
 ## 7. When an experiment is finished
 

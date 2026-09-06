@@ -69,7 +69,31 @@ footer{max-width:1040px;margin:0 auto;padding:0 20px 30px;color:var(--muted);fon
 """
 
 NAV = [("/", "Home"), ("/experiments", "Experiments"), ("/samples", "Samples"), ("/protocols", "Protocols"),
-       ("/projects", "Projects"), ("/validate", "Check"), ("/report", "Meeting brief"), ("/export", "Export")]
+       ("/projects", "Projects"), ("/validate", "Check"), ("/report", "Meeting brief"), ("/export", "Export"),
+       ("/ai", "Ask the AI")]
+
+ASKS = [
+    ("Check that a Results section matches its data",
+     "Re-analyse 4-data_processed/JSRe0007_quant.csv the way the note describes and tell me whether the numbers in Results match.",
+     "Codex / Claude Code"),
+    ("Report a test properly",
+     "Which test fits this design? Write the Results sentence in the standard format with effect size and CI.", "both"),
+    ("Audit the lab-meeting figure",
+     "Check 5-figures/JSRe0007_R_....png against the figure checklist: axes, colour, what it can and cannot support.",
+     "Codex / Claude Code"),
+    ("Draft a paragraph from a note",
+     "Draft the Results paragraph for JSRe0007 from its Results and Interpretation only, experiment ID after each claim.", "both"),
+    ("Push back on an interpretation",
+     "What would falsify the Interpretation in JSRe0007? What is the strongest alternative explanation?", "both"),
+    ("Plan before starting",
+     "Lay out the design for a 3-condition, 3-replicate fractionation and write the pre-registration: predictions and the decision rule.", "both"),
+    ("Ground a project page in the literature",
+     "Find recent papers on PRMT5 and snRNP chromatin release and add them, with DOIs, to the project page's references.",
+     "Codex / Claude Code"),
+    ("Turn the meeting brief into slides", "Make a five-slide deck from Inventory/meeting-brief_20260912.md.", "Codex / Claude Code"),
+    ("Start an RNA-seq or mass-spec analysis", "Set up the DESeq2 analysis for ALXe0004, DMSO vs PRMT5i, three vs three.",
+     "Codex / Claude Code, with uv"),
+]
 
 
 def esc(s) -> str:
@@ -378,6 +402,25 @@ class App:
         </form>"""
         return page("Settings", body, "", self.root)
 
+    def ai(self) -> str:
+        rows = "".join(f"<tr><td><b>{esc(want)}</b></td><td><i>{esc(say)}</i></td><td>{esc(where)}</td></tr>"
+                       for want, say, where in ASKS)
+        body = f"""
+        <h1>Ask the AI</h1>
+        <div class=card>
+          <p>Two ways, neither needs an API key. <b>ChatGPT:</b> click <a href='/export'>Export</a>, copy, paste into a chat
+          (once, paste <code>docs/ai-briefing.md</code> as the chat's instructions). It can reason about the notes but cannot see
+          data files or run anything. <b>Codex, Claude Code, Cowork:</b> open the tool in this folder; it reads the lab's rules
+          and skills itself, and can read files and run analyses.</p>
+          <p>You never name a skill. Ask for the task; the assistant picks the method. Every factual claim it makes should carry
+          an experiment ID; if it does not, ask for one.</p>
+        </div>
+        <table><tr><th>You want</th><th>Say something like</th><th>Works in</th></tr>{rows}</table>
+        <p class=hint>The first three rows check work that already exists, so a wrong answer costs nothing: start there.
+        Full details, what each skill needs, and a transcript of these asks run on the sandbox:
+        <code>docs/ai-agents.md</code> and <code>sandbox/PILOT.md</code>.</p>"""
+        return page("Ask the AI", body, "/ai", self.root)
+
     def validate(self) -> str:
         v = eln.load_vault(self.root)
         issues = eln.validate_vault(v)
@@ -555,6 +598,8 @@ def make_handler(app: App):
                     return self.send_html(app.form_setup(saved=bool(q.get("saved"))))
                 if path == "/validate":
                     return self.send_html(app.validate())
+                if path == "/ai":
+                    return self.send_html(app.ai())
                 if path == "/report":
                     return self.send_html(app.report())
                 if path == "/export":

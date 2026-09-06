@@ -79,6 +79,11 @@ date and writes `{ID}_snapshot_{date}.html` (print to PDF) and
 Codex / Claude Code / Cowork: open it in this folder; it already knows the rules.
 ChatGPT: **Export**, paste, ask. Every claim it makes should cite an ID.
 
+Good first asks: *do the numbers in JSRe0007's Results match its data file?* ·
+*write that Results sentence in the standard format with effect size* ·
+*check my `_R_` figure against the figure checklist* ·
+*what would falsify this Interpretation?* Full list: **Ask the AI** on the page.
+
 ## Leaving, or sending to another ELN
 
 **Export → Save as .eln archive**: a standard RO-Crate ZIP that eLabFTW,

@@ -8,6 +8,32 @@ no key to manage, and nothing to install beyond the AI tool itself.
 below run against the fictional sandbox record, so you can see what the
 answers look like before trying it on real notes.
 
+## What to ask
+
+Nobody needs to know a skill's name. Ask for the task; the agent reads the
+matching skill. These are the asks that pay off most for this lab, with
+the path each one works on. "Codex / Claude Code" means the agent is open
+in the folder and can read files and run scripts; "ChatGPT" means the
+paste-in export, which can reason about the notes but cannot see the data
+files or run anything.
+
+| You want | Say something like | Under the hood | Works in |
+|---|---|---|---|
+| Check that a Results section matches its data | *Re-analyse `4-data_processed/JSRe0007_quant.csv` the way the note describes and tell me whether the numbers in Results match.* | `statistical-analysis`, `verifying-results-before-claiming` | Codex / Claude Code |
+| Report a test properly | *Which test fits this design? Write the Results sentence in the standard format with effect size and CI.* | `statistical-analysis` | both |
+| Audit the lab-meeting figure | *Check `5-figures/JSRe0007_R_....png` against the figure checklist: axes, colour, what it can and cannot support.* | `scientific-visualization` | Codex / Claude Code |
+| Draft a paragraph from a note | *Draft the Results paragraph for JSRe0007 from its Results and Interpretation only, experiment ID after each claim.* | `scientific-writing`, `eln-search-and-cite` | both |
+| Push back on an interpretation | *What would falsify the Interpretation in JSRe0007? What is the strongest alternative explanation?* | `scientific-critical-thinking` | both |
+| Plan before starting | *Lay out the design for a 3-condition, 3-replicate fractionation and write the pre-registration: predictions and the decision rule.* | `experimental-design`, `preregistering-analysis` | both |
+| Ground a project page in the literature | *Find recent papers on PRMT5 and snRNP chromatin release and add them, with DOIs, to the project page's references.* | `paper-lookup`, `citation-management` | Codex / Claude Code |
+| Turn the meeting brief into slides | *Make a five-slide deck from `Inventory/meeting-brief_20260912.md`.* | `scientific-slides` | Codex / Claude Code |
+| Start an RNA-seq or mass-spec analysis | *Set up the DESeq2 analysis for ALXe0004, DMSO vs PRMT5i, three vs three.* | `pydeseq2`, `pathway-enrichment`, `pyopenms` | Codex / Claude Code, with `uv` |
+
+The same list is on the page under **Ask the AI**, and the four most
+common asks are on the cheat sheet. The first three rows are the ones to
+try in the first week: they check work that already exists rather than
+producing anything new, so a wrong answer costs nothing.
+
 ## Why the record is already AI-ready
 
 Three properties do all the work:
