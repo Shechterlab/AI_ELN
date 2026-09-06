@@ -224,6 +224,44 @@ class TestWeb(unittest.TestCase):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 303)
 
+    def test_06d_complete_verify_render_and_eln_export(self):
+        folder = next((self.root / "Experiments").glob("WEBe0001_*"))
+        note = folder / "1-notes" / "WEBe0001.md"
+        # not finished yet: refused with a "Complete anyway" option
+        code, body, _ = self.post("/complete/WEBe0001", {})
+        self.assertEqual(code, 400)
+        self.assertIn("Complete anyway", body)
+        self.assertFalse((folder / "1-notes" / "WEBe0001_MANIFEST.sha256").exists())
+        text = note.read_text(encoding="utf-8").replace("## Interpretation\n", "## Interpretation\n\nMeans something.\n")
+        note.write_text(text, encoding="utf-8")
+        code, body, _ = self.post("/complete/WEBe0001", {"date": "2026-09-12"})
+        self.assertEqual(code, 200)
+        self.assertIn("WEBe0001 is complete", body)
+        self.assertTrue((folder / "1-notes" / "WEBe0001_MANIFEST.sha256").exists())
+        self.assertTrue((folder / "1-notes" / "WEBe0001_snapshot_20260912.html").exists())
+        code, body, _ = self.get("/note/WEBe0001")
+        self.assertIn("Verify files", body)
+        self.assertNotIn("Mark complete", body)
+        code, body, _ = self.post("/verify/WEBe0001", {})
+        self.assertIn("match the manifest", body)
+        (folder / "3-code" / "WEBe0001_late.R").write_text("# late\n", encoding="utf-8")
+        code, body, _ = self.post("/verify/WEBe0001", {})
+        self.assertIn("Changed since completion", body)
+        self.assertIn("WEBe0001_late.R", body)
+        code, body, _ = self.post("/render/WEBe0001", {})
+        self.assertIn("Saved and opened", body)
+        self.assertTrue(list((folder / "1-notes").glob("WEBe0001_snapshot_*.html")))
+        code, body, _ = self.post("/export/save", {"scope": "project", "project": "Proj-W", "format": "eln"})
+        self.assertEqual(code, 200)
+        self.assertIn(".eln archive", body)
+        eln_files = list((self.root / "Inventory").glob("export_Proj-W_*.eln"))
+        self.assertEqual(len(eln_files), 1)
+        import zipfile
+        with zipfile.ZipFile(eln_files[0]) as zf:
+            self.assertTrue(any(n.endswith("ro-crate-metadata.json") for n in zf.namelist()))
+        self.assertEqual(self.post("/complete/NOPE0001", {})[0], 404)
+        self.assertEqual(self.post("/verify/NOPE0001", {})[0], 404)
+
     def test_07_unknown_routes(self):
         self.assertEqual(self.get("/nope")[0], 404)
         self.assertEqual(self.get("/note/NOPE0001")[0], 404)

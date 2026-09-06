@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -627,6 +628,177 @@ class TestIndexFindReportExport(TempVault):
             out, _ = self.ok("export", "-i")
         self.assertIn("TSTe0001.md ====", out)
         self.assertNotIn("TSTe0002.md ====", out)
+
+
+# ---------------------------------------------------------------------------
+# completion, snapshots, manifests, verification, .eln archives, per-type templates
+# ---------------------------------------------------------------------------
+
+class TestCloseOutAndArchive(TempVault):
+    def fill_results(self, exp_id):
+        note = self.note(exp_id)
+        self.edit(note, "## Results\n", "## Results\n\nBands were brighter after treatment.\n\n![](../5-figures/TSTe0001_R_blot.png)\n")
+        self.edit(note, "## Interpretation\n", "## Interpretation\n\nPreliminary: supports the hypothesis (n = 1).\n")
+
+    def test_set_header_field(self):
+        self.make_clean_vault()
+        note = self.note("TSTe0001")
+        eln.set_header_field(note, "status", "paused")
+        eln.set_header_field(note, "title", "Now with: colon, and comma")
+        eln.set_header_field(note, "brand_new_key", ["a", "b"])
+        text = note.read_text(encoding="utf-8")
+        self.assertIn("status: paused            # active | complete | paused | abandoned", text)  # comment kept
+        fields, _, problems = eln.parse_front_matter(text)
+        self.assertEqual(problems, [])
+        self.assertEqual(fields["title"], "Now with: colon, and comma")
+        self.assertEqual(fields["brand_new_key"], ["a", "b"])
+        with self.assertRaises(eln.ElnError):
+            eln.set_header_field(self.root / "Protocols" / "README.md", "x", "y") if (self.root / "Protocols" / "README.md").exists() else (_ for _ in ()).throw(eln.ElnError("no README"))
+
+    def test_per_type_template_override(self):
+        self.make_clean_vault()
+        out, _ = self.ok("new", "experiment", "--title", "blot", "--type", "WesternBlot, Fractionation",
+                         "--project", "Proj-A", "--protocol", "P_WesternBlot")
+        text = self.note("TSTe0002").read_text(encoding="utf-8")
+        self.assertIn("templates/experiment.WesternBlot.md", text)  # the override's marker comment
+        self.assertIn("primary antibodies with sample IDs", text)
+        fields, _, problems = eln.parse_front_matter(text)
+        self.assertEqual(problems, [])
+        self.assertEqual(fields["experiment_type"], ["WesternBlot", "Fractionation"])
+        # the base template is used when no override exists, and the vault still validates strictly
+        self.ok("new", "experiment", "--title", "if", "--type", "IF", "--project", "Proj-A", "--protocol", "P_WesternBlot")
+        self.assertNotIn("experiment.WesternBlot.md", self.note("TSTe0003").read_text(encoding="utf-8"))
+        code, out = self.issues("--strict")
+        self.assertEqual(code, 0, out)
+
+    def test_render_is_self_contained(self):
+        folder = self.make_clean_vault()
+        (folder / "5-figures" / "TSTe0001_R_blot.png").write_bytes(b"\x89PNG\r\n\x1a\nfakepng")
+        self.fill_results("TSTe0001")
+        out_file = self.tmp / "snap.html"
+        out, _ = self.ok("render", "TSTe0001", "--out", str(out_file))
+        html_text = out_file.read_text(encoding="utf-8")
+        self.assertIn("<!doctype html>", html_text)
+        self.assertIn("data:image/png;base64,", html_text)           # image embedded, not linked
+        self.assertNotIn("/note/", html_text)                          # no web-only links
+        self.assertNotIn("/file?p=", html_text)
+        self.assertIn("<td>experiment_id</td><td>TSTe0001</td>", html_text)
+        self.assertIn("Bands were brighter", html_text)
+        self.assertIn("5-figures/TSTe0001_R_blot.png", html_text)     # file list
+        self.fail("render", "NOPE0001")
+
+    def test_complete_refuses_unfinished_then_writes_snapshot_and_manifest(self):
+        folder = self.make_clean_vault()
+        _, err = self.fail("complete", "TSTe0001", "--date", "2026-09-10")
+        self.assertIn("Results and Interpretation", err)
+        self.assertIn("--force", err)
+        self.assertEqual(list((folder / "1-notes").glob("*MANIFEST*")), [])
+        (folder / "5-figures" / "TSTe0001_R_blot.png").write_bytes(b"\x89PNG\r\n\x1a\nfakepng")
+        self.fill_results("TSTe0001")
+        self.fail("complete", "TSTe0001", "--date", "10/09/2026")
+        out, err = self.ok("complete", "TSTe0001", "--date", "2026-09-10")
+        self.assertIn("TSTe0001 is complete", out)
+        fields, _, _ = eln.parse_front_matter(self.note("TSTe0001").read_text(encoding="utf-8"))
+        self.assertEqual(fields["status"], "complete")
+        self.assertEqual(fields["date_completed"], "2026-09-10")
+        snap = folder / "1-notes" / "TSTe0001_snapshot_20260910.html"
+        manifest = folder / "1-notes" / "TSTe0001_MANIFEST.sha256"
+        self.assertTrue(snap.exists())
+        self.assertTrue(manifest.exists())
+        self.assertIn("generated 2026-09-10", snap.read_text(encoding="utf-8"))
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+        self.assertTrue(all(re.match(r"^[0-9a-f]{64}  \S", ln) for ln in lines), lines)
+        self.assertIn("1-notes/TSTe0001_snapshot_20260910.html", "\n".join(lines))  # the snapshot is covered
+        self.assertNotIn("MANIFEST", "\n".join(lines))                            # the manifest is not
+        self.assertIn("1-notes/TSTe0001.md", "\n".join(lines))
+        # sha256sum-compatible: recompute one entry by hand
+        import hashlib
+        note_hash = hashlib.sha256(self.note("TSTe0001").read_bytes()).hexdigest()
+        self.assertIn(f"{note_hash}  1-notes/TSTe0001.md", lines)
+        # still validates strictly; inventory picked up the status
+        code, out = self.issues("--strict")
+        self.assertEqual(code, 0, out)
+        self.assertIn(",complete,", (self.root / "Inventory" / "experiments.csv").read_text(encoding="utf-8"))
+        # --force completes an unfinished one and re-running is idempotent
+        self.ok("new", "experiment", "--title", "unfinished", "--project", "Proj-A", "--protocol", "P_WesternBlot")
+        self.ok("complete", "TSTe0002", "--force")
+        self.ok("complete", "TSTe0002", "--force")
+
+    def test_verify_detects_drift(self):
+        folder = self.make_clean_vault()
+        self.fill_results("TSTe0001")
+        self.ok("complete", "TSTe0001", "--date", "2026-09-10")
+        out, _ = self.ok("verify", "TSTe0001")
+        self.assertIn("TSTe0001: OK", out)
+        out, _ = self.ok("verify")
+        self.assertIn("TSTe0001: OK", out)
+        (folder / "4-data_processed" / "TSTe0001_quant.csv").write_text("a,b\n", encoding="utf-8")   # added
+        (folder / "1-notes" / "TSTe0001.md").write_text(self.note("TSTe0001").read_text(encoding="utf-8") + "\nedited\n", encoding="utf-8")  # modified
+        code, out, _ = run("verify", "TSTe0001")
+        self.assertEqual(code, 1)
+        self.assertIn("modified  1-notes/TSTe0001.md", out)
+        self.assertIn("added     4-data_processed/TSTe0001_quant.csv", out)
+        self.ok("complete", "TSTe0001", "--date", "2026-09-11", "--force")   # refresh
+        out, _ = self.ok("verify", "TSTe0001")
+        self.assertIn("OK", out)
+        self.ok("new", "experiment", "--title", "never completed")
+        _, err = self.fail("verify", "TSTe0002")
+        self.assertIn("no manifest", err + _)
+
+    def test_eln_archive_is_a_valid_ro_crate(self):
+        import hashlib
+        import zipfile
+        folder = self.make_clean_vault()
+        (folder / "5-figures" / "TSTe0001_R_blot.png").write_bytes(b"\x89PNG\r\n\x1a\nfakepng")
+        self.fill_results("TSTe0001")
+        out_file = self.tmp / "export.eln"
+        out, _ = self.ok("export", "--project", "Proj-A", "--format", "eln", "--out", str(out_file))
+        self.assertIn(".eln archive", out)
+        with zipfile.ZipFile(out_file) as zf:
+            names = zf.namelist()
+            roots = {n.split("/")[0] for n in names}
+            self.assertEqual(len(roots), 1, roots)                              # single root folder
+            root = roots.pop()
+            crate = json.loads(zf.read(f"{root}/ro-crate-metadata.json"))
+            self.assertEqual(crate["@context"], "https://w3id.org/ro/crate/1.1/context")
+            by_id = {node["@id"]: node for node in crate["@graph"]}
+            desc = by_id["ro-crate-metadata.json"]
+            self.assertEqual(desc["conformsTo"]["@id"], "https://w3id.org/ro/crate/1.1")
+            self.assertEqual(desc["about"]["@id"], "./")
+            self.assertIn(desc["sdPublisher"]["@id"], by_id)
+            self.assertEqual(by_id[desc["sdPublisher"]["@id"]]["@type"], "Organization")
+            root_ds = by_id["./"]
+            part_ids = [p["@id"] for p in root_ds["hasPart"]]
+            self.assertIn("./experiments/TSTe0001/", part_ids)
+            self.assertIn("./protocols/P_WesternBlot/", part_ids)                # related notes travel too
+            self.assertIn("./samples/TSTp0001/", part_ids)
+            self.assertIn("./projects/Proj-A/", part_ids)
+            exp = by_id["./experiments/TSTe0001/"]
+            self.assertEqual(exp["@type"], "Dataset")
+            self.assertEqual(exp["identifier"], "TSTe0001")
+            self.assertIn("X retention after Y", exp["name"])
+            self.assertEqual(by_id[exp["author"]["@id"]]["@type"], "Person")
+            self.assertEqual(by_id[exp["author"]["@id"]]["familyName"], "Person")
+            self.assertIn("<h2>Results</h2>", exp["text"])
+            self.assertIn('src="5-figures/TSTe0001_R_blot.png"', exp["text"])  # image path relative to the dataset
+            self.assertIn("Proj-A", exp["keywords"])
+            files = [by_id[p["@id"]] for p in exp["hasPart"]]
+            self.assertTrue(files)
+            for f in files:
+                self.assertEqual(f["@type"], "File")
+                for key in ("name", "encodingFormat", "contentSize", "sha256"):
+                    self.assertIn(key, f, f)
+                data = zf.read(f"{root}/" + f["@id"][2:])
+                self.assertEqual(f["contentSize"], str(len(data)))
+                self.assertEqual(f["sha256"], hashlib.sha256(data).hexdigest())
+            note_file = by_id["./experiments/TSTe0001/1-notes/TSTe0001.md"]
+            self.assertEqual(note_file["encodingFormat"], "text/markdown")
+        # --no-related leaves only the experiment
+        self.ok("export", "--experiment", "TSTe0001", "--format", "eln", "--no-related", "--out", str(out_file))
+        with zipfile.ZipFile(out_file) as zf:
+            crate = json.loads(zf.read([n for n in zf.namelist() if n.endswith("ro-crate-metadata.json")][0]))
+            ids = [p["@id"] for p in next(n for n in crate["@graph"] if n["@id"] == "./")["hasPart"]]
+            self.assertEqual(ids, ["./experiments/TSTe0001/"])
 
 
 # ---------------------------------------------------------------------------

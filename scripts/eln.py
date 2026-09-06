@@ -21,17 +21,23 @@ Pure standard-library Python 3.9+. No dependencies, nothing to install.
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
+import hashlib
+import html
 import io
 import json
+import mimetypes
 import os
 import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import quote
 
 __version__ = "1.0.0"
 
@@ -298,11 +304,12 @@ def render_header_line(line: str, values: Dict[str, str]) -> str:
     return out
 
 
-def render_template(kind: str, values: Dict[str, str]) -> str:
-    text = template_path(kind).read_text(encoding="utf-8")
+def render_template(kind: str, values: Dict[str, str], path: Optional[Path] = None) -> str:
+    path = path or template_path(kind)
+    text = path.read_text(encoding="utf-8")
     header, body, error = split_front_matter(text)
     if header is None:
-        raise ElnError(f"template {template_path(kind)} is broken: {error}")
+        raise ElnError(f"template {path} is broken: {error}")
     rendered_header = [render_header_line(line, values) for line in header]
     rendered_body = RE_PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), body)
     return "---\n" + "\n".join(rendered_header) + "\n---\n" + rendered_body.rstrip("\n") + "\n"
@@ -925,6 +932,10 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
         (folder / sub).mkdir(parents=True, exist_ok=True)
     write_subfolder_readmes(folder, exp_id)
 
+    # A per-type template (templates/experiment.WesternBlot.md) may add prompts to the body;
+    # the header keys stay those of templates/experiment.md, which is what the validator checks.
+    first_type = (csv_items(exp_type) or [""])[0]
+    override = TEMPLATES_DIR / f"experiment.{first_type}.md" if first_type else None
     note_path = folder / "1-notes" / f"{exp_id}.md"
     note_path.write_text(render_template("experiment", {
         "EXPERIMENT_ID": exp_id, "TITLE": title, "RESEARCHER": researcher or initials,
@@ -932,7 +943,7 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
         "PROTOCOL": protocol or "", "SAMPLES": samples or "", "NOTEBOOK_REF": notebook or "",
         "RAW_DATA_PATH": raw_data_path or f"Experiments/{folder_name}/2-data_raw",
         "RELATED": related or "", "TAGS": tags or "",
-    }), encoding="utf-8")
+    }, path=override if override and override.exists() else None), encoding="utf-8")
     result = Created(exp_id, note_path)
 
     for pid in csv_items(protocol):
@@ -1403,6 +1414,18 @@ def cmd_export(args) -> int:
         scope = "-".join(args.experiment[:3])
     elif args.status:
         scope = args.status
+    if args.format == "eln":
+        out = args.out
+        if not out:
+            (root / "Inventory").mkdir(parents=True, exist_ok=True)
+            out = str(root / "Inventory" / f"export_{scope}_{date.today().strftime('%Y%m%d')}.eln")
+        data = build_eln(vault, experiments, related=not args.no_related, root_name=Path(out).stem)
+        Path(out).write_bytes(data)
+        print(f"Exported {len(experiments)} experiment(s) as an .eln archive ({len(data):,} bytes) -> {out}")
+        print("Import it into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.")
+        if args.open:
+            open_path(Path(out).parent)
+        return 0
     text = build_export(vault, experiments, related=not args.no_related)
     out = args.out
     if not out and args.open:
@@ -1418,6 +1441,487 @@ def cmd_export(args) -> int:
         print(text, end="")
         err(f"Exported {len(experiments)} experiment(s), {len(text):,} characters")
     return 0
+
+
+# --------------------------------------------------------------------------
+# A small, safe Markdown renderer (headers, lists, tables, images, links, emphasis, code).
+# Used by the web page, by HTML snapshots, and by the .eln archive's `text` field.
+# --------------------------------------------------------------------------
+
+def esc(s) -> str:
+    return html.escape("" if s is None else str(s), quote=True)
+
+
+RE_ID_LINK = re.compile(r"\b([A-Z]{2,4}[eipacmtrsg]\d{4}|P_[A-Za-z0-9][A-Za-z0-9-]*)\b")
+
+
+def _web_img_src(rel: str) -> str:
+    return "/file?p=" + quote(rel)
+
+
+class _Render:
+    __slots__ = ("img_base", "link_ids", "img_src")
+
+    def __init__(self, img_base: str, link_ids: bool, img_src):
+        self.img_base, self.link_ids, self.img_src = img_base, link_ids, img_src
+
+
+def _inline(s: str, r: "_Render") -> str:
+    s = esc(s)
+
+    def img(m):
+        src = html.unescape(m.group(2))
+        if src.startswith(("http://", "https://", "/", "data:")):
+            return f'<img alt="{m.group(1)}" src="{esc(src)}">'
+        rel = os.path.normpath(os.path.join(r.img_base, src)).replace("\\", "/")
+        return f'<img alt="{m.group(1)}" src="{esc(r.img_src(rel) if r.img_src else rel)}">'
+
+    s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", img, s)
+    s = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target=_blank rel=noopener>\1</a>', s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", s)
+    s = re.sub(r"(?<![\w*])\*([^*\n]+)\*(?![\w*])", r"<i>\1</i>", s)
+    s = re.sub(r"(?<![\w_])_([^_\n]+)_(?![\w_])", r"<i>\1</i>", s)
+    if r.link_ids:
+        s = RE_ID_LINK.sub(r'<a href="/note/\1">\1</a>', s)
+    return s
+
+
+def md_to_html(text: str, img_base: str = "", link_ids: bool = True, img_src=_web_img_src) -> str:
+    """Markdown -> HTML. Everything is escaped first; nothing in a note can inject markup.
+    img_src maps a note-relative image path to the src attribute (web route, data URI, or archive path)."""
+    r = _Render(img_base, link_ids, img_src)
+    text = RE_HTML_COMMENT.sub("", text or "")
+    out: List[str] = []
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    para: List[str] = []
+
+    def flush():
+        if para:
+            out.append("<p>" + _inline(" ".join(para), r) + "</p>")
+            para.clear()
+
+    while i < n:
+        line = lines[i]
+        s = line.strip()
+        if s.startswith("```"):
+            flush()
+            i += 1
+            buf = []
+            while i < n and not lines[i].strip().startswith("```"):
+                buf.append(lines[i])
+                i += 1
+            out.append("<pre>" + esc("\n".join(buf)) + "</pre>")
+            i += 1
+            continue
+        m = re.match(r"^(#{1,6})\s+(.*)$", s)
+        if m:
+            flush()
+            lvl = len(m.group(1))
+            out.append(f"<h{lvl}>{_inline(m.group(2), r)}</h{lvl}>")
+            i += 1
+            continue
+        if re.match(r"^(-{3,}|\*{3,})$", s):
+            flush()
+            out.append("<hr>")
+            i += 1
+            continue
+        if s.startswith("|") and i + 1 < n and re.match(r"^\|?\s*:?-{2,}", lines[i + 1].strip()):
+            flush()
+            header = [c.strip() for c in s.strip("|").split("|")]
+            out.append("<table><tr>" + "".join(f"<th>{_inline(c, r)}</th>" for c in header) + "</tr>")
+            i += 2
+            while i < n and lines[i].strip().startswith("|"):
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                out.append("<tr>" + "".join(f"<td>{_inline(c, r)}</td>" for c in cells) + "</tr>")
+                i += 1
+            out.append("</table>")
+            continue
+        if re.match(r"^\s*[-*]\s+(.*)$", line):
+            flush()
+            out.append("<ul>")
+            while i < n and re.match(r"^\s*[-*]\s+", lines[i]):
+                item = re.sub(r"^\s*[-*]\s+", "", lines[i])
+                box = ""
+                mm = re.match(r"^\[([ xX])\]\s*(.*)$", item)
+                if mm:
+                    box = "&#9745; " if mm.group(1).strip() else "&#9744; "
+                    item = mm.group(2)
+                out.append(f"<li>{box}{_inline(item, r)}</li>")
+                i += 1
+            out.append("</ul>")
+            continue
+        if re.match(r"^\s*\d+\.\s+", line):
+            flush()
+            out.append("<ol>")
+            while i < n and re.match(r"^\s*\d+\.\s+", lines[i]):
+                item = re.sub(r"^\s*\d+\.\s+", "", lines[i])
+                out.append(f"<li>{_inline(item, r)}</li>")
+                i += 1
+            out.append("</ol>")
+            continue
+        if s.startswith(">"):
+            flush()
+            out.append(f"<blockquote>{_inline(s.lstrip('> '), r)}</blockquote>")
+            i += 1
+            continue
+        if not s:
+            flush()
+            i += 1
+            continue
+        para.append(s)
+        i += 1
+    flush()
+    return "\n".join(out)
+
+
+# --------------------------------------------------------------------------
+# Editing a header line in place
+# --------------------------------------------------------------------------
+
+def set_header_field(path: Path, key: str, value) -> None:
+    """Replace one header line's value, keeping any trailing comment; add the key if absent.
+    Line-level, so nothing else in the file is touched."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise ElnError(f"{path} has no YAML header")
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        raise ElnError(f"{path} has an unterminated YAML header")
+    for i in range(1, end):
+        if lines[i].startswith(key + ":"):
+            _, comment = _split_value_comment(lines[i][len(key) + 1:])
+            lines[i] = f"{key}: {format_value(value)}{comment}".rstrip()
+            break
+    else:
+        lines.insert(end, f"{key}: {format_value(value)}".rstrip())
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# Snapshots (self-contained HTML), manifests (sha256sum format), completion, verification
+# --------------------------------------------------------------------------
+
+SNAPSHOT_CSS = (
+    "body{max-width:860px;margin:32px auto;padding:0 20px;font:15px/1.5 -apple-system,BlinkMacSystemFont,"
+    "'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933}h1{font-size:22px;margin-bottom:4px}"
+    "h2{border-bottom:1px solid #e3e8ee;padding-bottom:4px;margin-top:24px;font-size:18px}"
+    "table{border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #e3e8ee;"
+    "vertical-align:top}.meta td:first-child{color:#5f6b7a;white-space:nowrap}img{max-width:100%;border:1px solid #e3e8ee}"
+    "code{background:#f1f5f9;padding:1px 4px;border-radius:4px}pre{background:#f1f5f9;padding:10px;overflow-x:auto}"
+    ".sub{color:#5f6b7a}.foot{color:#5f6b7a;font-size:13px;margin-top:40px;border-top:1px solid #e3e8ee;padding-top:10px}"
+)
+
+SKIP_NAMES = {".ds_store", "thumbs.db", "desktop.ini", "__pycache__"}
+
+
+def _data_uri(path: Path, limit: int = 8_000_000) -> Optional[str]:
+    mime, _ = mimetypes.guess_type(path.name)
+    try:
+        if not mime or not mime.startswith("image/") or path.stat().st_size > limit:
+            return None
+        return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError:
+        return None
+
+
+def folder_files(folder: Path) -> List[Path]:
+    """Every regular file under an experiment folder, sorted, skipping OS litter."""
+    out = []
+    for p in sorted(folder.rglob("*")):
+        if p.is_file() and p.name.lower() not in SKIP_NAMES and not p.name.startswith(".") \
+                and "__pycache__" not in p.parts:
+            out.append(p)
+    return out
+
+
+def render_snapshot_html(vault: Vault, note: Note, generated: Optional[str] = None) -> str:
+    """One note as a single HTML file: header table, body with images embedded as data URIs, file list.
+    Opens in any browser, prints to PDF, needs nothing else. This is the archival rendering."""
+    generated = generated or date.today().isoformat()
+    base_dir = note.path.parent
+
+    def img_src(rel: str) -> str:
+        return _data_uri(base_dir / rel) or rel
+
+    text = note.path.read_text(encoding="utf-8", errors="replace")
+    _, body_md, _ = split_front_matter(text)
+    meta = "".join(f"<tr><td>{esc(k)}</td><td>{esc(', '.join(v) if isinstance(v, list) else v) or '-'}</td></tr>"
+                   for k, v in note.fields.items())
+    files_html = ""
+    if note.folder is not None:
+        rows = []
+        for p in folder_files(note.folder):
+            rel = p.relative_to(note.folder).as_posix()
+            rows.append(f"<tr><td>{esc(rel)}</td><td>{p.stat().st_size:,}</td></tr>")
+        files_html = "<h2>Files in this experiment folder</h2><table><tr><th>path</th><th>bytes</th></tr>" + "".join(rows) + "</table>"
+    return (f"<!doctype html><html><head><meta charset=utf-8><title>{esc(note.id)} {esc(note.get('title'))}</title>"
+            f"<style>{SNAPSHOT_CSS}</style></head><body>"
+            f"<h1>{esc(note.id)} <span class=sub>{esc(note.get('title'))}</span></h1>"
+            f"<table class=meta>{meta}</table>"
+            f"{md_to_html(body_md, img_base='', link_ids=False, img_src=img_src)}"
+            f"{files_html}"
+            f"<div class=foot>Snapshot of <code>{esc(vault.rel(note.path))}</code> generated {esc(generated)} by eln.py. "
+            f"The Markdown file is the record; this rendering is for reading, printing, and archiving.</div>"
+            f"</body></html>")
+
+
+def snapshot_path(note: Note, when: str) -> Path:
+    return note.path.parent / f"{note.id}_snapshot_{when.replace('-', '')}.html"
+
+
+def manifest_path(folder: Path, exp_id: str) -> Path:
+    return folder / "1-notes" / f"{exp_id}_MANIFEST.sha256"
+
+
+def hash_folder(folder: Path, exp_id: str) -> Dict[str, str]:
+    """{relative path: sha256} for every file in the folder except the manifest itself."""
+    out = {}
+    mpath = manifest_path(folder, exp_id)
+    for p in folder_files(folder):
+        if p == mpath:
+            continue
+        h = hashlib.sha256()
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        out[p.relative_to(folder).as_posix()] = h.hexdigest()
+    return out
+
+
+def write_manifest(folder: Path, exp_id: str) -> Path:
+    """sha256sum-compatible: `<hash>  <path>` per line. `sha256sum -c` can check it with no tool of ours."""
+    hashes = hash_folder(folder, exp_id)
+    p = manifest_path(folder, exp_id)
+    p.write_text("".join(f"{h}  {rel}\n" for rel, h in sorted(hashes.items())), encoding="utf-8")
+    return p
+
+
+def read_manifest(folder: Path, exp_id: str) -> Optional[Dict[str, str]]:
+    p = manifest_path(folder, exp_id)
+    if not p.exists():
+        return None
+    out = {}
+    for line in p.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([0-9a-f]{64})\s+\*?(.+)$", line.strip())
+        if m:
+            out[m.group(2)] = m.group(1)
+    return out
+
+
+def verify_manifest(folder: Path, exp_id: str) -> Tuple[List[str], List[str], List[str]]:
+    """(missing, modified, added) relative to the manifest written at completion."""
+    recorded = read_manifest(folder, exp_id)
+    if recorded is None:
+        raise ElnError(f"{exp_id} has no manifest (it has not been completed with eln.py)")
+    now = hash_folder(folder, exp_id)
+    missing = sorted(p for p in recorded if p not in now)
+    modified = sorted(p for p in recorded if p in now and now[p] != recorded[p])
+    added = sorted(p for p in now if p not in recorded)
+    return missing, modified, added
+
+
+def complete_experiment(root: Path, exp_id: str, when: Optional[str] = None, force: bool = False) -> Dict[str, object]:
+    """The close-out: check the note is finished, set status/date_completed, write a snapshot and a
+    manifest, re-index. Nothing is locked; the manifest makes later changes detectable (`verify`)."""
+    vault = load_vault(root)
+    note = vault.by_id.get(exp_id)
+    if note is None or note.kind != "experiment" or note.folder is None:
+        raise ElnError(f"no experiment {exp_id}")
+    when = when or date.today().isoformat()
+    if not _valid_date(when):
+        raise ElnError(f"date must be YYYY-MM-DD (got {when!r})")
+    secs = sections(note.body)
+    empty = [s for s in ("Results", "Interpretation") if section_is_empty(secs.get(s, ""))]
+    if empty and not force:
+        raise ElnError(f"{exp_id}: the {' and '.join(empty)} section{'s are' if len(empty) > 1 else ' is'} still empty. "
+                       f"Write {'them' if len(empty) > 1 else 'it'} first, or pass --force to complete anyway.")
+    warnings: List[str] = []
+    raw = note.get("raw_data_path")
+    if raw and not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", raw) and not raw.startswith("\\\\") \
+            and not (root / raw).exists() and not Path(raw).expanduser().exists():
+        warnings.append(f"raw_data_path {raw!r} was not found from this machine; fine if it is on a mounted drive, "
+                        f"but make sure the data is somewhere backed up")
+    set_header_field(note.path, "status", "complete")
+    set_header_field(note.path, "date_completed", when)
+    vault = load_vault(root)
+    note = vault.by_id[exp_id]
+    snap = snapshot_path(note, when)
+    snap.write_text(render_snapshot_html(vault, note, generated=when), encoding="utf-8")
+    manifest = write_manifest(note.folder, exp_id)
+    write_index(vault, quiet=True)
+    return {"snapshot": snap, "manifest": manifest, "warnings": warnings,
+            "files": len(read_manifest(note.folder, exp_id) or {})}
+
+
+def cmd_render(args) -> int:
+    root = resolve_root(args.root)
+    vault = load_vault(root)
+    note = vault.by_id.get(args.id)
+    if note is None:
+        raise ElnError(f"no note {args.id}")
+    when = date.today().isoformat()
+    out = Path(args.out) if args.out else snapshot_path(note, when)
+    out.write_text(render_snapshot_html(vault, note, generated=when), encoding="utf-8")
+    print(f"Wrote {vault.rel(out) if args.out is None else out}")
+    if args.open:
+        open_path(out)
+    return 0
+
+
+def cmd_complete(args) -> int:
+    root = resolve_root(args.root)
+    r = complete_experiment(root, args.id, when=args.date, force=args.force)
+    vault = load_vault(root)
+    print(f"{args.id} is complete.")
+    print(f"  {vault.rel(r['snapshot'])}  (self-contained HTML; print it to PDF for LabArchives)")
+    print(f"  {vault.rel(r['manifest'])}  ({r['files']} files hashed; `eln.py verify {args.id}` detects later changes)")
+    for w in r["warnings"]:
+        err(f"  warning: {w}")
+    if args.open:
+        open_path(r["snapshot"])
+    return 0
+
+
+def cmd_verify(args) -> int:
+    root = resolve_root(args.root)
+    vault = load_vault(root)
+    if args.id:
+        targets = [vault.by_id.get(args.id)]
+        if targets[0] is None or targets[0].kind != "experiment":
+            raise ElnError(f"no experiment {args.id}")
+    else:
+        targets = [n for n in vault.notes["experiment"] if n.folder and manifest_path(n.folder, n.id).exists()]
+        if not targets:
+            print("No experiment has a manifest yet (manifests are written by `eln.py complete`).")
+            return 0
+    drift = 0
+    for n in targets:
+        try:
+            missing, modified, added = verify_manifest(n.folder, n.id)
+        except ElnError as e:
+            print(f"{n.id}: {e}")
+            drift += 1
+            continue
+        if not (missing or modified or added):
+            print(f"{n.id}: OK, all {len(read_manifest(n.folder, n.id) or {})} files match the manifest")
+            continue
+        drift += 1
+        print(f"{n.id}: changed since completion")
+        for p in modified:
+            print(f"  modified  {p}")
+        for p in missing:
+            print(f"  missing   {p}")
+        for p in added:
+            print(f"  added     {p}")
+    if drift:
+        print("Changes after completion are allowed; re-run `eln.py complete ID` to refresh the snapshot and manifest.")
+    return 1 if drift else 0
+
+
+# --------------------------------------------------------------------------
+# The .eln archive: RO-Crate 1.1 in a ZIP, per TheELNConsortium/TheELNFileFormat.
+# Importable by eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, SciLog.
+# --------------------------------------------------------------------------
+
+ELN_MEDIA_TYPE = "application/vnd.eln+zip"
+
+
+def _person_node(name: str) -> Dict[str, str]:
+    parts = (name or "").strip().split()
+    given, family = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", parts[0] if parts else "unknown")
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", (name or "unknown").strip()).strip("-").lower() or "unknown"
+    return {"@id": f"#person-{slug}", "@type": "Person", "name": (name or "unknown").strip(),
+            "givenName": given, "familyName": family}
+
+
+def build_eln(vault: Vault, experiments: List[Note], related: bool = True, today: Optional[date] = None,
+              publisher: str = "Shechter Lab research record (AI_ELN)",
+              publisher_url: str = "https://github.com/Shechterlab/AI_ELN", root_name: Optional[str] = None) -> bytes:
+    """Bytes of a .eln archive containing the selected experiments (whole folders) plus, if related,
+    the protocols, samples, and projects they reference (their notes). root_name should match the
+    archive's filename stem, as the specification prefers."""
+    today = today or date.today()
+    stamp = today.strftime("%Y%m%d")
+    root_name = re.sub(r"[^A-Za-z0-9._-]+", "-", root_name or f"ai-eln-export-{stamp}").strip("-") or "eln-export"
+    notes: List[Note] = list(experiments)
+    if related:
+        seen = {e.id for e in experiments}
+        extras: List[Note] = []
+        for e in experiments:
+            for key, kind in REF_FIELDS["experiment"].items():
+                for ref in e.get_list(key):
+                    t = vault.by_id.get(ref)
+                    if t is not None and t.id not in seen:
+                        seen.add(t.id)
+                        extras.append(t)
+        order = {"project": 0, "protocol": 1, "sample": 2, "experiment": 3}
+        notes += sorted(extras, key=lambda n: (order[n.kind], n.id))
+
+    persons: Dict[str, Dict[str, str]] = {}
+    graph: List[Dict] = []
+    parts: List[Dict[str, str]] = []
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for n in notes:
+            ds_dir = f"./{n.kind}s/{n.id}/"
+            if n.kind == "experiment" and n.folder is not None:
+                files = [(p, p.relative_to(n.folder).as_posix()) for p in folder_files(n.folder)]
+                note_rel = n.path.relative_to(n.folder).as_posix()
+            else:
+                files = [(n.path, n.path.name)]
+                note_rel = n.path.name
+            file_nodes = []
+            latest = ""
+            for p, rel in files:
+                data = p.read_bytes()
+                arc = f"{root_name}/{n.kind}s/{n.id}/{rel}"
+                zf.writestr(arc, data)
+                mtime = date.fromtimestamp(p.stat().st_mtime).isoformat()
+                latest = max(latest, mtime)
+                mime, _ = mimetypes.guess_type(p.name)
+                file_nodes.append({
+                    "@id": ds_dir + rel, "@type": "File", "name": p.name,
+                    "encodingFormat": mime or "application/octet-stream",
+                    "contentSize": str(len(data)), "sha256": hashlib.sha256(data).hexdigest(),
+                    "dateModified": mtime,
+                })
+            who = n.get("researcher") or n.get("lead") or "unknown"
+            person = _person_node(who)
+            persons.setdefault(person["@id"], person)
+            _, body_md, _ = split_front_matter(n.path.read_text(encoding="utf-8", errors="replace"))
+            img_base = os.path.dirname(note_rel)
+            keywords = [n.kind] + n.get_list("tags") + n.get_list("experiment_type") + n.get_list("project")
+            dataset = {
+                "@id": ds_dir, "@type": "Dataset",
+                "name": f"{n.id} {n.get('title')}".strip(), "identifier": n.id,
+                "author": {"@id": person["@id"]},
+                "dateCreated": n.get("date_started") or n.get("date_created") or n.get("version") or latest,
+                "dateModified": n.get("date_completed") or latest,
+                "keywords": ", ".join(k for k in keywords if k),
+                "text": md_to_html(body_md, img_base=img_base, link_ids=False, img_src=lambda rel: rel),
+                "hasPart": [{"@id": f["@id"]} for f in file_nodes],
+            }
+            if n.get("status"):
+                dataset["creativeWorkStatus"] = n.get("status")
+            graph.append(dataset)
+            graph.extend(file_nodes)
+            parts.append({"@id": ds_dir})
+
+        descriptor = {
+            "@id": "ro-crate-metadata.json", "@type": "CreativeWork",
+            "about": {"@id": "./"}, "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            "dateCreated": today.isoformat(), "sdPublisher": {"@id": "#publisher"},
+            "version": "1.0",
+        }
+        root_ds = {"@id": "./", "@type": "Dataset", "name": publisher, "datePublished": today.isoformat(),
+                   "hasPart": parts}
+        org = {"@id": "#publisher", "@type": "Organization", "name": publisher, "url": publisher_url}
+        crate = {"@context": "https://w3id.org/ro/crate/1.1/context",
+                 "@graph": [descriptor, root_ds, org] + graph + list(persons.values())}
+        zf.writestr(f"{root_name}/ro-crate-metadata.json", json.dumps(crate, indent=2, ensure_ascii=False))
+    return buf.getvalue()
 
 
 # --------------------------------------------------------------------------
@@ -1587,6 +2091,24 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--json", action="store_true", help="print full header fields as JSON")
     f.set_defaults(func=cmd_find)
 
+    rn = sub.add_parser("render", parents=[common], help="write one note as a self-contained HTML file (images embedded)")
+    rn.add_argument("id", metavar="ID")
+    rn.add_argument("--out", help="default: 1-notes/{ID}_snapshot_{date}.html next to the note")
+    rn.add_argument("--open", action="store_true")
+    rn.set_defaults(func=cmd_render)
+
+    cp = sub.add_parser("complete", parents=[common],
+                        help="close out an experiment: set status and date, write an HTML snapshot and a sha256 manifest")
+    cp.add_argument("id", metavar="ID")
+    cp.add_argument("--date", help="completion date YYYY-MM-DD (default: today)")
+    cp.add_argument("--force", action="store_true", help="complete even if Results or Interpretation are empty")
+    cp.add_argument("--open", action="store_true", help="open the snapshot afterwards")
+    cp.set_defaults(func=cmd_complete)
+
+    vf = sub.add_parser("verify", parents=[common], help="compare completed experiments' files with their manifests")
+    vf.add_argument("id", nargs="?", metavar="ID", help="one experiment (default: every experiment with a manifest)")
+    vf.set_defaults(func=cmd_verify)
+
     r = sub.add_parser("report", parents=[common], help="Markdown brief for lab meeting")
     r.add_argument("--out", help="write to a file instead of stdout")
     r.add_argument("--open", action="store_true", help="write to Inventory/meeting-brief_<date>.md and open it")
@@ -1600,6 +2122,9 @@ def build_parser() -> argparse.ArgumentParser:
     x.add_argument("--status", help="every experiment with this status")
     x.add_argument("--all", action="store_true", help="every experiment")
     x.add_argument("--no-related", action="store_true", help="do not include referenced protocols/samples/projects")
+    x.add_argument("--format", choices=["md", "eln"], default="md",
+                   help="md: one Markdown file to paste into a chat (default); eln: a .eln archive (RO-Crate) "
+                        "that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import")
     x.add_argument("--out", help="write to a file instead of stdout")
     x.add_argument("-i", "--interactive", action="store_true", help="ask what to export")
     x.add_argument("--open", action="store_true", help="write to Inventory/export_<scope>_<date>.md and open it")

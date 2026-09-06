@@ -30,6 +30,8 @@ from urllib.parse import parse_qs, quote, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eln  # noqa: E402
 
+md_to_html = eln.md_to_html  # the renderer lives in eln.py so snapshots and .eln archives share it
+
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".tif", ".tiff"}
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
         ".svg": "image/svg+xml", ".webp": "image/webp", ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff"}
@@ -84,118 +86,6 @@ def page(title: str, body: str, active: str = "", root: Optional[Path] = None) -
             f"<script>function cp(id){{var t=document.getElementById(id);t.select();document.execCommand('copy');"
             f"var b=document.getElementById(id+'-btn');if(b){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy all'}},1500)}}}}</script>"
             f"</body></html>")
-
-
-# --------------------------------------------------------------------------
-# A small, safe Markdown renderer (headers, lists, tables, images, links, emphasis, code)
-# --------------------------------------------------------------------------
-
-def _inline(s: str, img_base: str) -> str:
-    s = esc(s)
-    s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)",
-               lambda m: f'<img alt="{m.group(1)}" src="{_img_src(m.group(2), img_base)}">', s)
-    s = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target=_blank rel=noopener>\1</a>', s)
-    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
-    s = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", s)
-    s = re.sub(r"(?<![\w*])\*([^*\n]+)\*(?![\w*])", r"<i>\1</i>", s)
-    s = re.sub(r"(?<![\w_])_([^_\n]+)_(?![\w_])", r"<i>\1</i>", s)
-    s = re.sub(r"\b([A-Z]{2,4}[eipacmtrsg]\d{4}|P_[A-Za-z0-9][A-Za-z0-9-]*)\b", r'<a href="/note/\1">\1</a>', s)
-    return s
-
-
-def _img_src(src: str, img_base: str) -> str:
-    src = html.unescape(src)
-    if src.startswith(("http://", "https://", "/")):
-        return esc(src)
-    rel = os.path.normpath(os.path.join(img_base, src)).replace("\\", "/")
-    return "/file?p=" + quote(rel)
-
-
-def md_to_html(text: str, img_base: str = "") -> str:
-    text = eln.RE_HTML_COMMENT.sub("", text or "")
-    out: List[str] = []
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    para: List[str] = []
-
-    def flush():
-        if para:
-            out.append("<p>" + _inline(" ".join(para), img_base) + "</p>")
-            para.clear()
-
-    while i < n:
-        line = lines[i]
-        s = line.strip()
-        if s.startswith("```"):
-            flush()
-            i += 1
-            buf = []
-            while i < n and not lines[i].strip().startswith("```"):
-                buf.append(lines[i])
-                i += 1
-            out.append("<pre>" + esc("\n".join(buf)) + "</pre>")
-            i += 1
-            continue
-        m = re.match(r"^(#{1,6})\s+(.*)$", s)
-        if m:
-            flush()
-            lvl = len(m.group(1))
-            out.append(f"<h{lvl}>{_inline(m.group(2), img_base)}</h{lvl}>")
-            i += 1
-            continue
-        if re.match(r"^(-{3,}|\*{3,})$", s):
-            flush()
-            out.append("<hr>")
-            i += 1
-            continue
-        if s.startswith("|") and i + 1 < n and re.match(r"^\|?\s*:?-{2,}", lines[i + 1].strip()):
-            flush()
-            header = [c.strip() for c in s.strip("|").split("|")]
-            out.append("<table><tr>" + "".join(f"<th>{_inline(c, img_base)}</th>" for c in header) + "</tr>")
-            i += 2
-            while i < n and lines[i].strip().startswith("|"):
-                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
-                out.append("<tr>" + "".join(f"<td>{_inline(c, img_base)}</td>" for c in cells) + "</tr>")
-                i += 1
-            out.append("</table>")
-            continue
-        m = re.match(r"^\s*[-*]\s+(.*)$", line)
-        if m:
-            flush()
-            out.append("<ul>")
-            while i < n and re.match(r"^\s*[-*]\s+", lines[i]):
-                item = re.sub(r"^\s*[-*]\s+", "", lines[i])
-                box = ""
-                mm = re.match(r"^\[([ xX])\]\s*(.*)$", item)
-                if mm:
-                    box = "&#9745; " if mm.group(1).strip() else "&#9744; "
-                    item = mm.group(2)
-                out.append(f"<li>{box}{_inline(item, img_base)}</li>")
-                i += 1
-            out.append("</ul>")
-            continue
-        if re.match(r"^\s*\d+\.\s+", line):
-            flush()
-            out.append("<ol>")
-            while i < n and re.match(r"^\s*\d+\.\s+", lines[i]):
-                item = re.sub(r"^\s*\d+\.\s+", "", lines[i])
-                out.append(f"<li>{_inline(item, img_base)}</li>")
-                i += 1
-            out.append("</ol>")
-            continue
-        if s.startswith(">"):
-            flush()
-            out.append(f"<blockquote>{_inline(s.lstrip('> '), img_base)}</blockquote>")
-            i += 1
-            continue
-        if not s:
-            flush()
-            i += 1
-            continue
-        para.append(s)
-        i += 1
-    flush()
-    return "\n".join(out)
 
 
 # --------------------------------------------------------------------------
@@ -336,6 +226,21 @@ class App:
                    f"<button class='btn secondary'>Open in your editor</button>"
                    f"<button class='btn secondary' name=folder value=1>Show folder</button>"
                    f"<span class=path>{esc(self.rel(n.path))}</span></form>")
+        if n.kind == "experiment" and n.folder is not None:
+            if n.get("status") != "complete":
+                actions += (f"<form class=actions method=post action='/complete/{esc(n.id)}'>"
+                            f"<button class='btn secondary'>Mark complete</button>"
+                            f"<span class=hint>sets status and date, writes an HTML snapshot and a file manifest</span></form>")
+            else:
+                has_manifest = eln.manifest_path(n.folder, n.id).exists()
+                actions += (f"<div class=actions>"
+                            f"<form method=post action='/verify/{esc(n.id)}' style='display:inline'>"
+                            f"<button class='btn secondary' {'' if has_manifest else 'disabled'}>Verify files</button></form>"
+                            f"<form method=post action='/complete/{esc(n.id)}' style='display:inline'>"
+                            f"<input type=hidden name=force value=1><button class='btn secondary'>Refresh snapshot &amp; manifest</button></form>"
+                            f"<form method=post action='/render/{esc(n.id)}' style='display:inline'>"
+                            f"<button class='btn secondary'>Save HTML snapshot</button></form>"
+                            f"</div>")
         body = (f"{msg}<h1>{esc(n.id)} <small style='font-weight:400;color:var(--muted)'>{esc(n.get('title'))}</small></h1>"
                 f"{actions}<div class=card><div class=meta>{meta}</div></div>"
                 f"<div class='card note'>{md_to_html(body_md, img_base)}</div>{files_html}{usage}")
@@ -522,7 +427,11 @@ class App:
                               f"<div class=actions><button class=btn id=exp-btn onclick=\"cp('exp')\">Copy all</button>"
                               f"<form method=post action='/export/save' style='display:inline'>"
                               f"<input type=hidden name=scope value='{esc(scope)}'><input type=hidden name=project value='{esc(q.get('project'))}'>"
-                              f"<input type=hidden name=ids value='{esc(q.get('ids'))}'><button class='btn secondary'>Save as a file</button></form></div>"
+                              f"<input type=hidden name=ids value='{esc(q.get('ids'))}'><button class='btn secondary'>Save as a file</button></form>"
+                              f"<form method=post action='/export/save' style='display:inline'>"
+                              f"<input type=hidden name=scope value='{esc(scope)}'><input type=hidden name=project value='{esc(q.get('project'))}'>"
+                              f"<input type=hidden name=ids value='{esc(q.get('ids'))}'><input type=hidden name=format value=eln>"
+                              f"<button class='btn secondary' title='RO-Crate archive that eLabFTW, RSpace, Kadi4Mat and others import'>Save as .eln archive</button></form></div>"
                               f"<textarea id=exp class=export readonly>{esc(text)}</textarea>")
             except eln.ElnError as e:
                 err = str(e)
@@ -729,6 +638,47 @@ def make_handler(app: App):
                         out = app.edit(nid, err=error, text=g("text"))
                         return self.send_html(out, 400) if out else self.not_found("No such note")
                     return self.redirect(redirect)
+                if path.startswith("/complete/"):
+                    nid = path[len("/complete/"):]
+                    try:
+                        r = eln.complete_experiment(app.root, nid, when=g("date") or None, force=bool(g("force")))
+                    except eln.ElnError as e:
+                        retry = (f"<form method=post action='/complete/{esc(nid)}' style='display:inline'>"
+                                 f"<input type=hidden name=force value=1><button class='btn secondary'>Complete anyway</button></form>")
+                        out = app.note(nid, f"<div class='msg err'>{esc(e)} {retry}</div>")
+                        return self.send_html(out, 400) if out else self.not_found("No such experiment")
+                    msg = (f"<div class='msg ok'>{esc(nid)} is complete. Snapshot <span class=path>{esc(app.rel(r['snapshot']))}</span>; "
+                           f"manifest of {r['files']} files <span class=path>{esc(app.rel(r['manifest']))}</span>.</div>")
+                    for w in r["warnings"]:
+                        msg += f"<div class='msg warn'>{esc(w)}</div>"
+                    return self.send_html(app.note(nid, msg))
+                if path.startswith("/verify/"):
+                    nid = path[len("/verify/"):]
+                    v = eln.load_vault(app.root)
+                    n = v.by_id.get(nid)
+                    if n is None or n.kind != "experiment" or n.folder is None:
+                        return self.not_found("No such experiment")
+                    missing, modified, added = eln.verify_manifest(n.folder, nid)
+                    if not (missing or modified or added):
+                        msg = f"<div class='msg ok'>All {len(eln.read_manifest(n.folder, nid) or {})} files match the manifest written at completion.</div>"
+                    else:
+                        items = "".join(f"<li>{esc(kind)}: <span class=path>{esc(p)}</span></li>"
+                                        for kind, lst in (("modified", modified), ("missing", missing), ("added", added)) for p in lst)
+                        msg = (f"<div class='msg warn'>Changed since completion:<ul>{items}</ul>"
+                               f"That is allowed; use <b>Refresh snapshot &amp; manifest</b> when the changes are intentional.</div>")
+                    return self.send_html(app.note(nid, msg))
+                if path.startswith("/render/"):
+                    nid = path[len("/render/"):]
+                    v = eln.load_vault(app.root)
+                    n = v.by_id.get(nid)
+                    if n is None:
+                        return self.not_found("No such note")
+                    when = date.today().isoformat()
+                    out = eln.snapshot_path(n, when)
+                    out.write_text(eln.render_snapshot_html(v, n, generated=when), encoding="utf-8")
+                    eln.open_path(out)
+                    return self.send_html(app.note(nid, f"<div class='msg ok'>Saved and opened <span class=path>{esc(app.rel(out))}</span>. "
+                                                        f"It is one file with the images inside; print it to PDF from the browser.</div>"))
                 if path == "/open":
                     p = app.root / g("p")
                     if not app.inside_root(p) or not p.exists():
@@ -750,11 +700,19 @@ def make_handler(app: App):
                         "active" if scope == "active" else None, scope == "all")
                     label = g("project") if scope == "project" else scope
                     (app.root / "Inventory").mkdir(parents=True, exist_ok=True)
-                    out = app.root / "Inventory" / f"export_{label}_{date.today().strftime('%Y%m%d')}.md"
-                    out.write_text(eln.build_export(v, experiments), encoding="utf-8")
-                    eln.open_path(out)
-                    return self.send_html(page("Export", f"<h1>Export saved</h1><div class='msg ok'>Saved to "
-                                               f"<span class=path>{esc(app.rel(out))}</span> and opened. Attach it to a chat or copy its contents.</div>"
+                    if g("format") == "eln":
+                        out = app.root / "Inventory" / f"export_{label}_{date.today().strftime('%Y%m%d')}.eln"
+                        out.write_bytes(eln.build_eln(v, experiments, root_name=out.stem))
+                        eln.open_path(out.parent)
+                        note_text = ("an .eln archive (RO-Crate). Import it into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, "
+                                     "OpenSemanticLab, or SciLog; the folder it is in was opened.")
+                    else:
+                        out = app.root / "Inventory" / f"export_{label}_{date.today().strftime('%Y%m%d')}.md"
+                        out.write_text(eln.build_export(v, experiments), encoding="utf-8")
+                        eln.open_path(out)
+                        note_text = "a Markdown file, opened. Attach it to a chat or copy its contents."
+                    return self.send_html(page("Export", f"<h1>Export saved</h1><div class='msg ok'>Saved "
+                                               f"<span class=path>{esc(app.rel(out))}</span>: {note_text}</div>"
                                                f"<a class=btn href='/export'>Back</a>", "/export", app.root))
                 return self.not_found()
             except eln.ElnError as e:

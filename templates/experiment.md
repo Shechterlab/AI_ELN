@@ -44,7 +44,8 @@ tags: [{{TAGS}}]          # add meeting to flag this for the next lab meeting
 
 ## Interpretation
 
-<!-- What does this tell us? Does it support, contradict, or refine the hypothesis? -->
+<!-- What does this tell us? Does it support, contradict, or refine the hypothesis?
+     Mark anything tentative as such ("Preliminary:", "n = 1"); an AI reading this later keeps your hedges. -->
 
 ## Decision
 
