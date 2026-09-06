@@ -6,27 +6,34 @@ header. Because the structure never varies, a person can find anything in
 seconds, a spreadsheet can index it, and an AI assistant can read it and
 cite the exact experiment a claim came from.
 
-No accounts, no plugins, no database, no API keys. If you can make a folder
-and type in a text file, you can use this.
+No accounts, no plugins, no database, no API keys, nothing to install
+beyond Python (already on every Mac). If you can fill in a form and type
+in a text box, you can use this.
 
 ## What you actually do
 
-1. **Double-click `launchers/New Experiment`.** It asks for a title (and a
-   few optional things), then creates the experiment folder and opens the
-   note. The first time, it also asks your initials and name.
-2. **Write in the note.** Objective before you start, Results and
-   Interpretation when you have them. The note is a text file; use any editor.
-3. **Drop files into the subfolders**, named with the experiment ID in
+1. **Double-click `launchers/Open ELN`.** A page opens in your browser
+   (it runs on your own computer; nothing is uploaded anywhere).
+2. **Click New experiment, type a title, click Create.** The folder, the
+   note, the protocol snapshot, and the inventory row are made for you.
+3. **Click Edit here and write.** Objective before you start; Results,
+   Interpretation, Decision when you have them.
+4. **Drop files into the subfolders**, named with the experiment ID in
    front: `JSRe0002_R_blot-quantification.png` into `5-figures/`. Raw
-   instrument files go into `2-data_raw/` untouched.
+   instrument files go into `2-data_raw/` untouched. **Show folder** opens it.
 
-That is the whole habit. Two more double-clicks are worth knowing:
-`Check Everything` tells you if anything is misnamed or missing, and
-`Lab Meeting Brief` writes the summary for the next meeting from whatever
-you flagged.
+That is the whole habit. **Check** tells you if anything is misnamed or
+missing; **Meeting brief** writes the summary for the next lab meeting
+from whatever you flagged. Practice first on fictional data with
+`launchers/Try the Sandbox`.
 
-Mac users: the first time you double-click a launcher, right-click it and
-choose *Open* instead. Windows needs Python installed once; see
+![The home page](docs/img/home.png)
+
+The page is one dependency-free Python file reading and writing the same
+plain files as everything else. Terminal-window launchers (`New
+Experiment`, `Check Everything`, ...) and a command line do the same
+things for people who prefer them. Mac users right-click → Open a launcher
+the first time; Windows needs Python installed once. See
 [`docs/getting-started.md`](docs/getting-started.md).
 
 ## The whole system on one screen
@@ -47,10 +54,10 @@ Inventory/    *.csv                     generated index of all of the above; ope
 
 | Thing | ID looks like | Made by |
 |---|---|---|
-| Experiment | `JSRe0002` | `New Experiment` |
-| Sample | `JSRp0001` (p plasmid, i oligo, a antibody, c cell line, g gel, ...) | `New Sample` |
-| Protocol | `P_WesternBlot` | `New Protocol` |
-| Project | `PRMT5-ChromatinRelease` | `New Project` |
+| Experiment | `JSRe0002` | New experiment |
+| Sample | `JSRp0001` (p plasmid, i oligo, a antibody, c cell line, g gel, ...) | New sample |
+| Protocol | `P_WesternBlot` | New protocol |
+| Project | `PRMT5-ChromatinRelease` | New project |
 
 The initials are yours, so numbering never collides with anyone else's. An
 ID written anywhere is a link. The complete rules fit on one page:
@@ -75,15 +82,17 @@ tags: [meeting]           # flag for the next lab meeting
 ---
 ```
 
+![A filled-in note as the page shows it](docs/img/note.png)
+
 ## Using AI with it
 
 Everything here works with the ChatGPT site license or a Claude
 subscription. Nothing needs an API key.
 
-- **ChatGPT, copy and paste.** Double-click `launchers/Export for ChatGPT`,
-  pick a project (or press Enter for everything active). It writes one file
-  containing the notes plus a short primer on how to read them. Paste it
-  into a chat and ask: *summarize what we know, citing experiment IDs*;
+- **ChatGPT, copy and paste.** Click **Export**, pick a project (or all
+  active experiments), click **Copy all**, paste into a chat. The export
+  contains the notes, everything they reference, and a short primer on
+  how to read them. Ask: *summarize what we know, citing experiment IDs*;
   *draft a results paragraph for JSRe0002*; *which experiments used
   JSRa0003?* Once, paste [`docs/ai-briefing.md`](docs/ai-briefing.md) as
   the instructions of a ChatGPT Project so every chat already knows the rules.
@@ -95,23 +104,25 @@ subscription. Nothing needs an API key.
   plus vendored methodology skills from
   [K-Dense](https://github.com/K-Dense-AI/scientific-agent-skills)
   (experimental design, statistics, scientific writing, citations,
-  LabArchives). Those are pinned to a release and updated only by a
-  reviewed diff.
+  LabArchives), pinned to a release and updated only by a reviewed diff.
 
-Details and the reasoning: [`docs/ai-agents.md`](docs/ai-agents.md).
+[`sandbox/PILOT.md`](sandbox/PILOT.md) shows what those skills produced
+when run against the fictional sandbox. Details and reasoning:
+[`docs/ai-agents.md`](docs/ai-agents.md).
 
 ## Keeping it honest
 
-`launchers/Check Everything` (or `python3 scripts/eln.py validate`) reads
-every note and folder and reports what breaks the conventions: a misnamed
-folder, a missing subfolder, a `status` that isn't one of the four, a
-sample ID that points at nothing, a figure without the experiment ID in
-front. Errors fail; warnings are advice. Run it before lab meeting and
-before handing a folder to anyone.
+**Check** (or `python3 scripts/eln.py validate`) reads every note and
+folder and reports what breaks the conventions: a misnamed folder, a
+missing subfolder, a `status` that isn't one of the four, a sample ID that
+points at nothing, a figure without the experiment ID in front. Errors
+fail; warnings are advice. Run it before lab meeting and before handing a
+folder to anyone. Continuous integration runs it on this repository's own
+example and on the sandbox on every change, on macOS, Windows, and Linux.
 
 ## For people who like a terminal
 
-Everything the launchers do is one script with no dependencies:
+Everything the page does is one script with no dependencies:
 
 ```bash
 python3 scripts/eln.py init                                  # once: initials, name, where files live
@@ -122,6 +133,7 @@ python3 scripts/eln.py find --status active --tag meeting
 python3 scripts/eln.py index                                 # regenerate Inventory/*.csv
 python3 scripts/eln.py report                                # Markdown brief for lab meeting
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
+python3 scripts/eln_web.py                                   # the page, by hand
 ```
 
 `--help` on any command. The files can live in this folder (default) or
@@ -130,11 +142,12 @@ mount — set once with `init`. Tests: `python3 -m unittest discover -s tests`.
 
 ## Read more
 
-- [`docs/getting-started.md`](docs/getting-started.md) — first day, step by step, including the Mac and Windows one-time setup
+- [`docs/getting-started.md`](docs/getting-started.md) — first day, step by step, with pictures
 - [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) — one printable page
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — the rules, precisely
 - [`docs/SOP.md`](docs/SOP.md) — what's required, what's flexible, what happens when an experiment is done
 - [`docs/ai-agents.md`](docs/ai-agents.md) / [`docs/ai-briefing.md`](docs/ai-briefing.md) — AI without API keys
+- [`sandbox/`](sandbox/README.md) — fictional record to practice on; [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
 - [`docs/design-notes.md`](docs/design-notes.md) — why it's shaped this way; where LabArchives fits
 - [`reference/jacob-original-system/`](reference/jacob-original-system/) — the spreadsheet-and-folders system by Jacob Roth that this is a direct translation of
 
@@ -143,5 +156,5 @@ mount — set once with `init`. Tests: `python3 -m unittest discover -s tests`.
 The information architecture — one ID per experiment, five fixed
 subfolders, IDs for every gel and plasmid, a results file you can find in
 one search — is Jacob Roth's. This repo turns it into plain Markdown with a
-header, adds a tool that enforces the conventions, and makes the whole
-thing readable by AI.
+header, adds a tool that enforces the conventions and a page that makes it
+point-and-click, and makes the whole thing readable by AI.

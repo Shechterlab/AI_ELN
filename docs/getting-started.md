@@ -1,6 +1,7 @@
 # Getting started
 
-Ten minutes, once. After that, creating an experiment is one double-click.
+Ten minutes, once. After that, creating an experiment is one double-click
+and one form.
 
 ## 0. Get the folder onto your computer
 
@@ -14,62 +15,65 @@ it around by hand.
 
 **Mac.** Python is already there. The first time you double-click a
 launcher, macOS will say it's from an unidentified developer: right-click
-(or Control-click) the launcher, choose **Open**, then **Open** again. Only
-needed once per launcher. If a window offers to install *command line
-developer tools*, click **Install**; that is Python being set up and takes
-a few minutes.
+(or Control-click) the launcher, choose **Open**, then **Open** again
+(on the newest macOS: *System Settings → Privacy & Security → Open
+Anyway*). Only needed once per launcher, and not at all if the folder came
+by OneDrive sync or `git clone`. If a window offers to install *command
+line developer tools*, click **Install**; that is Python being set up and
+takes a few minutes.
 
 **Windows.** Install Python once from <https://www.python.org/downloads/>
 and tick **Add python.exe to PATH** on the first screen of the installer.
 Then the launchers just work.
 
-**Linux.** Python 3 is already there; run the `.command` files from a
-terminal or use the commands in §6.
+**Linux.** Python 3 is already there; run `python3 scripts/eln_web.py`.
 
-## 2. Create your first experiment
+## 2. Open the page
 
-Double-click **`launchers/New Experiment`**. A small window asks:
+Double-click **`launchers/Open ELN`**. A small window appears and your
+browser opens a page like this:
 
-```
-First time here. Two quick questions (asked only once):
-  Your initials (2-4 letters, e.g. JSR): JSR
-  Your full name: Jacob Roth
+![The home page: seven buttons and the recent experiments](img/home.png)
 
-New experiment. Only the title is required; press Enter to skip the rest.
-  Title (what are you doing?): SNRPB chromatin retention after PRMT5 inhibition
-  Project ID (existing: PRMT5-ChromatinRelease):
-  Experiment type (e.g. WesternBlot, IF, qPCR): WesternBlot
-  Protocol ID (existing: P_WesternBlot): P_WesternBlot
-  Sample IDs, comma-separated (existing: DSLp0001):
-  Physical notebook page (e.g. NB02-153): NB02-153
-  Flag this for the next lab meeting? (y/N): y
+The page runs on your own computer (the address starts with `127.0.0.1`);
+nothing leaves it. Leave the small window alone; closing it closes the
+page. The first time, it asks for your initials and name under
+**settings**. Your initials become your ID prefix (`JSRe0001`, `JSRe0002`,
+…), so nobody's numbering collides with anyone else's.
 
-Created JSRe0001
-  Experiments/JSRe0001_SNRPB-chromatin-retention-after-PRMT5-inhibition/1-notes/JSRe0001.md
-  Experiments/JSRe0001_.../1-notes/JSRe0001_P_WesternBlot_20260901.md  (snapshot of P_WesternBlot)
-Opening the note. Fill in the Objective; everything else can wait.
-```
+Want to click around first without touching the lab's real record?
+Double-click **`launchers/Try the Sandbox`** instead: same page, fictional
+data, resettable.
 
-You now have a folder with the five standard subfolders, a note with the
-header filled in, a copy of the protocol as it was on that day, and a row
-in `Inventory/experiments.csv`. The note opens in whatever your computer
-uses for `.md` files.
+## 3. Create your first experiment
 
-## 3. Write in the note
+Click **New experiment**. The title is the only thing you must fill in;
+everything else can be added later.
 
-It's a text file. The header at the top is filled in for you; the parts
-that matter are the `##` section titles — keep them so every experiment in
-the lab reads the same way. Between them, write however you like.
+![The new-experiment form](img/new-experiment.png)
 
-Fill in **Objective** before you start. Fill in **Results**,
-**Interpretation**, and **Decision** when you have them. Leave a section as
-"None" rather than deleting it.
+Click **Create experiment**. You now have a folder with the five standard
+subfolders, a note with the header filled in, a copy of the protocol as it
+stood today, and a row in the inventory. The page shows the new note.
 
-Any editor works, including TextEdit (Mac: Format → Make Plain Text once)
-or Notepad. A free Markdown editor such as VS Code or Typora shows
-headings and images nicely; none of them is required.
+## 4. Write in the note
 
-## 4. Put files where they belong, named with the ID
+Click **Edit here** on the note's page, write under the section titles,
+click **Save**. That is the whole editing workflow if you never want to
+see a text editor. (The note is a plain text file, so any editor works
+too: **Open in your editor** hands it to whatever your computer uses for
+`.md` files.)
+
+![A filled-in note as the page shows it](img/note.png)
+
+Keep the `##` section titles so every experiment in the lab reads the
+same way; between them, write however you like. Fill in **Objective**
+before you start; **Results**, **Interpretation**, and **Decision** when
+you have them. Leave a section as "None" rather than deleting it.
+
+## 5. Put files where they belong, named with the ID
+
+**Show folder** on the note's page opens the experiment folder.
 
 ```
 2-data_raw/         instrument output. Original filenames. Never edit, never rename.
@@ -80,26 +84,29 @@ headings and images nicely; none of them is required.
 
 Start every file you make with the experiment ID; join words with hyphens.
 That single habit is what makes "find me the blot from that experiment" a
-one-second search forever. Full grammar: [`CONVENTIONS.md`](CONVENTIONS.md) §3.
+one-second search forever. Each subfolder has a short README saying what
+goes in it. Full grammar: [`CONVENTIONS.md`](CONVENTIONS.md) §3.
 
 If the raw data is too large to keep here (microscopy, sequencing), leave
 it on the institutional storage and put its location in the note's
-`raw_data_path` line.
+`raw_data_path` line. A figure you put in `5-figures/` and link from the
+Results section shows up on the note's page.
 
-## 5. The other launchers
+## 6. The rest of the page
 
-| Launcher | What it does |
+| Button | What it does |
 |---|---|
-| **New Sample** | A record for a plasmid, oligo, antibody, cell line, mouse line, peptide, protein prep, slide, or gel. Gets an ID like `JSRp0001`. Reuse that ID in every experiment that touches it. |
-| **New Protocol** | One living file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
-| **New Project** | The rolled-up state of a research thread; conclusions cite experiment IDs. |
-| **Check Everything** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
-| **Lab Meeting Brief** | Writes `Inventory/meeting-brief_<date>.md` from everything tagged `meeting`, plus the active-experiments table. |
-| **Export for ChatGPT** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
+| **New sample** | A record for a plasmid, oligo, antibody, cell line, mouse line, peptide, protein prep, slide, or gel. Gets an ID like `JSRp0001`. Tick it in the experiment form from then on. |
+| **New protocol** | One living file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
+| **New project** | The rolled-up state of a research thread; conclusions cite experiment IDs. |
+| **Check** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
+| **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. One click saves it as a file. |
+| **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
+| **Experiments / Samples / Protocols / Projects** | Browse and filter. Every ID on every page is a link. |
 
-## 6. When an experiment is finished
+## 7. When an experiment is finished
 
-Open the note and change two header lines:
+Edit the note and change two header lines:
 
 ```yaml
 status: complete
@@ -107,25 +114,28 @@ date_completed: 2026-09-12
 ```
 
 Make sure Results and Interpretation are written and `raw_data_path` is
-somewhere backed up. Then run **Check Everything**; it will tell you if
-you forgot one of those.
+somewhere backed up. **Check** will tell you if you forgot one of those.
 
-## 7. The same thing from a terminal
+## 8. The same thing without a browser
 
-The launchers just run one script. If you prefer typing:
+Every launcher and every button runs one script. If you prefer a terminal:
 
 ```bash
 python3 scripts/eln.py init                                # initials, name, where files live
 python3 scripts/eln.py new experiment --title "..."         # add --project, --protocol, --samples, --tags meeting ...
-python3 scripts/eln.py new experiment --interactive         # the same questions the launcher asks
+python3 scripts/eln.py new experiment --interactive         # asks questions instead
 python3 scripts/eln.py new sample --type plasmid --title "..."
 python3 scripts/eln.py validate                            # --strict makes warnings fail too
 python3 scripts/eln.py find --status active --project PRMT5-ChromatinRelease
 python3 scripts/eln.py report
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
+python3 scripts/eln_web.py                                 # the page, by hand
 ```
 
-## 8. Where the files live
+The terminal-window launchers (`New Experiment`, `Check Everything`, and
+so on) are the same commands with questions instead of flags.
+
+## 9. Where the files live
 
 By default, inside this folder — simplest, and fine for a synced OneDrive
 or Dropbox copy of the whole folder. If the lab keeps notes somewhere else
@@ -135,22 +145,25 @@ or Dropbox copy of the whole folder. If the lab keeps notes somewhere else
 python3 scripts/eln.py init --root "/path/to/ShechterLab/ELN"
 ```
 
-That writes `~/.ai_eln.json`; the launchers and every command use it from
-then on. `AI_ELN_ROOT` in the environment or `--root` on a command
-overrides it for one shell or one call.
+That writes `~/.ai_eln.json`; the page, the launchers, and every command
+use it from then on. `AI_ELN_ROOT` in the environment or `--root` on a
+command overrides it for one shell or one call.
 
 ## If something doesn't work
 
 - **Mac: "cannot be opened because it is from an unidentified developer"** —
-  right-click → Open (once per launcher).
+  right-click → Open (once per launcher), or Privacy & Security → Open Anyway.
 - **Mac: double-clicking opens the file in a text editor instead of running
   it** — the executable bit was lost in a download or sync. In Terminal:
   `chmod +x` followed by a space, then drag the `launchers` folder into the
-  window, add `/*.command`, press Enter. Or use the commands in §7.
+  window, add `/*.command`, press Enter. Or run
+  `python3 scripts/eln_web.py` directly.
 - **Windows: a window flashes and closes, or "python is not recognized"** —
   install Python (§1) with *Add to PATH* ticked, then try again.
-- **"No initials"** — run `launchers/New Experiment` once (it asks), or
-  `python3 scripts/eln.py init`.
-- **Check Everything says a folder "does not match {ID}_{slug}"** — someone
-  made or renamed an experiment folder by hand. Rename it to
-  `{ID}_{words-with-hyphens}` or recreate it with the launcher.
+- **The page says "First time here"** — click *settings* and enter your
+  initials and name.
+- **"could not open a port"** — another copy of the page is already
+  running; find its window, or close it and try again.
+- **Check says a folder "does not match {ID}_{slug}"** — someone made or
+  renamed an experiment folder by hand. Rename it to
+  `{ID}_{words-with-hyphens}` or recreate it with New experiment.

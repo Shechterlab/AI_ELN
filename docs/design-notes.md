@@ -83,9 +83,12 @@ that renders Markdown nicely (VS Code, Typora, Obsidian if someone likes
 it) is a view on the same files, not a requirement, and this repo avoids
 editor-specific syntax so nobody is locked to one.
 
-The cost of flat files is that nothing stops you from misnaming a folder.
-That's exactly what the launchers (you don't name anything; the tool
-does) and the validator (it tells you when something's off) are for.
+The cost of flat files is that nothing stops you from misnaming a folder,
+and that "open the .md file" is a real barrier for some people. That's
+exactly what the local web page (a form; you don't name anything; the tool
+does; you can write the note on the page) and the validator (it tells you
+when something's off) are for. The page owns nothing: stop it and the files
+are exactly as they were.
 
 ## Data lives outside the notebook
 
@@ -170,9 +173,11 @@ first.
 ## What this repo builds now vs. later
 
 **Now (Phase 1):** conventions, the four templates, `scripts/eln.py`
-(create, validate, index, find, report, export), the double-click
-launchers, the agent instruction files and skills, tests on three
-operating systems. Enough for a pilot to run on.
+(create, validate, index, find, report, export), a local web page
+(`scripts/eln_web.py`) so nobody needs a terminal or a Markdown editor, the
+double-click launchers, a fictional sandbox to practice on, the agent
+instruction files and skills, tests on three operating systems. Enough for
+a pilot to run on.
 
 **Later:** *Phase 2* — lab-wide rollout with the SOP once the pilot's kinks
 are out. *Phase 3* — the LabArchives bridge (needs institutional API

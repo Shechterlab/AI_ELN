@@ -2,6 +2,11 @@
 
 **One experiment = one ID = one folder = one note.** Never make the folder by hand.
 
+## Start
+
+Double-click **`launchers/Open ELN`** → a page opens in your browser → **New experiment** → title → **Create**.
+Write with **Edit here**. Practice first on **`launchers/Try the Sandbox`**.
+
 ## IDs
 
 | | pattern | example |
@@ -53,20 +58,20 @@ One `key: value` per line. Lists in `[square, brackets]`. Dates `YYYY-MM-DD`.
 Objective · Experimental design · Methods · Deviations from protocol ·
 Results · Interpretation · Decision · Follow-up experiments · Files
 
-## Double-clicks (in `launchers/`)
+## Buttons on the page (and the matching double-clicks in `launchers/`)
 
-**New Experiment** · **New Sample** · **New Protocol** · **New Project** ·
-**Check Everything** · **Lab Meeting Brief** · **Export for ChatGPT**
+**New experiment** · **New sample** · **New protocol** · **New project** ·
+**Check** · **Meeting brief** · **Export** for ChatGPT
 
 Same from a terminal: `python3 scripts/eln.py new experiment --title "..."`,
-`validate`, `find`, `report`, `export`, `index`, `init`. `--help` anywhere.
+`validate`, `find`, `report`, `export`, `index`, `init`; `python3 scripts/eln_web.py` for the page.
 
 ## When you finish
 
 `status: complete`, `date_completed:`, Results and Interpretation written,
-`raw_data_path` points at backed-up storage. Then **Check Everything**.
+`raw_data_path` points at backed-up storage. Then **Check**.
 
 ## With AI
 
 Codex / Claude Code / Cowork: open it in this folder; it already knows the rules.
-ChatGPT: **Export for ChatGPT**, paste, ask. Every claim it makes should cite an ID.
+ChatGPT: **Export**, paste, ask. Every claim it makes should cite an ID.

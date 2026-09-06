@@ -4,6 +4,10 @@ Everything here runs on subscriptions the lab already has (the ChatGPT
 site license, or a Claude plan). There is no server, no vector database,
 no key to manage, and nothing to install beyond the AI tool itself.
 
+[`../sandbox/PILOT.md`](../sandbox/PILOT.md) is a transcript of every path
+below run against the fictional sandbox record, so you can see what the
+answers look like before trying it on real notes.
+
 ## Why the record is already AI-ready
 
 Three properties do all the work:
@@ -28,12 +32,12 @@ Works with the ChatGPT web app or desktop app, no terminal.
    [`ai-briefing.md`](ai-briefing.md) into its instructions. (If your
    ChatGPT doesn't offer Projects or the instruction box is too small,
    paste the briefing as the first message of each new chat instead.)
-2. **Each time:** double-click `launchers/Export for ChatGPT`. It asks for
-   a project ID or experiment IDs (Enter = all active experiments) and
-   writes one file, `Inventory/export_<scope>_<date>.md`, that contains the
-   selected notes, everything they reference (protocols, samples, project
-   page), and a short primer on how to read them. It opens the file;
-   select all, copy, paste into the chat — or attach the file.
+2. **Each time:** on the page (`launchers/Open ELN`) click **Export**, pick
+   a project or all active experiments, click **Copy all**, paste into the
+   chat. (Or double-click `launchers/Export for ChatGPT`, which writes the
+   same thing to `Inventory/export_<scope>_<date>.md` and opens it.) The
+   export contains the selected notes, everything they reference
+   (protocols, samples, project page), and a short primer on how to read them.
 3. **Ask.** Things that work well:
    - *Summarize what these experiments established, one bullet per
      conclusion, citing experiment IDs. Flag anything based on a single
