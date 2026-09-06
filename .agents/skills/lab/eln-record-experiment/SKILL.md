@@ -71,15 +71,23 @@ header to that location.
 
 ## 4. Closing out
 
-When asked to mark an experiment complete:
+When asked to mark an experiment complete, run the close-out command
+rather than editing the header by hand:
 
-1. Confirm Results and Interpretation are written (not just the template hint).
-2. Set `status: complete` and `date_completed: YYYY-MM-DD` in the header.
-3. Confirm `raw_data_path` points at a real, backed-up location.
-4. Run `python3 scripts/eln.py validate` and fix anything it reports for this note.
+```bash
+python3 scripts/eln.py complete JSRe0002 [--date YYYY-MM-DD]
+```
 
-`paused` and `abandoned` are also valid; add one honest sentence in
-Decision saying why.
+It refuses if Results or Interpretation are still empty (tell the person
+what is missing rather than using `--force`), sets `status: complete` and
+`date_completed`, writes `1-notes/{ID}_snapshot_{date}.html` (one file,
+images embedded, printable to PDF) and `1-notes/{ID}_MANIFEST.sha256`
+(every file's checksum; `eln.py verify ID` later shows what changed), and
+re-indexes. It warns if `raw_data_path` cannot be found from this machine;
+relay that warning.
+
+`paused` and `abandoned` are set by editing the header; add one honest
+sentence in Decision saying why.
 
 ## 5. Lab meeting
 

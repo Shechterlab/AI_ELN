@@ -117,6 +117,8 @@ JSRe0002_P_CellularFractionation_20220119.md
 JSRe0002_quantification.csv
 JSRe0002_analysis.R
 JSRe0002_figure-1.ai
+JSRe0002_snapshot_20230210.html      written by the tool at completion: the note as one printable file
+JSRe0002_MANIFEST.sha256             written by the tool at completion: every file's checksum
 ```
 
 **The one exemption: `2-data_raw/`.** Instrument output keeps whatever name
@@ -188,6 +190,16 @@ Body sections, in this order, always present even if a section only says
 **Objective · Experimental design · Methods · Deviations from protocol ·
 Results · Interpretation · Decision · Follow-up experiments · Files.**
 
+In *Interpretation*, mark what is tentative as such ("Preliminary:",
+"n = 1", "suggests"). An AI reading the note later is told to keep those
+hedges; it can only keep what is there.
+
+A per-type template may add prompts to the body: if
+`templates/experiment.{Type}.md` exists for the first `experiment_type`
+given, it is used instead of `templates/experiment.md`. It must keep the
+same header keys and section titles; only the hints change.
+`templates/experiment.WesternBlot.md` is the example to copy.
+
 ### 4.2 Protocol
 
 | field | required | type / allowed values |
@@ -257,8 +269,14 @@ Experiments · Reagents in use · Figures · Related protocols.**
   correctly, no separators to argue about).
 - `status` is the one field you're expected to keep current. An experiment
   is `complete` when Results and Interpretation are written and
-  `raw_data_path` points at backed-up storage. `paused` and `abandoned`
-  both need one honest sentence in the note saying why.
+  `raw_data_path` points at backed-up storage. Set it with **Mark
+  complete** on the page or `eln.py complete ID`: that checks those
+  conditions, sets `status` and `date_completed`, and writes two standard
+  files next to the note, a self-contained HTML snapshot and a
+  `sha256sum`-format manifest, so the state of the folder at completion is
+  recorded and later changes are detectable (`eln.py verify`). Nothing is
+  locked. `paused` and `abandoned` both need one honest sentence in the
+  note saying why.
 
 ## 6. What the validator enforces
 

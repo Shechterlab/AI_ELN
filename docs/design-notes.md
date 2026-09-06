@@ -72,6 +72,30 @@ The validator (`eln.py validate`) is where "convention" becomes
 for things that actually break the system (a misnamed folder, a duplicate
 ID) and warnings for everything else. Nothing blocks you from writing.
 
+## What was borrowed from the mature ELNs, and what was not
+
+The institutional ELNs (eLabFTW, RSpace, SciNote, openBIS, Chemotion) and
+the plain-text notebooks that preceded this one were each read for one
+question: what do they do that a folder of Markdown cannot, and does it
+survive the filter of *standard files, no lock-in, easy*?
+
+| practice | where it comes from | what this record does |
+|---|---|---|
+| Lock and timestamp an entry when it is finished | every institutional ELN; eLabFTW's "timestamp" | **Mark complete** writes a `sha256sum`-format manifest and a dated HTML snapshot; `verify` shows later drift. Records the state without locking anything. |
+| Export a finished entry as a document | eLabFTW/RSpace PDF export; mdlabbook's HTML and PDF | `render` and the snapshot: one self-contained HTML file, images embedded, printable to PDF anywhere. |
+| Exchange records between ELN systems | [the `.eln` format](https://github.com/TheELNConsortium/TheELNFileFormat), an RO-Crate ZIP that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import | `export --format eln`. The lock-in escape hatch: any of those systems can import this record whole, including the files and checksums. Validated with the reference RO-Crate library. |
+| Templates per experiment type | eLabFTW experiment templates | `templates/experiment.{Type}.md`, optional, same header keys, only the prompts differ. |
+| Link entries to items and resources | eLabFTW items, RSpace inventory, openBIS objects | The header fields `samples`, `protocols`, `project`, resolved by the validator; derived usage in the CSVs. |
+| One root per project, dated and sortable, README in each directory | [Noble 2009](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1000424) | The five subfolders, `YYYYMMDD` in filenames, and the README each subfolder starts with. Jacob's system was this, independently. |
+| Fit the discipline; meet the technical requirements; plan the rollout | [Ten simple rules for implementing ELNs](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1012170) (Vandendorpe et al., 2024; the three rules that could be read through this session's proxy) | Templates and sample types are molecular-biology-shaped; requirements are a browser and Python; the SOP and the sandbox are the rollout plan. |
+| Keep tentative and confirmed claims apart so an AI does not conflate them | [Notes2Skills](https://arxiv.org/abs/2606.11897) (2026) | The Interpretation prompt asks for "Preliminary:" marks; the search skill and the ChatGPT briefing forbid upgrading hedges; the pilot showed it holding. |
+| Dashboards over structured notes | Obsidian ELN's Dataview tables | The web page's lists and filters, and the CSVs for Excel. No plugin. |
+
+Left out on purpose: user accounts and permissions (the sync service and
+the filesystem already have them), electronic signatures and audit trails
+that would need a server to be meaningful, a database, and any feature
+that would make the Markdown file not the whole truth.
+
 ## Why flat files and not an app
 
 Friction is the enemy. Every ELN the lab has tried was abandoned not
@@ -185,12 +209,12 @@ first.
 
 ## What this repo builds now vs. later
 
-**Now (Phase 1):** conventions, the four templates, `scripts/eln.py`
-(create, validate, index, find, report, export), a local web page
-(`scripts/eln_web.py`) so nobody needs a terminal or a Markdown editor, the
-double-click launchers, a fictional sandbox to practice on, the agent
-instruction files and skills, tests on three operating systems. Enough for
-a pilot to run on.
+**Now (Phase 1):** conventions, the templates, `scripts/eln.py` (create,
+validate, index, find, report, export as Markdown or `.eln`, complete,
+verify, render), a local web page (`scripts/eln_web.py`) so nobody needs a
+terminal or a Markdown editor, the double-click launchers, a fictional
+sandbox to practice on, the agent instruction files and fifteen vendored
+skills, tests on three operating systems. Enough for a pilot to run on.
 
 **Later:** *Phase 2* — lab-wide rollout with the SOP once the pilot's kinks
 are out. *Phase 3* — the LabArchives bridge (needs institutional API

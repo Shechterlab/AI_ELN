@@ -61,17 +61,25 @@ Results · Interpretation · Decision · Follow-up experiments · Files
 ## Buttons on the page (and the matching double-clicks in `launchers/`)
 
 **New experiment** · **New sample** · **New protocol** · **New project** ·
-**Check** · **Meeting brief** · **Export** for ChatGPT
+**Check** · **Meeting brief** · **Export** for ChatGPT or `.eln` ·
+on a note: **Edit here** · **Mark complete** · **Verify files**
 
 Same from a terminal: `python3 scripts/eln.py new experiment --title "..."`,
 `validate`, `find`, `report`, `export`, `index`, `init`; `python3 scripts/eln_web.py` for the page.
 
 ## When you finish
 
-`status: complete`, `date_completed:`, Results and Interpretation written,
-`raw_data_path` points at backed-up storage. Then **Check**.
+Results and Interpretation written, `raw_data_path` points at backed-up
+storage, then **Mark complete** on the note's page. It sets the status and
+date and writes `{ID}_snapshot_{date}.html` (print to PDF) and
+`{ID}_MANIFEST.sha256` (checksums; **Verify files** shows later changes).
 
 ## With AI
 
 Codex / Claude Code / Cowork: open it in this folder; it already knows the rules.
 ChatGPT: **Export**, paste, ask. Every claim it makes should cite an ID.
+
+## Leaving, or sending to another ELN
+
+**Export → Save as .eln archive**: a standard RO-Crate ZIP that eLabFTW,
+RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import.

@@ -22,9 +22,11 @@ in a text box, you can use this.
    front: `JSRe0002_R_blot-quantification.png` into `5-figures/`. Raw
    instrument files go into `2-data_raw/` untouched. **Show folder** opens it.
 
-That is the whole habit. **Check** tells you if anything is misnamed or
-missing; **Meeting brief** writes the summary for the next lab meeting
-from whatever you flagged. Practice first on fictional data with
+That is the whole habit. When the experiment is done, **Mark complete**
+checks it is written up, dates it, and drops a one-file HTML snapshot and
+a checksum list next to the note. **Check** tells you if anything is
+misnamed or missing; **Meeting brief** writes the summary for the next lab
+meeting from whatever you flagged. Practice first on fictional data with
 `launchers/Try the Sandbox`.
 
 ![The home page](docs/img/home.png)
@@ -50,6 +52,12 @@ and readable in any editor.
 Sync conflicts are two readable copies, never a corrupted database, and
 **Check** points them out. This GitHub repository is only where the tools
 are developed; nobody in the lab needs it day to day.
+
+And if the lab ever moves to a hosted ELN: **Export → Save as .eln
+archive** produces the standard [`.eln`](https://github.com/TheELNConsortium/TheELNFileFormat)
+exchange file (an RO-Crate ZIP) that eLabFTW, RSpace, Kadi4Mat, PASTA,
+SampleDB, OpenSemanticLab, and SciLog import, files and checksums
+included. Nothing here is a dead end.
 
 ## The whole system on one screen
 
@@ -116,10 +124,12 @@ subscription. Nothing needs an API key.
   never invent a result, create experiments only through the tool) and the
   skills in [`.agents/skills/`](.agents/skills/README.md): how to record an
   experiment, how to search and cite, how to synthesize a project page,
-  plus vendored methodology skills from
+  plus fifteen vendored methodology skills from
   [K-Dense](https://github.com/K-Dense-AI/scientific-agent-skills)
-  (experimental design, statistics, scientific writing, citations,
-  LabArchives), pinned to a release and updated only by a reviewed diff.
+  (statistics, experimental design, figures, EDA, writing, critical
+  appraisal, literature search, slides, mass spec, RNA-seq, pathways,
+  LabArchives, pre-registration, verification), pinned to a release and
+  updated only by a reviewed diff.
 
 [`sandbox/PILOT.md`](sandbox/PILOT.md) shows what those skills produced
 when run against the fictional sandbox. Details and reasoning:
@@ -149,6 +159,9 @@ python3 scripts/eln.py find --status active --tag meeting
 python3 scripts/eln.py index                                 # regenerate Inventory/*.csv
 python3 scripts/eln.py report                                # Markdown brief for lab meeting
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
+python3 scripts/eln.py export --project PRMT5-ChromatinRelease --format eln --out prmt5.eln   # for eLabFTW/RSpace/...
+python3 scripts/eln.py complete JSRe0002                    # close out: snapshot + manifest
+python3 scripts/eln.py verify                               # anything changed since completion?
 python3 scripts/eln_web.py                                   # the page, by hand
 ```
 

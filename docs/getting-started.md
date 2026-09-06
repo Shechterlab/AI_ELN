@@ -122,15 +122,13 @@ Results section shows up on the note's page.
 
 ## 7. When an experiment is finished
 
-Edit the note and change two header lines:
-
-```yaml
-status: complete
-date_completed: 2026-09-12
-```
-
-Make sure Results and Interpretation are written and `raw_data_path` is
-somewhere backed up. **Check** will tell you if you forgot one of those.
+Click **Mark complete** on the note's page. It checks that Results and
+Interpretation are written (and says so if not), sets the status and date,
+and drops two files next to the note: a one-file HTML snapshot of the
+whole experiment (figures included; print it to PDF for LabArchives) and a
+checksum list of every file in the folder, so **Verify files** can later
+show whether anything changed. Nothing is locked; if you come back to the
+experiment, edit away and click **Refresh snapshot & manifest**.
 
 ## 8. The same thing without a browser
 

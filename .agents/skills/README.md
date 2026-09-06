@@ -31,8 +31,13 @@ root and copied here by `scripts/sync_skills.py`:
 
 - `k-dense-scientific/` (from
   [scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills),
-  release `v2.66.0`): `experimental-design`, `statistical-analysis`,
-  `scientific-writing`, `citation-management`, `labarchive-integration`.
+  release `v2.66.0`): `statistical-analysis`, `experimental-design`,
+  `scientific-visualization`, `exploratory-data-analysis`,
+  `scientific-writing`, `scientific-critical-thinking`,
+  `citation-management`, `paper-lookup`, `scientific-slides`, `pyopenms`,
+  `pydeseq2`, `pathway-enrichment`, `labarchive-integration`. What each
+  needs to run its scripts is tabulated in
+  [`../../docs/ai-agents.md`](../../docs/ai-agents.md#the-skills).
 - `k-dense-superpowers/` (from
   [science-superpowers](https://github.com/K-Dense-AI/science-superpowers),
   pinned commit): `preregistering-analysis`,

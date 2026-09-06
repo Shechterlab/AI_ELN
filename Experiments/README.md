@@ -5,7 +5,8 @@ One subfolder per experiment, created by `launchers/New Experiment` or
 
 ```
 {ID}_{slug-of-title}/
-├── 1-notes/          {ID}.md, plus {ID}_P_{Protocol}_{date}.md snapshots the tool copies in
+├── 1-notes/          {ID}.md, plus {ID}_P_{Protocol}_{date}.md snapshots the tool copies in;
+│                     after Mark complete: {ID}_snapshot_{date}.html and {ID}_MANIFEST.sha256
 ├── 2-data_raw/       untouched instrument output, original filenames, never edited
 ├── 3-code/           {ID}_analysis.R and the like
 ├── 4-data_processed/ {ID}_quantification.csv and the like

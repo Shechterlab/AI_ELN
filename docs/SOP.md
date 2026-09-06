@@ -80,16 +80,24 @@ fixed; `WARN` is advice.
 
 ## 8. Completion and archival
 
-When an experiment is marked `status: complete`:
+When an experiment is finished, click **Mark complete** on its page (or
+run `eln.py complete ID`). That:
 
-1. `date_completed` is set; Results, Interpretation, and Decision are written.
-2. `raw_data_path` points to a real, backed-up location.
-3. **Check Everything** reports no errors for the note.
-4. (Once the LabArchives bridge exists; see `design-notes.md`) the note is
-   deposited as a timestamped snapshot in LabArchives under the same ID.
+1. Refuses if Results or Interpretation are still empty, and warns if
+   `raw_data_path` cannot be found from your machine.
+2. Sets `status: complete` and `date_completed`.
+3. Writes `1-notes/{ID}_snapshot_{date}.html`: the whole note, figures
+   included, as one file that opens in any browser and prints to PDF. This
+   is the archival rendering, and what goes to LabArchives.
+4. Writes `1-notes/{ID}_MANIFEST.sha256`: a checksum of every file in the
+   experiment folder, in the standard `sha256sum` format. **Verify files**
+   (or `eln.py verify ID`) later shows anything that changed.
 
-Archival is a snapshot of the record, not the working copy. Keep working
-in the note afterward if you revisit the experiment.
+Nothing is locked. If you revisit the experiment, edit the note, then
+**Refresh snapshot & manifest**. For LabArchives, upload the snapshot (or
+its PDF) under the experiment ID; when the API bridge exists this becomes
+automatic. To hand a project to another ELN (eLabFTW, RSpace, Kadi4Mat,
+and others), use **Export → Save as .eln archive**.
 
 ## 9. Ownership and offboarding
 

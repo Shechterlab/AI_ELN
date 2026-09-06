@@ -46,7 +46,10 @@ python3 scripts/eln.py new sample --type plasmid --title "..."   |  new protocol
 python3 scripts/eln.py validate [--strict]      # every rule in CONVENTIONS.md; ERROR fails, WARN advises
 python3 scripts/eln.py index                    # regenerate Inventory/*.csv
 python3 scripts/eln.py report                   # lab-meeting brief from tags: [meeting]
-python3 scripts/eln.py export --project X       # bundle for pasting into a chat
+python3 scripts/eln.py export --project X       # bundle for pasting into a chat; --format eln for an RO-Crate .eln archive
+python3 scripts/eln.py complete ID [--date D]   # close out: checks Results/Interpretation, sets status, writes HTML snapshot + sha256 manifest
+python3 scripts/eln.py verify [ID]              # compare a completed experiment's files with its manifest
+python3 scripts/eln.py render ID                # self-contained HTML of one note
 ```
 
 ## Ground rules
@@ -74,6 +77,13 @@ python3 scripts/eln.py export --project X       # bundle for pasting into a chat
    renaming folders, or restructuring needs a human's confirmation first.
 8. **Run `eln.py validate` after editing** and fix what it reports for the
    notes you touched.
+9. **Close out with `eln.py complete ID`**, not by hand-editing `status`.
+   It checks the note is finished, writes the snapshot and manifest, and
+   re-indexes.
+10. **Vendored skills' scripts need packages.** Run them as
+    `uv run --python 3.12 --with <pkg> ... python <script>`; never install
+    into the system Python. If `uv` is missing, say so rather than
+    installing things globally.
 
 ## Common requests
 
@@ -82,7 +92,9 @@ python3 scripts/eln.py export --project X       # bundle for pasting into a chat
 | "Create an experiment for ..." | `eln.py new experiment` with what was given; ask for a title if missing; check `--project`/`--protocol`/`--samples` exist first. Skill: `eln-record-experiment`. |
 | "What do we know about X" / "which experiments used Y" | `eln.py find`, read the matches, answer with IDs, say plainly if nothing turned up. Skill: `eln-search-and-cite`. |
 | "Summarize / update project X" | Read `Projects/X.md` and every experiment with X in `project`; rewrite *Current state* in place, every conclusion cited. Skill: `eln-project-synthesis`. |
-| "Write up my results" / "mark it complete" | Fill the named sections from what the person tells you; set `status`/`date_completed`; validate. Skill: `eln-record-experiment`. |
+| "Write up my results" / "mark it complete" | Fill the named sections from what the person tells you; then `eln.py complete ID`. Skill: `eln-record-experiment`. |
+| "Send this to eLabFTW / RSpace / the core" | `eln.py export --format eln --project X --out X.eln`; the archive imports there directly. |
+| "Analyse the data in 4-data_processed" | Read the `statistical-analysis` / `exploratory-data-analysis` skill first; run scripts via `uv run --with ...`; write results into the note's Results section, never as a new conclusion. |
 | "Prepare lab meeting" | `eln.py report`; expand from the flagged notes only. |
 | Design, statistics, writing, citations | The vendored skills under `.agents/skills/vendor/` apply; they are methodology, and rules 1-2 still hold. |
 
