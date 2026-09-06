@@ -276,7 +276,7 @@ class App:
             return "Header problem: " + "; ".join(problems), None
         if fields.get(eln.ID_FIELD[n.kind]) != nid:
             return f"The header's {eln.ID_FIELD[n.kind]} must stay {nid}.", None
-        n.path.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        eln.write_text_lf(n.path, text if text.endswith("\n") else text + "\n")
         eln.write_index(eln.load_vault(self.root), quiet=True)
         return None, f"/note/{nid}?saved=1"
 
@@ -675,7 +675,7 @@ def make_handler(app: App):
                         return self.not_found("No such note")
                     when = date.today().isoformat()
                     out = eln.snapshot_path(n, when)
-                    out.write_text(eln.render_snapshot_html(v, n, generated=when), encoding="utf-8")
+                    eln.write_text_lf(out, eln.render_snapshot_html(v, n, generated=when))
                     eln.open_path(out)
                     return self.send_html(app.note(nid, f"<div class='msg ok'>Saved and opened <span class=path>{esc(app.rel(out))}</span>. "
                                                         f"It is one file with the images inside; print it to PDF from the browser.</div>"))
@@ -688,7 +688,7 @@ def make_handler(app: App):
                 if path == "/report/save":
                     (app.root / "Inventory").mkdir(parents=True, exist_ok=True)
                     out = app.root / "Inventory" / f"meeting-brief_{date.today().strftime('%Y%m%d')}.md"
-                    out.write_text(eln.build_report(eln.load_vault(app.root)), encoding="utf-8")
+                    eln.write_text_lf(out, eln.build_report(eln.load_vault(app.root)))
                     eln.open_path(out)
                     return self.send_html(app.report(saved=out))
                 if path == "/export/save":
@@ -708,7 +708,7 @@ def make_handler(app: App):
                                      "OpenSemanticLab, or SciLog; the folder it is in was opened.")
                     else:
                         out = app.root / "Inventory" / f"export_{label}_{date.today().strftime('%Y%m%d')}.md"
-                        out.write_text(eln.build_export(v, experiments), encoding="utf-8")
+                        eln.write_text_lf(out, eln.build_export(v, experiments))
                         eln.open_path(out)
                         note_text = "a Markdown file, opened. Attach it to a chat or copy its contents."
                     return self.send_html(page("Export", f"<h1>Export saved</h1><div class='msg ok'>Saved "

@@ -1,0 +1,20 @@
+# Line endings are part of a file's bytes, and bytes are what the manifests hash.
+# Every text file is stored and checked out with LF on every platform, so a note
+# created on a Mac and one created on Windows are byte-identical and verify the same.
+* text=auto eol=lf
+
+# Windows batch launchers must stay CRLF to run under cmd.exe.
+*.cmd text eol=crlf
+
+# Binaries, never converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.pptx binary
+*.xlsx binary
+*.docx binary
+*.scn binary
+*.czi binary
+*.eln binary

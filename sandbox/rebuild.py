@@ -45,7 +45,7 @@ def backdate(path: Path, to: str) -> None:
     from datetime import date
     today = date.today().isoformat()
     if today != to:
-        path.write_text(path.read_text(encoding="utf-8").replace(today, to), encoding="utf-8")
+        eln.write_text_lf(path, path.read_text(encoding="utf-8").replace(today, to))
 
 
 set_field = eln.set_header_field  # line-level header edit, shared with the tool
@@ -58,7 +58,7 @@ def fill(path: Path, section: str, text: str) -> None:
     new, n = re.subn(pattern, lambda m: m.group(1) + "\n" + text.strip() + "\n", t, count=1, flags=re.S)
     if not n:
         raise KeyError(section)
-    path.write_text(new, encoding="utf-8")
+    eln.write_text_lf(path, new)
 
 
 def png(path: Path, bands, width: int = 520, height: int = 200) -> None:
@@ -282,7 +282,7 @@ def build() -> None:
         for r in raw_names:
             (f / "2-data_raw" / r).write_bytes(b"placeholder instrument file (sandbox)\n")
         if processed:
-            (f / "4-data_processed" / processed[0]).write_text(processed[1], encoding="utf-8")
+            eln.write_text_lf(f / "4-data_processed" / processed[0], processed[1])
         if figure:
             png(f / "5-figures" / figure, bands or [])
 
@@ -303,9 +303,9 @@ def build() -> None:
               bands=lanes([40, 85, 0, 0], 60, 85) + lanes([90, 90, 0, 0], 120, 145))
     add_files("JORe0002", ["LSM980_20260811_slide01.czi", "LSM980_20260811_slide02.czi", "LSM980_20260812_slide03.czi"],
               processed=("JORe0002_speckle-scores.csv", "nucleus,condition,speckles,diffuse_fraction\n1,DMSO,17,0.41\n2,DMSO,19,0.43\n1,PRMT5i,20,0.44\n2,PRMT5i,18,0.45\n"))
-    (folder_of("ALXe0004") / "2-data_raw" / "README.md").write_text(
-        "# 2-data_raw\n\nFASTQ files are on institutional storage (see `raw_data_path` in the note); "
-        "nothing is kept here.\n", encoding="utf-8")
+    eln.write_text_lf(folder_of("ALXe0004") / "2-data_raw" / "README.md",
+                      "# 2-data_raw\n\nFASTQ files are on institutional storage (see `raw_data_path` in the note); "
+                      "nothing is kept here.\n")
 
     # project pages: current state written the way the eln-project-synthesis skill would
     fill(root / "Projects" / "PRMT5-ChromatinRelease.md", "Current state", """\

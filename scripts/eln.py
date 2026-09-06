@@ -130,6 +130,13 @@ class ElnError(Exception):
     """A user-facing error. main() prints it and exits 1."""
 
 
+def write_text_lf(path: Path, text: str) -> None:
+    """Write UTF-8 with LF line endings on every platform, so a note's bytes (and therefore its
+    checksum in a manifest) do not depend on which computer created it."""
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
 def err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
@@ -338,7 +345,7 @@ def load_config() -> Dict[str, str]:
 def save_config(data: Dict[str, str]) -> Path:
     p = config_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    write_text_lf(p, json.dumps(data, indent=2) + "\n")
     return p
 
 
@@ -883,7 +890,7 @@ def write_subfolder_readmes(folder: Path, exp_id: str) -> None:
     for sub, text in SUBFOLDER_READMES.items():
         p = folder / sub / "README.md"
         if not p.exists():
-            p.write_text(f"# {sub}\n\n{text.replace('{ID}', exp_id)}", encoding="utf-8")
+            write_text_lf(p, f"# {sub}\n\n{text.replace('{ID}', exp_id)}")
 
 
 def _wizard_experiment(args, root: Path) -> None:
@@ -937,13 +944,13 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
     first_type = (csv_items(exp_type) or [""])[0]
     override = TEMPLATES_DIR / f"experiment.{first_type}.md" if first_type else None
     note_path = folder / "1-notes" / f"{exp_id}.md"
-    note_path.write_text(render_template("experiment", {
+    write_text_lf(note_path, render_template("experiment", {
         "EXPERIMENT_ID": exp_id, "TITLE": title, "RESEARCHER": researcher or initials,
         "PROJECT": project or "", "DATE": today, "EXPERIMENT_TYPE": exp_type or "",
         "PROTOCOL": protocol or "", "SAMPLES": samples or "", "NOTEBOOK_REF": notebook or "",
         "RAW_DATA_PATH": raw_data_path or f"Experiments/{folder_name}/2-data_raw",
         "RELATED": related or "", "TAGS": tags or "",
-    }, path=override if override and override.exists() else None), encoding="utf-8")
+    }, path=override if override and override.exists() else None))
     result = Created(exp_id, note_path)
 
     for pid in csv_items(protocol):
@@ -980,10 +987,10 @@ def create_sample(root: Path, initials: str, sample_type: str, title: str, sourc
     sample_id = next_sample_id(root, initials, letter)
     path = root / "Samples" / f"{sample_id}.md"
     ensure_vault_dirs(root)
-    path.write_text(render_template("sample", {
+    write_text_lf(path, render_template("sample", {
         "SAMPLE_ID": sample_id, "SAMPLE_TYPE": stype, "TITLE": title.strip(), "DATE": date.today().isoformat(),
         "SOURCE": source or "", "STORAGE": storage or "", "TAGS": tags or "",
-    }), encoding="utf-8")
+    }))
     if index:
         write_index(load_vault(root), quiet=True)
     return Created(sample_id, path)
@@ -1001,9 +1008,9 @@ def create_protocol(root: Path, name: str, title: str = "", tags: str = "", inde
         raise ElnError(f"{path} already exists. Edit it in place and bump its version instead.")
     title = (title or "").strip() or re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name).replace("-", " ")
     ensure_vault_dirs(root)
-    path.write_text(render_template("protocol", {
+    write_text_lf(path, render_template("protocol", {
         "NAME": name, "TITLE": title, "DATE": date.today().isoformat(), "TAGS": tags or "",
-    }), encoding="utf-8")
+    }))
     if index:
         write_index(load_vault(root), quiet=True)
     return Created(pid, path)
@@ -1018,10 +1025,10 @@ def create_project(root: Path, project_id: str, title: str = "", lead: str = "",
     if path.exists():
         raise ElnError(f"{path} already exists.")
     ensure_vault_dirs(root)
-    path.write_text(render_template("project", {
+    write_text_lf(path, render_template("project", {
         "PROJECT_ID": pid, "TITLE": (title or "").strip() or pid, "LEAD": lead or "",
         "DATE": date.today().isoformat(), "TAGS": tags or "",
-    }), encoding="utf-8")
+    }))
     if index:
         write_index(load_vault(root), quiet=True)
     return Created(pid, path)
@@ -1298,7 +1305,7 @@ def cmd_report(args) -> int:
         (root / "Inventory").mkdir(parents=True, exist_ok=True)
         out = str(root / "Inventory" / f"meeting-brief_{date.today().strftime('%Y%m%d')}.md")
     if out:
-        Path(out).write_text(text, encoding="utf-8")
+        write_text_lf(Path(out), text)
         print(f"Wrote {out}")
         if args.open:
             open_path(Path(out))
@@ -1432,7 +1439,7 @@ def cmd_export(args) -> int:
         (root / "Inventory").mkdir(parents=True, exist_ok=True)
         out = str(root / "Inventory" / f"export_{scope}_{date.today().strftime('%Y%m%d')}.md")
     if out:
-        Path(out).write_text(text, encoding="utf-8")
+        write_text_lf(Path(out), text)
         print(f"Exported {len(experiments)} experiment(s), {len(text):,} characters -> {out}")
         if args.open:
             open_path(Path(out))
@@ -1596,7 +1603,7 @@ def set_header_field(path: Path, key: str, value) -> None:
             break
     else:
         lines.insert(end, f"{key}: {format_value(value)}".rstrip())
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_lf(path, "\n".join(lines) + "\n")
 
 
 # --------------------------------------------------------------------------
@@ -1694,7 +1701,7 @@ def write_manifest(folder: Path, exp_id: str) -> Path:
     """sha256sum-compatible: `<hash>  <path>` per line. `sha256sum -c` can check it with no tool of ours."""
     hashes = hash_folder(folder, exp_id)
     p = manifest_path(folder, exp_id)
-    p.write_text("".join(f"{h}  {rel}\n" for rel, h in sorted(hashes.items())), encoding="utf-8")
+    write_text_lf(p, "".join(f"{h}  {rel}\n" for rel, h in sorted(hashes.items())))
     return p
 
 
@@ -1748,7 +1755,7 @@ def complete_experiment(root: Path, exp_id: str, when: Optional[str] = None, for
     vault = load_vault(root)
     note = vault.by_id[exp_id]
     snap = snapshot_path(note, when)
-    snap.write_text(render_snapshot_html(vault, note, generated=when), encoding="utf-8")
+    write_text_lf(snap, render_snapshot_html(vault, note, generated=when))
     manifest = write_manifest(note.folder, exp_id)
     write_index(vault, quiet=True)
     return {"snapshot": snap, "manifest": manifest, "warnings": warnings,
@@ -1763,7 +1770,7 @@ def cmd_render(args) -> int:
         raise ElnError(f"no note {args.id}")
     when = date.today().isoformat()
     out = Path(args.out) if args.out else snapshot_path(note, when)
-    out.write_text(render_snapshot_html(vault, note, generated=when), encoding="utf-8")
+    write_text_lf(out, render_snapshot_html(vault, note, generated=when))
     print(f"Wrote {vault.rel(out) if args.out is None else out}")
     if args.open:
         open_path(out)
@@ -1969,7 +1976,7 @@ def cmd_init(args) -> int:
     p = save_config(data)
     ensure_vault_dirs(root)
     if root != REPO_ROOT and not (root / "AGENTS.md").exists():
-        (root / "AGENTS.md").write_text(POINTER_AGENTS_MD.format(repo=REPO_ROOT, root=root), encoding="utf-8")
+        write_text_lf((root / "AGENTS.md"), POINTER_AGENTS_MD.format(repo=REPO_ROOT, root=root))
     print(f"Saved {p}")
     print(f"  initials:   {initials}")
     print(f"  researcher: {researcher}")
