@@ -570,6 +570,31 @@ def make_handler(app: App):
         def not_found(self, what: str = "Not found"):
             self.send_html(page("Not found", f"<h1>{esc(what)}</h1><p><a href='/'>Home</a></p>", "", app.root), 404)
 
+        def guard(self) -> bool:
+            """Only the browser tab this page opened may talk to it. Rejects requests whose Host is not
+            this server (DNS rebinding) and cross-site POSTs (a page on another site submitting a form
+            to 127.0.0.1 from inside your browser)."""
+            port = self.server.server_address[1]
+            hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host", "") not in hosts:
+                return self.forbid("wrong host")
+            origin = self.headers.get("Origin")
+            if origin and origin not in {f"http://{h}" for h in hosts}:
+                return self.forbid("cross-site request")
+            site = self.headers.get("Sec-Fetch-Site")
+            if site and site not in ("same-origin", "none"):
+                return self.forbid("cross-site request")
+            return True
+
+        def forbid(self, why: str) -> bool:
+            data = f"403 Forbidden: {why}".encode("utf-8")
+            self.send_response(403)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return False
+
         def query(self) -> Dict[str, str]:
             return {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
 
@@ -580,6 +605,8 @@ def make_handler(app: App):
             return {k: (v if len(v) > 1 else v[0]) for k, v in data.items()}
 
         def do_GET(self):
+            if not self.guard():
+                return
             path = urlparse(self.path).path
             q = self.query()
             try:
@@ -642,6 +669,8 @@ def make_handler(app: App):
             self.wfile.write(data)
 
         def do_POST(self):
+            if not self.guard():
+                return
             path = urlparse(self.path).path
             f = self.form()
             g = lambda k: (f.get(k) if isinstance(f.get(k), str) else (f.get(k) or [""])[0]) or ""  # noqa: E731
@@ -760,6 +789,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true")
     args = p.parse_args(argv)
+    eln.lenient_console()
     try:
         root = eln.resolve_root(args.root)
         eln.ensure_vault_dirs(root)

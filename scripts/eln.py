@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import re
@@ -566,6 +567,19 @@ def _valid_date(s: str) -> bool:
         return False
 
 
+RE_SYNC_CONFLICT = re.compile(r"conflicted copy", re.IGNORECASE)  # Dropbox's phrase; OneDrive copies fail the ID-prefix rule instead
+
+
+def sync_conflict_files(root: Path) -> List[Path]:
+    """Files a sync service made when two people edited the same file while offline."""
+    out: List[Path] = []
+    for d in list(KIND_DIR.values()) + ["Inventory"]:
+        base = root / d
+        if base.is_dir():
+            out.extend(p for p in base.rglob("*") if p.is_file() and RE_SYNC_CONFLICT.search(p.name))
+    return sorted(out)
+
+
 def validate_vault(vault: Vault) -> List[Issue]:
     issues: List[Issue] = []
     E = lambda path, msg: issues.append(Issue("ERROR", path, msg))  # noqa: E731
@@ -573,6 +587,9 @@ def validate_vault(vault: Vault) -> List[Issue]:
 
     for folder, msg in vault.folder_issues:
         E(vault.rel(folder), msg)
+    for p in sync_conflict_files(vault.root):
+        W(vault.rel(p), "sync-conflict copy (two people edited the same file while offline): compare it with the "
+                        "original, keep one, delete the other" + (", then re-run index" if "Inventory" in p.parts else ""))
 
     known_keys = {kind: set(template_keys(kind)) | {"type"} for kind in KINDS}
     seen_ids: Dict[str, str] = {}
@@ -754,18 +771,32 @@ def build_index(vault: Vault) -> Dict[str, List[Dict[str, str]]]:
 
 
 def write_index(vault: Vault, quiet: bool = False) -> None:
+    """Regenerate Inventory/*.csv. A file is only rewritten when its content changes, so a synced
+    folder does not see four modified files every time someone creates a record."""
     inv = vault.root / "Inventory"
     inv.mkdir(parents=True, exist_ok=True)
     rows = build_index(vault)
     for name, cols in INDEX_COLUMNS.items():
         path = inv / f"{name}.csv"
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols, lineterminator="\n")
+        w.writeheader()
+        for r in rows[name]:
+            w.writerow(r)
+        new = buf.getvalue()
+        try:
+            old = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            old = None
+        label = f"{vault.rel(path)} ({len(rows[name])} row{'s' if len(rows[name]) != 1 else ''})"
+        if old == new:
+            if not quiet:
+                print(f"Up to date {label}")
+            continue
         with open(path, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=cols, lineterminator="\n")
-            w.writeheader()
-            for r in rows[name]:
-                w.writerow(r)
+            f.write(new)
         if not quiet:
-            print(f"Wrote {vault.rel(path)} ({len(rows[name])} row{'s' if len(rows[name]) != 1 else ''})")
+            print(f"Wrote {label}")
 
 
 # --------------------------------------------------------------------------
@@ -1576,7 +1607,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def lenient_console() -> None:
+    """Never crash on a title with a character the console can't show (older Windows consoles)."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    lenient_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):

@@ -40,8 +40,10 @@ the result readable by any AI the lab already pays for — with no API keys.
    be written on the page itself or in any editor.
 5. **Large binary data lives outside the record**, on institutional
    storage, referenced by path.
-6. **Where the record lives is a lab decision.** Default: this folder,
-   synced. Alternative: a separate root, set once.
+6. **The record is one synced folder and nothing else.** Tools and notes
+   travel together in the lab's Dropbox/OneDrive; no server, no git, no
+   central copy. Every file is plain text (Markdown, CSV, JSON) or a
+   standard image. A separate root is possible but unusual.
 7. **LabArchives is the archival layer**, fed one-directionally on
    completion. Not yet built.
 8. **AI is retrieval-and-citation, never the source of a conclusion.** It
@@ -169,8 +171,8 @@ No server, API key, or vector database is involved.
 - `AGENTS.md`/`CLAUDE.md`/`GEMINI.md`, three lab skills, ChatGPT briefing
 - GitHub Actions: tests on ubuntu/macos/windows × Python 3.9/3.12; strict
   validation of the example vault; inventory freshness; weekly skills drift
-- A worked example (`DSLe0001`, `P_WesternBlot`, `DSLp0001`,
-  `PRMT5-ChromatinRelease`) produced by the tool, validating clean
+- The top-level record ships empty, ready to drop into a synced folder;
+  the worked examples live in `sandbox/`
 
 **Not built (discussed):**
 - The LabArchives archival bridge (needs institutional API access)

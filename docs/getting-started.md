@@ -3,13 +3,29 @@
 Ten minutes, once. After that, creating an experiment is one double-click
 and one form.
 
-## 0. Get the folder onto your computer
+## 0. Where the record lives
 
-Either the lab's shared copy (a synced OneDrive/Dropbox folder — ask
-whoever set it up), or download this repository (green **Code** button →
-**Download ZIP**, then unzip), or `git clone` it if you know what that is.
-Wherever it ends up, that folder is your notebook. Don't move things inside
-it around by hand.
+The record is one folder: these tools plus `Experiments/`, `Protocols/`,
+`Samples/`, `Projects/`. It lives in the lab's Dropbox or OneDrive. There
+is no server, no account, no git, and no central copy; the synced folder
+is the record, and every file in it is plain text.
+
+**If someone has already set it up:** make sure the lab's folder is synced
+to your computer (it will be in your Dropbox or OneDrive), and go to §1.
+
+**If you are setting it up for the lab** (once, by whoever runs the lab):
+
+1. Download this folder from GitHub: green **Code** button → **Download
+   ZIP**, unzip. If you used `git clone` instead, delete the hidden `.git`
+   folder inside it; git and sync services corrupt each other.
+2. Rename the folder if you like (`ShechterLab-ELN`) and move it into the
+   lab's shared Dropbox or OneDrive.
+3. Double-click `launchers/Open ELN` once to see the page come up. The
+   record starts empty. `sandbox/`, `tests/`, and `.github/` are harmless
+   and can stay or go; `reference/` is Jacob's original materials.
+
+Don't move things around inside the folder by hand after that; the page
+and the launchers do it.
 
 ## 1. One-time setup for your computer
 
@@ -135,11 +151,11 @@ python3 scripts/eln_web.py                                 # the page, by hand
 The terminal-window launchers (`New Experiment`, `Check Everything`, and
 so on) are the same commands with questions instead of flags.
 
-## 9. Where the files live
+## 9. Keeping the notes somewhere other than the tools (unusual)
 
-By default, inside this folder — simplest, and fine for a synced OneDrive
-or Dropbox copy of the whole folder. If the lab keeps notes somewhere else
-(a server mount, a different shared folder), tell the tool once:
+Normally the notes sit next to the tools in the one synced folder and
+nothing needs configuring. If the lab keeps notes somewhere else (a server
+mount, a different shared folder), tell the tool once:
 
 ```bash
 python3 scripts/eln.py init --root "/path/to/ShechterLab/ELN"

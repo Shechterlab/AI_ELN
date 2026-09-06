@@ -125,20 +125,33 @@ access enabled first. When it is, the vendored `labarchive-integration`
 skill (`.agents/skills/vendor/`) already documents the signed-request
 flow, regional endpoints, and the ELN vs. Inventory API split.
 
-## Collaboration model
+## Collaboration model: one synced folder, nothing central
 
-The simplest deployment is one shared folder (OneDrive/SharePoint or a
-server mount) containing everything — this repo's tooling and the
-`Experiments/`, `Protocols/`, `Samples/`, `Projects/` folders — synced to
-each person's machine. Per-researcher initials mean two people can create
-experiments at the same time without a central counter. `eln.py init
---root` supports the alternative where notes live in a separate location
-from the tooling.
+The deployment is one folder in the lab's Dropbox or OneDrive containing
+everything: these tools, the templates, and `Experiments/`, `Protocols/`,
+`Samples/`, `Projects/`. Everyone who syncs it has the whole record and
+the whole toolset. There is no server, no database, no git repository, and
+no central copy that is more authoritative than the one on your laptop;
+the sync service is the only shared component, and it is one the lab
+already pays for and already trusts with its files.
 
-Where it makes sense to split: protocols, samples, project pages, and
-completed experiments are shared; in-progress notes can be personal until
-completion. Sync goes through institutionally managed storage or a
-private institutional git host, not a public repository.
+Three properties make that safe:
+
+- **Per-researcher initials** mean two people creating experiments at the
+  same moment cannot collide; there is no counter to coordinate.
+- **Every file is plain text or a standard image**, so a sync conflict is
+  two readable copies, never a corrupted database. Dropbox names them
+  "conflicted copy"; OneDrive appends the computer name. The checker
+  flags both (the first by name, the second because it no longer starts
+  with the experiment ID), and the fix is to read both and keep one.
+- **The inventory is derived**, so a conflicted CSV is noise: delete it and
+  re-index.
+
+This GitHub repository is where the tools are developed, not where the
+record lives; nobody in the lab needs it day to day, and a `.git` folder
+should never be inside the synced record (git and sync services corrupt
+each other). `eln.py init --root` supports the unusual case of keeping the
+notes in a different location from the tools.
 
 ## AI integration, in stages
 

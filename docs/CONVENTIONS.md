@@ -82,9 +82,10 @@ reference and tells you if one points nowhere.
 - The five subfolders are created by the tool and are never renamed,
   reordered, or added to per experiment. The value of the system is that
   every experiment looks the same.
-- `<root>` is wherever the lab keeps shared files. By default it's this
-  folder. It can be a synced OneDrive/Dropbox folder or a server mount —
-  set once with `eln.py init`. See `docs/getting-started.md`.
+- `<root>` is the folder these tools sit in: the one the lab syncs with
+  Dropbox or OneDrive. Tools and record travel together; there is no
+  server and no central copy. (`eln.py init --root` exists for the unusual
+  case of keeping the notes somewhere else. See `docs/getting-started.md`.)
 - `Inventory/` is **generated** by `eln.py index` from the notes. Never
   hand-edit it; edit the note and re-index.
 

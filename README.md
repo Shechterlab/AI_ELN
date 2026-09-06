@@ -36,6 +36,21 @@ things for people who prefer them. Mac users right-click → Open a launcher
 the first time; Windows needs Python installed once. See
 [`docs/getting-started.md`](docs/getting-started.md).
 
+## Where it lives
+
+The whole thing is **one folder**: these tools, the templates, and the
+lab's `Experiments/`, `Protocols/`, `Samples/`, `Projects/`. Put that
+folder in the lab's Dropbox or OneDrive and everyone who syncs it has the
+record and the tools. There is no server, no database, no git, and no
+central copy; the synced folder *is* the record, and every file in it is
+plain text (Markdown with a small header, CSV, JSON) or a standard image.
+If every script here vanished tomorrow, the notes would still be complete
+and readable in any editor.
+
+Sync conflicts are two readable copies, never a corrupted database, and
+**Check** points them out. This GitHub repository is only where the tools
+are developed; nobody in the lab needs it day to day.
+
 ## The whole system on one screen
 
 ```
@@ -116,9 +131,10 @@ when run against the fictional sandbox. Details and reasoning:
 folder and reports what breaks the conventions: a misnamed folder, a
 missing subfolder, a `status` that isn't one of the four, a sample ID that
 points at nothing, a figure without the experiment ID in front. Errors
-fail; warnings are advice. Run it before lab meeting and before handing a
-folder to anyone. Continuous integration runs it on this repository's own
-example and on the sandbox on every change, on macOS, Windows, and Linux.
+fail; warnings are advice. It also spots sync-conflict copies. Run it
+before lab meeting and before handing a folder to anyone. Every change to
+the tools is tested on macOS, Windows, and Linux, including a strict check
+of the sandbox record.
 
 ## For people who like a terminal
 
@@ -136,9 +152,9 @@ python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
 python3 scripts/eln_web.py                                   # the page, by hand
 ```
 
-`--help` on any command. The files can live in this folder (default) or
-anywhere the lab already shares files — a synced OneDrive folder, a server
-mount — set once with `init`. Tests: `python3 -m unittest discover -s tests`.
+`--help` on any command. The record is the folder the tools sit in;
+`init --root` is only for the unusual case of keeping notes elsewhere.
+Tests: `python3 -m unittest discover -s tests`.
 
 ## Read more
 

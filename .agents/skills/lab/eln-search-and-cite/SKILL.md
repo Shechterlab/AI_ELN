@@ -59,6 +59,9 @@ Grep is fine too - the section headers are fixed (`## Results`,
 
 ## Don'ts
 
+- Don't search or cite `sandbox/`. It is fictional practice data; `eln.py
+  find` never looks there, and neither should a grep, unless the person
+  explicitly asked to work in the sandbox.
 - Don't modify notes while answering a question. Searching is read-only.
 - Don't invent an experiment, number, figure, or reagent that isn't in a note.
 - Don't summarize from the CSV alone when the question is about *what was

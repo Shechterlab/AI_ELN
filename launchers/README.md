@@ -39,8 +39,8 @@ does too.
 
 ## If a `.command` opens in a text editor instead of running
 
-The executable flag was lost (this happens when a folder is downloaded as a
-ZIP or synced through some services). Fix once, in Terminal:
+The executable flag was lost. Dropbox keeps it on Mac; a ZIP download or
+some other sync services may not. Fix once, in Terminal:
 
 ```bash
 chmod +x launchers/*.command

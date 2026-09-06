@@ -497,6 +497,29 @@ class TestValidate(TempVault):
         self.edit(self.note("TSTe0001"), "type: experiment", "type: protocol")
         self.assert_issue("ERROR", "type is 'protocol', expected 'experiment'")
 
+    def test_sync_conflict_copies_are_flagged(self):
+        folder = self.make_clean_vault()
+        note = folder / "1-notes" / "TSTe0001.md"
+        shutil.copyfile(note, folder / "1-notes" / "TSTe0001 (Jordan's conflicted copy 2026-09-06).md")
+        shutil.copyfile(self.root / "Inventory" / "experiments.csv",
+                        self.root / "Inventory" / "experiments (conflicted copy 2026-09-06).csv")
+        code, out = self.issues()
+        self.assertEqual(code, 0)  # warnings only
+        self.assertIn("sync-conflict copy", out)
+        self.assertIn("conflicted copy 2026-09-06).md", out)
+        self.assertIn("then re-run index", out)
+        # the conflict copy is not mistaken for a second note
+        self.assertNotIn("duplicate ID", out)
+
+    def test_index_rewrites_only_when_changed(self):
+        self.make_clean_vault()
+        out, _ = self.ok("index")
+        self.assertIn("Up to date Inventory/experiments.csv", out)
+        self.ok("new", "experiment", "--title", "another", "--project", "Proj-A", "--protocol", "P_WesternBlot", "--no-index")
+        out, _ = self.ok("index")
+        self.assertIn("Wrote Inventory/experiments.csv (2 rows)", out)
+        self.assertIn("Up to date Inventory/samples.csv", out)
+
 
 # ---------------------------------------------------------------------------
 # index / find / report / export

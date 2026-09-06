@@ -200,6 +200,30 @@ class TestWeb(unittest.TestCase):
         self.assertIn("Bands got brighter.", note.read_text(encoding="utf-8"))  # untouched
         self.assertEqual(self.get("/edit/NOPE0001")[0], 404)
 
+    def test_06c_cross_site_requests_are_refused(self):
+        body = urllib.parse.urlencode({"title": "injected"}).encode()
+        req = urllib.request.Request(self.base + "/new/experiment", data=body, method="POST",
+                                     headers={"Origin": "http://evil.example"})
+        try:
+            self.opener.open(req)
+            self.fail("cross-site POST was accepted")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 403)
+        self.assertFalse(list((self.root / "Experiments").glob("*injected*")))
+        req = urllib.request.Request(self.base + "/", headers={"Host": "evil.example"})
+        try:
+            self.opener.open(req)
+            self.fail("wrong Host was accepted")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 403)
+        # same-origin still works (Origin sent by browsers on form posts)
+        req = urllib.request.Request(self.base + "/new/protocol", data=urllib.parse.urlencode({"name": "SameOrigin"}).encode(),
+                                     method="POST", headers={"Origin": self.base})
+        try:
+            self.opener.open(req)
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 303)
+
     def test_07_unknown_routes(self):
         self.assertEqual(self.get("/nope")[0], 404)
         self.assertEqual(self.get("/note/NOPE0001")[0], 404)

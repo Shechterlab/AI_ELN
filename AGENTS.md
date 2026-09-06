@@ -32,6 +32,11 @@ etc. live. Check before assuming paths are repo-relative; pass `--root` if
 needed. IDs: experiments `{INITIALS}e{NNNN}`, samples
 `{INITIALS}{p|i|a|c|m|t|r|s|g}{NNNN}`, protocols `P_{Name}`, projects named.
 
+**`sandbox/` is fictional.** It holds made-up experiments for practice
+(researchers "Alex Example" and "Jordan Example"). Never cite anything in
+it as a lab result and never let a search stray into it. Work there only
+when the person explicitly asks for the sandbox (`--root sandbox`).
+
 ## The tool
 
 ```bash
