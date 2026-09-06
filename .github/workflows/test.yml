@@ -22,6 +22,12 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: The repo's own example vault follows its own conventions
         run: python scripts/eln.py validate --strict
+      - name: The sandbox follows the conventions and matches its generator
+        shell: bash
+        run: |
+          python scripts/eln.py validate --strict --root sandbox
+          python sandbox/rebuild.py
+          git diff --exit-code -- sandbox/ || { echo "sandbox/ differs from what sandbox/rebuild.py produces: run it and commit."; exit 1; }
       - name: Inventory CSVs are current
         shell: bash
         run: |

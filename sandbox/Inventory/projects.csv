@@ -1,0 +1,3 @@
+project_id,title,lead,status,date_started,experiments
+PRMT5-ChromatinRelease,PRMT5 inhibition and chromatin release of snRNP proteins,Alex Example,active,2026-05-20,ALXe0001;ALXe0002;ALXe0003;ALXe0004;JORe0001;JORe0002
+SNRPB-ArginineMethylation,Mapping arginine methylation sites on SNRPB,Jordan Example,active,2026-07-01,JORe0001;JORe0003

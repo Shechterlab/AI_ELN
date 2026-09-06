@@ -1,0 +1,8 @@
+sample_id,sample_type,title,source,storage_location,date_created,status,used_in_experiments
+ALXa0001,antibody,"anti-SNRPB (mouse monoclonal, Sigma S0698)","Sigma S0698, lot 0000123","Fridge 4C, door, antibody box 1",2026-05-25,active,ALXe0002;ALXe0003;JORe0002
+ALXa0002,antibody,anti-U1-70K (rabbit),"gift, Dreyfuss lab (2025)","Fridge 4C, door, antibody box 1",2026-05-25,active,ALXe0001;ALXe0002
+ALXa0003,antibody,"anti-histone H3 (rabbit, Abcam ab1791)",Abcam ab1791,"Fridge 4C, door, antibody box 2",2026-05-25,active,ALXe0001;ALXe0002;ALXe0003;JORe0001
+ALXc0001,cell-line,A549 (lung adenocarcinoma),"ATCC CCL-185, passage 8 at thaw","LN2 rack 2, box 4, A1-A6",2026-05-22,active,ALXe0001;ALXe0002;ALXe0004;JORe0001;JORe0002;JORe0003
+ALXc0002,cell-line,HeLa,ATCC CCL-2,"LN2 rack 2, box 4, B1-B4",2026-06-30,active,ALXe0003
+JORp0001,plasmid,pcDNA3-FLAG-SNRPB wild type,"in-house, cloned 2026-06 (see NB04-012)","Freezer -20C B, box 3, C4",2026-06-18,active,JORe0001;JORe0003
+JORp0002,plasmid,pcDNA3-FLAG-SNRPB R107K/R111K,"in-house, site-directed mutagenesis from JORp0001","Freezer -20C B, box 3, C5",2026-06-25,active,JORe0001

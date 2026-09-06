@@ -1,0 +1,7 @@
+replicate,condition,chromatin,nucleoplasm,fraction
+1,DMSO,0.29,0.71,0.29
+1,PRMT5i,0.55,0.45,0.55
+2,DMSO,0.36,0.64,0.36
+2,PRMT5i,0.66,0.34,0.66
+3,DMSO,0.28,0.72,0.28
+3,PRMT5i,0.53,0.47,0.53

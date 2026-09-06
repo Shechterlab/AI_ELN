@@ -1,0 +1,4 @@
+protocol_id,title,version,status,used_in_experiments
+P_CellularFractionation,Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin),2026-06-10,current,ALXe0001;ALXe0002;ALXe0003;ALXe0004;JORe0001
+P_Immunofluorescence,Immunofluorescence on coverslips,2026-07-15,current,JORe0002
+P_WesternBlot,"Western blot (wet transfer, PVDF)",2026-05-02,current,ALXe0001;ALXe0002;ALXe0003;JORe0001;JORe0003
