@@ -116,7 +116,16 @@ export class NodeStore {
     const tmp = path.join(path.dirname(full), `.${path.basename(full).slice(0, 80)}.${process.pid}.tmp`);
     try {
       await fsp.writeFile(tmp, bytes);
-      await fsp.rename(tmp, full);
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await fsp.rename(tmp, full);
+          break;
+        } catch (e) {
+          /* Windows refuses while another program has the old file open; that lasts a moment */
+          if (attempt >= 39 || !['EPERM', 'EACCES', 'EBUSY'].includes(e.code)) throw e;
+          await new Promise((r) => setTimeout(r, 25));
+        }
+      }
     } catch (e) {
       await fsp.rm(tmp, { force: true }).catch(() => {});
       throw e;

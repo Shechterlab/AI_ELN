@@ -147,7 +147,15 @@ def write_text_lf(path: Path, text: str) -> None:
     try:
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        os.replace(tmp, path)
+        for attempt in range(40):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                # Windows refuses while another program has the old file open; that lasts a moment
+                if attempt == 39:
+                    raise
+                time.sleep(0.025)
     except OSError:
         try:
             tmp.unlink()
