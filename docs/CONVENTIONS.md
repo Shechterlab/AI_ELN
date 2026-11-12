@@ -82,6 +82,7 @@ reference and tells you if one points nowhere.
 ├── Samples/      {SAMPLE_ID}.md
 ├── Projects/     {PROJECT_ID}.md
 ├── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv  (generated)
+├── AGENTS.md     the rules in short, for AI tools opened in this folder; written at setup
 ├── Exports/      folders written by Export: copies, safe to delete
 ├── notebook.md   whose notebook this is and the last IDs given out; kept by the tool
 └── lab.yaml      optional: lab name and house style for printouts
@@ -121,10 +122,26 @@ last_ids: [JSRa0003, JSRe0012, JSRp0004]
 
 The tool writes it. The next ID is one more than the higher of the number
 here and what is in the folders, so a number is not given out again when a
-folder is deleted or has not synced yet. When nobody has set initials on a
-computer, the tools use the owner's. You may correct `owner` and
+folder is deleted or has not synced yet. You may correct `owner` and
 `initials`, and write anything you like below the header. Do not lower a
-number in `last_ids`.
+number in `last_ids`. Keep the header in the form shown: one `key: value`
+per line and the list in square brackets. If the header cannot be read, the
+tools leave the file alone and Check says what is wrong with it. If the file
+is deleted, the next record makes it again from the IDs the folders show.
+
+**Whose initials a new record gets.** In this order: initials given with the
+command (`--initials`), then the `initials` in `notebook.md`, then the
+initials saved on the computer or in the browser. A notebook that names its
+owner is that person's: someone else's saved settings do not put their
+initials into it. A notebook that several people write in leaves `owner`
+and `initials` empty, and each person's saved initials are used.
+
+**One record at a time.** While a record is being created the tools hold a
+lock: an empty folder named `.eln-lock` at the top of the notebook, there
+for a moment. Two programs working in the same notebook at once (two
+windows, a person and an AI tool) therefore cannot give out the same ID. If
+a crash leaves it behind it is taken over after a minute; it can also be
+deleted by hand.
 
 ### Adopted folders
 
@@ -132,10 +149,12 @@ An older folder becomes a record with **Adopt** (`eln.py adopt`). The
 experiment gets the next ID and the tag `adopted`. The old folder is moved,
 whole and unchanged, to `2-data_raw/{old folder name}/`.
 `1-notes/{ID}_adopted-files.csv` lists every file with its size and the time
-it was last modified before the move. The title and `date_started` are read
-from the folder name where it holds a date (`2019-03-04_PRMT5 western`),
-otherwise from the oldest file date; `date_completed` is the newest file
-date. Results and Interpretation say "Not written" until someone writes
+it was last modified before the move (in UTC). The title and `date_started`
+are read from the folder name where it holds a date (`2019-03-04_PRMT5
+western`), otherwise from the oldest file date; `date_completed` is the
+newest file date. Links inside the folder are moved as links and never
+followed. A folder that is itself a link, is named `README.md`, or has a
+line break in its name is refused: rename it or adopt the real folder. Results and Interpretation say "Not written" until someone writes
 them.
 
 `lab.yaml` (optional, at the top of the notebook folder) holds the lab's
@@ -183,7 +202,13 @@ mass spec), it stays on institutional storage and the note's
 `raw_data_path` points at it; a short `README.md` in `2-data_raw/` saying
 where it went is welcome.
 
-`README.md` and dotfiles are exempt everywhere.
+`README.md` and dotfiles are exempt from the naming rule everywhere.
+
+**What the manifest covers.** Every file in the experiment folder, hidden
+files included (`.RData` is data). Left out: what the operating system and
+Office leave around (`.DS_Store`, `._*`, `Thumbs.db`, `desktop.ini`, `~$*`),
+and links. A link is never followed, in a manifest, a snapshot, or an
+export, so a file outside the notebook cannot end up in one by accident.
 
 ## 4. The YAML header (front matter)
 

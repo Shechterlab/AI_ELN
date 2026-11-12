@@ -28,6 +28,8 @@ IDs
   Protocol    P_{Name}                 P_WesternBlot
   Project     {Name}                   PRMT5-ChromatinRelease
   An ID written anywhere is a reference to that record. Numbers are never reused.
+  A notebook belongs to one person. An experiment or sample ID with other initials (ALXc0001 in a note of
+  JOR) is a record in that person's notebook, a different folder: it is not missing, and it is not created here.
 
 File names
   {ID}[_R|_P]_{words-with-hyphens}[_{YYYYMMDD}].ext

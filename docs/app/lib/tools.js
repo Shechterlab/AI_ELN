@@ -14,7 +14,7 @@ import { loadVault, ciIn, sortedById, writeSection } from './vault.js';
 import { templateKeys } from './templates.js';
 import { validateVault, formatIssues, countIssues } from './validate.js';
 import { writeIndex, formatIndexResult } from './inventory.js';
-import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder, readNotebook } from './create.js';
+import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder, notebookPerson, knownInitials, inAnotherNotebook, initialsOf } from './create.js';
 import { adoptFolder, adoptableFolders } from './adopt.js';
 import { exportFolder } from './exportfolder.js';
 import { findNotes, buildReport, buildExport, selectForExport, exportScope } from './query.js';
@@ -35,22 +35,25 @@ const bool = (description) => ({ type: 'boolean', description });
 const list = (description) => ({ type: 'array', items: { type: 'string' }, description });
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
+/** Who is creating this? Initials given with the call (or as a flag: ctx.explicit), then the owner named
+    in the notebook's notebook.md, then the saved settings (ctx.person). A notebook that names its owner is
+    that person's: settings left by someone else do not put their initials into it. Same as resolve_person
+    in scripts/eln.py. */
 async function person(ctx, args) {
-  let own = (ctx.person && cleanInitials(ctx.person.initials || '')) || '';
-  let ownName = (ctx.person && ctx.person.researcher) || '';
-  if (!own) {
-    /* a personal notebook says whose it is */
-    const known = await readNotebook(ctx.store);
-    own = cleanInitials(typeof known.initials === 'string' ? known.initials : '');
-    ownName = own && typeof known.owner === 'string' ? known.owner : '';
-  }
   if (args.initials && !cleanInitials(args.initials)) {
     throw new ElnError(`initials must be 2 to 4 letters, e.g. JSR (got ${pyRepr(args.initials)})`, 'bad_initials');
   }
-  const initials = cleanInitials(args.initials || '') || own;
-  if (!initials) throw new ElnError('initials are needed (2 to 4 letters, e.g. JSR): pass "initials", or set them in the notebook settings', 'no_initials');
-  /* someone else's initials do not get the configured person's name */
-  const researcher = args.researcher || (initials === own ? ownName : '') || initials;
+  const given = ctx.explicit || {};
+  const flag = cleanInitials(args.initials || '') || cleanInitials(given.initials || '');
+  const saved = (ctx.person && cleanInitials(ctx.person.initials || '')) || '';
+  const savedName = (ctx.person && ctx.person.researcher) || '';
+  const [book, owner] = await notebookPerson(ctx.store);
+  const initials = flag || book || saved;
+  if (!initials) {
+    throw new ElnError('initials are needed (2 to 4 letters, e.g. JSR): pass "initials", or write them into notebook.md in the notebook folder', 'no_initials');
+  }
+  /* a name belongs to its initials: someone else's initials do not get the saved person's name */
+  const researcher = args.researcher || given.researcher || (initials === book ? owner : '') || (initials === saved ? savedName : '') || initials;
   return { initials, researcher };
 }
 
@@ -150,7 +153,7 @@ export const TOOLS = [
       const byStatus = {};
       for (const e of exps) byStatus[e.get('status') || '(none)'] = (byStatus[e.get('status') || '(none)'] || 0) + 1;
       return {
-        person: ctx.person || null,
+        person: await person(ctx, {}).catch(() => null),
         counts: Object.fromEntries(KINDS.map((k) => [k + 's', v.notes[k].filter((n) => n.id).length])),
         experiments_by_status: byStatus,
         projects: sortedById(v.notes.project).map((n) => ({ id: n.id, title: n.get('title'), status: n.get('status') })),
@@ -195,6 +198,9 @@ export const TOOLS = [
     inputSchema: obj({ id: str('The ID, e.g. JSRe0002, JSRp0001, P_WesternBlot, or a project ID.') }, ['id']),
     handler: async (ctx, a) => {
       const v = await loadVault(ctx.store);
+      if (v.get(a.id) === null && inAnotherNotebook(a.id, await knownInitials(ctx.store))) {
+        throw new ElnError(`no note ${a.id} in this notebook. Its initials are ${initialsOf(a.id)}, so it is a record in that person's notebook, which this folder does not hold`, 'elsewhere');
+      }
       const n = noteOrThrow(v, a.id);
       const out = { id: n.id, kind: n.kind, path: n.path, folder: n.folder, fields: { ...n.fields }, text: n.text };
       if (n.kind === 'experiment' && n.folder) out.files = await experimentFiles(ctx.store, n);
@@ -280,7 +286,7 @@ export const TOOLS = [
   {
     name: 'adopt_folder',
     title: 'Adopt an older folder',
-    description: 'Make an experiment record out of an older folder that is inside the notebook folder (for example a folder dropped into Experiments/). The folder is moved, exactly as it is, into the new experiment\'s 2-data_raw/; nothing in it is renamed or changed. A CSV in 1-notes/ lists every file with its size and last-modified time. The title and dates are read from the folder name and the file dates unless given. Call with no folder to list the folders that are not records yet.',
+    description: 'Make an experiment record out of an older folder that is inside the notebook folder (for example a folder dropped into Experiments/). The folder is moved, exactly as it is, into the new experiment\'s 2-data_raw/; nothing in it is renamed or changed, and links in it are moved as links, never followed. A CSV in 1-notes/ lists every file with its size and last-modified time (UTC). The title and dates are read from the folder name and the file dates unless given. Call with no folder to list the folders that are not records yet.',
     readOnlyWhen: (a) => !a.folder,
     inputSchema: obj({
       folder: str('Path of the old folder, relative to the notebook folder, e.g. "Experiments/2019-03-04 PRMT5 western". Leave out to list the candidates.'),
@@ -436,7 +442,7 @@ export const TOOLS = [
     name: 'export_notes',
     readOnlyWhen: (a) => !a.save && ((a.format || 'md') === 'md' || (a.format === 'eln' && !!a.return_bytes)),
     title: 'Export',
-    description: 'Bundle experiments and the notes they refer to. format "md" gives one Markdown document to paste into a chat. format "folder" writes a folder of plain files into Exports/: the notes and their data files in the notebook layout, a README, one file with every note, and an index. format "eln" writes a .eln archive (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import. Choose what to export with project, experiment_ids, status, or all.',
+    description: 'Bundle experiments and the notes they refer to. format "md" gives one Markdown document to paste into a chat. format "folder" writes a folder of plain files into Exports/: the notes and their data files in the notebook layout, a README, one file with every note, and an index. format "eln" writes a .eln archive (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import. Choose what to export with project, experiment_ids, status, or all. A project and a status together give the experiments of that project with that status; experiment_ids are added to them; all cannot be combined with the others. A second folder export on the same day gets -2 at the end of its name.',
     inputSchema: obj({
       project: str('Export every experiment of this project.'),
       experiment_ids: list('Export these experiments.'),
@@ -500,7 +506,9 @@ async function runExport(ctx, a) {
   const stem = `export_${exportScope(choice)}_${today.replaceAll('-', '')}`;
   const ids = experiments.map((e) => e.id);
   if (a.format === 'folder') {
-    return exportFolder(ctx.store, v, experiments, { dest: `Exports/${stem}`, related, raw: a.raw !== false, today, lab });
+    let dest = `Exports/${stem}`;
+    for (let n = 2; (await ctx.store.stat(dest)) !== null; n++) dest = `Exports/${stem}-${n}`; // a second export on the same day gets -2, -3, ...
+    return exportFolder(ctx.store, v, experiments, { dest, related, raw: a.raw !== false, today, lab });
   }
   if ((a.format || 'md') === 'eln') {
     const { bytes, files } = await buildEln(ctx.store, v, experiments, { related, today, rootName: stem, lab });
@@ -556,6 +564,7 @@ export async function callTool(ctx, name, args = {}) {
   if (!tool) throw new ElnError(`unknown tool: ${name}`, 'unknown_tool');
   const clean = Object.fromEntries(Object.entries(args || {}).filter(([, v]) => v !== undefined));
   checkArgs(tool, clean);
+  if (name !== 'get_conventions') await requireFolder(ctx.store); // the folder is there, and is not a folder of notebooks
   return tool.handler(ctx, clean);
 }
 

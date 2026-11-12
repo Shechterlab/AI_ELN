@@ -36,5 +36,4 @@ Standard SDS-PAGE and wet transfer for fraction analysis.
 
 ## Change log
 
-- 2026-05-02: current version
-- 2026-04-01: initial version
+- 2026-05-02: initial version

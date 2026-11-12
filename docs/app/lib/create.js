@@ -2,7 +2,7 @@
    existence, so IDs, folder names, and headers are always right. */
 
 import {
-  ElnError, SUBFOLDERS, VAULT_DIRS, RE_INITIALS, RE_EXP_FOLDER, RE_EXP_ID, RE_SAMPLE_ID, RE_PROTOCOL_NAME, RE_PROJECT_ID,
+  ElnError, SUBFOLDERS, VAULT_DIRS, KIND_DIR, RE_INITIALS, RE_EXP_FOLDER, RE_EXP_ID, RE_SAMPLE_ID, RE_PROTOCOL_NAME, RE_PROJECT_ID,
   SAMPLE_LETTERS, SAMPLE_TYPES, NAMED_SUBFOLDERS,
 } from './schema.js';
 import { parseFrontMatter, formatValue, quoteIfNeeded, setHeaderField, csvItems } from './frontmatter.js';
@@ -11,7 +11,7 @@ import { slugify, nextNumber, fileNameFor } from './names.js';
 import { loadVault } from './vault.js';
 import { writeIndex } from './inventory.js';
 import { isoDate, pyRepr, strip, rstrip, stem, validDate, utf8, oneLine, decodeText, cmp } from './text.js';
-import { writeText, readText, exists, isFile, isDir } from '../store/base.js';
+import { writeText, readText, exists, isFile, isDir, withLock } from '../store/base.js';
 
 export const SUBFOLDER_READMES = {
   '1-notes': 'Your experiment note `{ID}.md` lives here, next to the protocol snapshot(s) `{ID}_P_...md`\n'
@@ -27,9 +27,29 @@ export const SUBFOLDER_READMES = {
 };
 
 /** A mistyped path, or a drive or synced folder that is not there, must not quietly start a second notebook. */
+export async function looksLikeNotebook(store, prefix = '') {
+  const at = (name) => (prefix ? `${prefix}/${name}` : name);
+  if (await isFile(store, at(NOTEBOOK_FILE))) return true;
+  for (const d of Object.values(KIND_DIR)) {
+    if (await isDir(store, at(d))) return true;
+  }
+  return false;
+}
+
+/** A mistyped path, or a drive that is not there, must not quietly start a second notebook.
+    Neither must the folder that holds several people's notebooks. */
 export async function requireFolder(store) {
   if (!(await isDir(store, ''))) {
     throw new ElnError(`there is no folder at ${store.label || 'that path'}. Check the path: is the drive or the synced folder available?`, 'no_folder');
+  }
+  if (await looksLikeNotebook(store)) return;
+  const inside = [];
+  for (const e of ((await store.list('')) || []).filter((x) => x.kind === 'dir' && !x.name.startsWith('.')).sort((a, b) => cmp(a.name, b.name))) {
+    if (await looksLikeNotebook(store, e.name)) inside.push(e.name);
+  }
+  if (inside.length) {
+    throw new ElnError(`${store.label || 'this folder'} is not a notebook. It holds ${inside.length} notebook${inside.length !== 1 ? 's' : ''} `
+      + `(${inside.slice(0, 8).join(', ')}${inside.length > 8 ? ', ...' : ''}). Use one of them as the notebook folder.`, 'not_a_notebook');
   }
 }
 
@@ -94,29 +114,85 @@ export async function readNotebook(store) {
   }
 }
 
+/** What is wrong with notebook.md, in words for Check. [] when it is fine or not there. */
+export async function notebookProblems(store) {
+  if (!(await isFile(store, NOTEBOOK_FILE))) return [];
+  let parsed;
+  try {
+    parsed = parseFrontMatter(decodeText(await store.readBytes(NOTEBOOK_FILE), true));
+  } catch (e) {
+    return ['the file cannot be read as UTF-8 text; the last IDs are not being remembered'];
+  }
+  const out = parsed.problems.map((p) => `${p}; until the header is fixed the last IDs are not being remembered`);
+  const ini = 'initials' in parsed.fields ? parsed.fields.initials : '';
+  if ((Array.isArray(ini) ? ini.length : ini) && !(typeof ini === 'string' && RE_INITIALS.test(ini.toUpperCase()))) {
+    out.push(`initials ${pyRepr(ini)} are not 2 to 4 letters; they are ignored`);
+  }
+  if ('last_ids' in parsed.fields && !Array.isArray(parsed.fields.last_ids) && parsed.fields.last_ids !== '') {
+    out.push('last_ids must be a list such as [JSRe0012, JSRp0004]; it is ignored');
+  }
+  return out;
+}
+
+/** [initials, owner] named in notebook.md; ['', ''] when it names nobody. */
+export async function notebookPerson(store) {
+  const known = await readNotebook(store);
+  const ini = known.initials;
+  if (!(typeof ini === 'string' && RE_INITIALS.test(ini.toUpperCase()))) return ['', ''];
+  return [ini.toUpperCase(), typeof known.owner === 'string' ? known.owner : ''];
+}
+
 async function lastIds(store) {
   const value = (await readNotebook(store)).last_ids;
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+/** One ID per kind of record, the highest: [JSRe0002, JSRe0010, JSRp0001] -> [JSRe0010, JSRp0001]. */
+export function highestIds(ids) {
+  const best = new Map();
+  const other = [];
+  for (const x of ids) {
+    if (initialsOf(x)) best.set(x.slice(0, -4), Math.max(best.get(x.slice(0, -4)) || 0, parseInt(x.slice(-4), 10)));
+    else if (!other.includes(x)) other.push(x); // something a person wrote there; kept as it is
+  }
+  return [...[...best].map(([prefix, number]) => `${prefix}${String(number).padStart(4, '0')}`), ...other].sort(cmp);
+}
+
+/** The experiment and sample IDs that the folder and file names show. */
+async function idsInFolders(store) {
+  const out = [];
+  for (const e of (await store.list('Experiments')) || []) {
+    const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) out.push(m[1]);
+  }
+  for (const e of (await store.list('Samples')) || []) {
+    if (e.kind === 'file' && e.name.endsWith('.md') && initialsOf(stem(e.name))) out.push(stem(e.name));
+  }
+  return out;
+}
+
 /** The highest number notebook.md remembers for these initials and this kind of record. */
 async function lastIssued(store, initials, letter) {
   const re = new RegExp(`^${initials}${letter}(\\d{4})$`);
+  let highest = 0;
   for (const known of await lastIds(store)) {
     const m = re.exec(known);
-    if (m) return parseInt(m[1], 10);
+    if (m) highest = Math.max(highest, parseInt(m[1], 10));
   }
-  return 0;
+  return highest;
 }
 
 async function updateNotebook(store, values) {
   if (!(await exists(store, NOTEBOOK_FILE))) {
+    /* a new (or deleted and re-made) notebook.md starts from the IDs the folders already show */
     const current = { owner: '', initials: '', last_ids: [], ...values };
+    current.last_ids = highestIds([...(await idsInFolders(store)), ...current.last_ids]);
     await writeText(store, NOTEBOOK_FILE, notebookText(String(current.owner), String(current.initials), current.last_ids));
     return;
   }
   try {
     let text = decodeText(await store.readBytes(NOTEBOOK_FILE), true);
+    if (parseFrontMatter(text).problems.length) return; // a header with a problem is left exactly as it is; Check says what is wrong
     for (const [key, value] of Object.entries(values)) text = setHeaderField(text, key, value, NOTEBOOK_FILE);
     await writeText(store, NOTEBOOK_FILE, text);
   } catch (e) { /* a notebook.md someone broke must not stop a record from being made */ }
@@ -124,11 +200,8 @@ async function updateNotebook(store, values) {
 
 /** Remember an ID that was just given out, in notebook.md. */
 export async function recordId(store, newId) {
-  const prefix = newId.slice(0, -4);
   const known = await lastIds(store);
-  const same = known.filter((x) => x.slice(0, -4) === prefix && /^[0-9]{4}$/.test(x.slice(-4))).map((x) => parseInt(x.slice(-4), 10));
-  const number = Math.max(parseInt(newId.slice(-4), 10), ...same);
-  const ids = [...known.filter((x) => x.slice(0, -4) !== prefix), `${prefix}${String(number).padStart(4, '0')}`].sort(cmp);
+  const ids = highestIds([...known, newId]);
   if (ids.join('\n') !== known.join('\n') || !(await exists(store, NOTEBOOK_FILE))) await updateNotebook(store, { last_ids: ids });
 }
 
@@ -208,8 +281,21 @@ export async function writeSubfolderReadmes(store, folder, expId) {
 
 const reindex = async (store) => writeIndex(store, await loadVault(store));
 
+/** Rebuild the index after a record was made. If the index cannot be written, the record still exists:
+    say so as a warning, not as a failure that invites a second attempt. */
+async function indexAfterCreate(store, result) {
+  try {
+    await reindex(store);
+  } catch (e) {
+    if (e instanceof ElnError) throw e;
+    result.warnings.push(`${result.id} was created, but the index in Inventory/ could not be updated (${e.message}). Rebuild the index once the folder can be written to`);
+  }
+}
+
 /** -> { id, path, folder, extra: [paths], warnings: [text] } */
-export async function createExperiment(store, {
+export const createExperiment = (store, args) => withLock(store, () => createExperimentLocked(store, args));
+
+async function createExperimentLocked(store, {
   initials, researcher = '', title, project = '', exp_type = '', protocol = '', samples = '', related = '',
   notebook = '', tags = '', raw_data_path = '', today = isoDate(), index = true,
 }) {
@@ -258,6 +344,14 @@ export async function createExperiment(store, {
   for (const s of csvItems(samples)) {
     if (!(await exists(store, `Samples/${s}.md`)) && !inAnotherNotebook(s, known)) result.warnings.push(`sample ${s} is not in Samples/ (check the ID, or create it with New sample)`);
   }
+  const there = new Set();
+  for (const e of (await store.list('Experiments')) || []) {
+    const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) there.add(m[1]);
+  }
+  for (const r of csvItems(related)) {
+    if (!there.has(r) && !inAnotherNotebook(r, known)) result.warnings.push(`related experiment ${r} is not in Experiments/ (check the ID)`);
+  }
 
   for (const pid of protocols) {
     const src = `Protocols/${pid}.md`;
@@ -273,11 +367,13 @@ export async function createExperiment(store, {
     await store.writeBytes(dst, bytes);
     result.extra.push(dst);
   }
-  if (index) await reindex(store);
+  if (index) await indexAfterCreate(store, result);
   return result;
 }
 
-export async function createSample(store, { initials, sample_type, title, source = '', storage = '', tags = '', today = isoDate(), index = true }) {
+export const createSample = (store, args) => withLock(store, () => createSampleLocked(store, args));
+
+async function createSampleLocked(store, { initials, sample_type, title, source = '', storage = '', tags = '', today = isoDate(), index = true }) {
   checkInitials(initials);
   let stype = strip(sample_type || '').toLowerCase();
   let letter;
@@ -295,8 +391,9 @@ export async function createSample(store, { initials, sample_type, title, source
     SOURCE: source || '', STORAGE: storage || '', TAGS: tags || '',
   }));
   await recordId(store, sampleId);
-  if (index) await reindex(store);
-  return { id: sampleId, path, extra: [], warnings: [] };
+  const result = { id: sampleId, path, extra: [], warnings: [] };
+  if (index) await indexAfterCreate(store, result);
+  return result;
 }
 
 export async function createProtocol(store, { name, title = '', tags = '', today = isoDate(), index = true }) {
@@ -312,8 +409,9 @@ export async function createProtocol(store, { name, title = '', tags = '', today
   const fullTitle = strip(title || '') || short.replace(/(?<=[a-z])(?=[A-Z])/g, ' ').replaceAll('-', ' ');
   await ensureVaultDirs(store);
   await writeText(store, path, await renderTemplate(store, 'protocol', { NAME: short, TITLE: fullTitle, DATE: today, TAGS: tags || '' }));
-  if (index) await reindex(store);
-  return { id: pid, path, extra: [], warnings: [] };
+  const result = { id: pid, path, extra: [], warnings: [] };
+  if (index) await indexAfterCreate(store, result);
+  return result;
 }
 
 export async function createProject(store, { project_id, title = '', lead = '', tags = '', today = isoDate(), index = true }) {
@@ -326,10 +424,11 @@ export async function createProject(store, { project_id, title = '', lead = '', 
   if (await exists(store, path)) throw new ElnError(`${path} already exists.`, 'exists');
   await ensureVaultDirs(store);
   await writeText(store, path, await renderTemplate(store, 'project', {
-    PROJECT_ID: pid, TITLE: strip(title || '') || pid, LEAD: lead || '', DATE: today, TAGS: tags || '',
+    PROJECT_ID: pid, TITLE: strip(title || '') || pid, LEAD: lead || (await notebookPerson(store))[1], DATE: today, TAGS: tags || '',
   }));
-  if (index) await reindex(store);
-  return { id: pid, path, extra: [], warnings: [] };
+  const result = { id: pid, path, extra: [], warnings: [] };
+  if (index) await indexAfterCreate(store, result);
+  return result;
 }
 
 /** Put a file into an experiment's subfolder under the right name. Never overwrites.

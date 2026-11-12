@@ -27,29 +27,38 @@ folder.
 - Finish and export: `complete_experiment`, `render_snapshot`,
   `meeting_brief`, `export_notes` (one Markdown file, a folder of plain files, or `.eln`), `rebuild_index`
 
+While a record is being created the server holds the notebook's lock (an
+empty `.eln-lock` folder, shared with `scripts/eln.py`), so two programs
+cannot give out the same ID.
+
 The server sends the lab's rules (cite experiment IDs, never invent a
 result, never touch `2-data_raw`) to the client as its instructions.
 
 ## Connecting a client
 
-The server takes `--root DIR` (default: the folder this repository is in),
+The server takes `--root DIR` (the notebook folder; default: the one saved by
+`python3 scripts/eln.py init --root`, or else the folder this repository is in),
 `--initials` and `--researcher` (default: what `python3 scripts/eln.py init`
 saved, or the environment variables `AI_ELN_INITIALS` and
 `AI_ELN_RESEARCHER`, or else the owner named in the notebook's `notebook.md`), and `--read-only` (offer only the tools that change
 nothing; the brief and the export are included and refuse to save).
 
+In the examples, `/path/to/AI_ELN` is the tools folder (this repository) and
+`/path/to/notebook` is your own notebook folder.
+
 **Claude Code and Cowork.** The repository includes `.mcp.json`, so opening
-the tool in the notebook folder offers the `ai-eln` server and asks whether
-to use it. To add it by hand:
+the tool in the tools folder offers the `ai-eln` server and asks whether to
+use it; it works on the notebook saved by `init --root`. To add it for a
+particular notebook:
 
 ```bash
-claude mcp add ai-eln -- node /path/to/notebook/mcp/server.mjs
+claude mcp add ai-eln -- node /path/to/AI_ELN/mcp/server.mjs --root /path/to/notebook
 ```
 
 **Claude Desktop.** In `claude_desktop_config.json`:
 
 ```json
-{ "mcpServers": { "ai-eln": { "command": "node", "args": ["/path/to/notebook/mcp/server.mjs"] } } }
+{ "mcpServers": { "ai-eln": { "command": "node", "args": ["/path/to/AI_ELN/mcp/server.mjs", "--root", "/path/to/notebook"] } } }
 ```
 
 **Codex.** In `~/.codex/config.toml`:
@@ -57,7 +66,7 @@ claude mcp add ai-eln -- node /path/to/notebook/mcp/server.mjs
 ```toml
 [mcp_servers.ai-eln]
 command = "node"
-args = ["/path/to/notebook/mcp/server.mjs"]
+args = ["/path/to/AI_ELN/mcp/server.mjs", "--root", "/path/to/notebook"]
 ```
 
 **Any other MCP client.** The command is `node /path/to/notebook/mcp/server.mjs`,

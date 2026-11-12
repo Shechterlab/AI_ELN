@@ -80,6 +80,14 @@ export class FsAccessStore {
     await parent.removeEntry(path.slice(i + 1));
   }
 
+  /** One record at a time across the tabs of this browser. -> a function that releases the lock */
+  lock() {
+    if (typeof navigator === 'undefined' || !navigator.locks) return Promise.resolve(async () => {});
+    return new Promise((resolve) => {
+      navigator.locks.request(`ai-eln:${this.label}`, () => new Promise((release) => resolve(async () => release())));
+    });
+  }
+
   /** Removes a folder only when it is empty (the browser refuses otherwise). */
   async rmdir(path) {
     await this.remove(path);

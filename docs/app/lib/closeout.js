@@ -30,8 +30,8 @@ export function snapshotCss(lab, noteId) {
     + `border-bottom:3px solid ${accent};padding-bottom:6px;margin-bottom:18px}.lab b{color:${primary}}`
     + `h1{font-size:22px;margin:0 0 6px;color:${primary}}`
     + 'h2{border-bottom:1px solid #e3e8ee;padding-bottom:4px;margin-top:24px;font-size:18px}'
-    + 'table{border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #e3e8ee;'
-    + 'vertical-align:top}.meta td:first-child{color:#5f6b7a;white-space:nowrap}img{max-width:100%;border:1px solid #e3e8ee}'
+    + 'table{border-collapse:collapse;margin:8px 0;max-width:100%}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #e3e8ee;'
+    + 'vertical-align:top;overflow-wrap:anywhere}p,li{overflow-wrap:anywhere}.meta td:first-child{color:#5f6b7a;white-space:nowrap}img{max-width:100%;border:1px solid #e3e8ee}'
     + 'code{background:#f1f5f9;padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#f1f5f9;padding:10px;overflow-x:auto}'
     + '.sub{color:#5f6b7a;font-weight:400}.sign{display:none}'
     + '.foot{color:#5f6b7a;font-size:13px;margin-top:40px;border-top:1px solid #e3e8ee;padding-top:10px}'
@@ -47,12 +47,14 @@ export function snapshotCss(lab, noteId) {
 }
 
 /** Every regular file under an experiment folder, in order, skipping what the operating system leaves behind. */
+/** Files the operating system, Office, or a half-finished save leaves around. Everything else counts,
+    hidden files included: .RData is data. */
+export const isLitter = (name) => SKIP_NAMES.has(name.toLowerCase()) || name.startsWith('~$') || name.startsWith('._')
+  || name.endsWith('.crswap') || (name.startsWith('.') && name.endsWith('.tmp'));
+
 export async function folderFiles(store, folder) {
-  return (await walkFiles(store, folder)).filter((p) => {
-    const name = basename(p);
-    return !SKIP_NAMES.has(name.toLowerCase()) && !name.startsWith('.') && !name.startsWith('~$') && !name.endsWith('.crswap')
-      && !p.split('/').includes('__pycache__');
-  });
+  return (await walkFiles(store, folder, { links: false })).filter((p) => !isLitter(basename(p))
+    && !p.split('/').some((part) => part === '__pycache__' || part === '.eln-lock'));
 }
 
 async function dataUri(store, path, limit = 8000000) {
@@ -84,7 +86,9 @@ export async function renderSnapshotHtml(store, note, generated = isoDate(), lab
     ['Snapshot generated', esc(generated)]];
   if (note.folder !== null) {
     const rows = [];
+    const own = new RegExp(`^1-notes/${note.id}_(MANIFEST\\.sha256|snapshot_\\d{8}\\.html)$`);
     for (const p of await folderFiles(store, note.folder)) {
+      if (own.test(p.slice(note.folder.length + 1))) continue; // the snapshot and the manifest describe the folder; they are not listed in it
       const size = (await store.stat(p)).size;
       rows.push(`<tr><td>${esc(p.slice(note.folder.length + 1))}</td><td>${thousands(size)}</td></tr>`);
     }
@@ -152,7 +156,7 @@ export async function readManifest(store, folder, expId, strict = false) {
 /** What changed since the manifest was written. -> { missing, modified, added, files } */
 export async function verifyManifest(store, folder, expId) {
   const recorded = await readManifest(store, folder, expId, true);
-  if (recorded === null) throw new ElnError(`${expId} has no manifest (it has not been marked complete)`, 'no_manifest');
+  if (recorded === null) throw new ElnError(`${expId} ${NO_MANIFEST}`, 'no_manifest');
   const now = await hashFolder(store, folder, expId);
   return {
     missing: Object.keys(recorded).filter((p) => !(p in now)).sort(cmp),
@@ -164,6 +168,9 @@ export async function verifyManifest(store, folder, expId) {
 
 /** Verify one experiment, or every experiment that has a manifest.
     -> { results: [{ id, ok, missing, modified, added, files, error }], drift } */
+const NO_MANIFEST_COMPLETE = 'is complete, but there is no manifest to compare with. Mark it complete again to write one';
+const NO_MANIFEST = 'has no manifest yet (one is written when the experiment is marked complete)';
+
 export async function verifyExperiments(store, vault, id = '') {
   let targets;
   if (id) {
@@ -173,11 +180,15 @@ export async function verifyExperiments(store, vault, id = '') {
   } else {
     targets = [];
     for (const n of vault.notes.experiment) {
-      if (n.folder && n.id && await exists(store, manifestPath(n.folder, n.id))) targets.push(n);
+      if (n.folder && n.id && (n.get('status') === 'complete' || await exists(store, manifestPath(n.folder, n.id)))) targets.push(n);
     }
   }
   const results = [];
   for (const n of targets) {
+    if (!(await exists(store, manifestPath(n.folder, n.id)))) {
+      results.push({ id: n.id, ok: false, missing: [], modified: [], added: [], files: 0, error: n.get('status') === 'complete' ? NO_MANIFEST_COMPLETE : NO_MANIFEST });
+      continue;
+    }
     try {
       const r = await verifyManifest(store, n.folder, n.id);
       results.push({ id: n.id, ok: !(r.missing.length || r.modified.length || r.added.length), ...r });
@@ -200,7 +211,7 @@ export async function renderSnapshot(store, vault, id, { when = isoDate(), out =
 
 /** The close-out: check the note is written up, set status and date_completed, write a snapshot and
     a manifest, rebuild the index. -> { snapshot, manifest, warnings, files } */
-export async function completeExperiment(store, id, { when = '', force = false, today = isoDate(), lab = null } = {}) {
+export async function completeExperiment(store, id, { when = '', force = false, today = isoDate(), lab = null, generated = '' } = {}) {
   let vault = await loadVault(store);
   let note = vault.get(id);
   if (note === null || note.kind !== 'experiment' || note.folder === null) throw new ElnError(`no experiment ${id}`, 'not_found');
@@ -215,6 +226,7 @@ export async function completeExperiment(store, id, { when = '', force = false, 
       + `Write ${empty.length > 1 ? 'them' : 'it'} first, or complete anyway (force).`, 'sections_empty', { empty, id });
   }
   const warnings = [];
+  if (note.get('status') === 'abandoned') warnings.push('the status was abandoned; it is now complete');
   if (validDate(note.get('date_started')) && date < note.get('date_started')) {
     warnings.push(`the completion date ${date} is before the start date ${note.get('date_started')}`);
   }
@@ -250,8 +262,9 @@ export async function completeExperiment(store, id, { when = '', force = false, 
   await writeText(store, note.path, text);
   vault = await loadVault(store);
   note = vault.get(id);
-  const snapshot = snapshotPath(note, date);
-  await writeText(store, snapshot, await renderSnapshotHtml(store, note, date, lab));
+  /* the snapshot may carry another date than the completion: an adopted folder is dated the day it was adopted */
+  const snapshot = snapshotPath(note, generated || date);
+  await writeText(store, snapshot, await renderSnapshotHtml(store, note, generated || date, lab));
   const manifest = await writeManifest(store, note.folder, id);
   await writeIndex(store, vault);
   return { snapshot, manifest, warnings, files: Object.keys((await readManifest(store, note.folder, id)) || {}).length };

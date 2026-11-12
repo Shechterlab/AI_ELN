@@ -5,6 +5,8 @@ Standard library only. Run it from anywhere:
     python3 3-code/JORe0004_summarise.py
 
 It reads 4-data_processed/JORe0004_retained-signal.csv and prints the numbers quoted in Results.
+Quartiles are by the exclusive method (the default of statistics.quantiles); Excel's QUARTILE.INC
+and R's default give slightly different values.
 """
 import csv
 import statistics

@@ -2,7 +2,7 @@
 type: notebook
 owner: Jordan Example
 initials: JOR
-last_ids: [JORe0004, JORp0002]
+last_ids: [JORa0001, JORe0004, JORp0002]
 ---
 
 # Lab notebook

@@ -761,6 +761,9 @@ def make_handler(app: App):
                         v, g("project") if scope == "project" else None,
                         eln.csv_items(g("ids").replace(" ", ",")) if scope == "ids" else [],
                         "active" if scope == "active" else None, scope == "all")
+                    if scope not in ("project", "ids", "active", "all") or not experiments:
+                        raise eln.ElnError("Nothing matched that choice, so no file was saved. Choose a project that has "
+                                           "experiments, or type at least one experiment ID.")
                     label = g("project") if scope == "project" else scope
                     (app.root / "Inventory").mkdir(parents=True, exist_ok=True)
                     if g("format") == "eln":

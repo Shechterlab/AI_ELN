@@ -83,8 +83,8 @@ model, so apply the same judgement you would to emailing it.
 ## Path B — Codex CLI
 
 OpenAI's Codex CLI signs in with a ChatGPT account and works directly in a
-folder. Open a terminal in this repository (or your synced copy) and start
-it. It reads [`AGENTS.md`](../AGENTS.md) automatically: the lab's rules,
+folder. Open a terminal in the tools folder (this repository) and start
+it; it works on the notebook you named with `eln.py init --root`. It reads [`AGENTS.md`](../AGENTS.md) automatically: the lab's rules,
 the `eln.py` commands, and where the skills are. Then talk to it:
 
 - *Create an experiment for the KCl titration repeat, project

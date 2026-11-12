@@ -58,6 +58,10 @@ textarea.text.tall { height: 68vh; font-size: 0.85rem; }
 
 .meta { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; font-size: 0.9rem; }
 .meta div:nth-child(odd) { color: var(--muted); }
+.meta div { min-width: 0; overflow-wrap: anywhere; }
+/* a wide table in a note scrolls inside the note, not the page */
+.note table { display: block; max-width: 100%; overflow-x: auto; }
+.note p, .note li, .path { overflow-wrap: anywhere; }
 .card + .card, .card + h2 + .card { margin-top: 14px; }
 .card.note { margin-top: 14px; padding: 22px 26px; }
 .note h1 { font-size: 1.5rem; }

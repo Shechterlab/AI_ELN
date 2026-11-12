@@ -25,7 +25,7 @@ try {
   process.stderr.write(`${e.message}\n`);
   process.exit(1);
 }
-const ctx = { store: new NodeStore(config.root), person: config.person, today: opt.today || undefined, labText: config.labText };
+const ctx = { store: new NodeStore(config.root), person: config.person, explicit: config.explicit, today: opt.today || undefined, labText: config.labText };
 /* read-only: the tools that change nothing, plus the brief and the export, which then refuse to save */
 const tools = mcpTools().filter((t) => !opt.read_only || t.canBeReadOnly).map(({ canBeReadOnly, ...t }) => t);
 const allowed = new Set(tools.map((t) => t.name));

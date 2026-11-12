@@ -11,7 +11,7 @@ tags: []
 
 # Immunofluorescence on coverslips
 
-`P_Immunofluorescence` · version 2026-08-18
+`P_Immunofluorescence` · version 2026-07-15
 
 ## Purpose
 

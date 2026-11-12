@@ -1,4 +1,5 @@
 protocol_id,title,version,status,used_in_experiments
-P_CellularFractionation,Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin),2026-06-10,current,ALXe0001;ALXe0002;ALXe0003;ALXe0004
+P_CellularFractionation,Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin),2026-06-14,current,ALXe0001;ALXe0002;ALXe0003
+P_RNAextraction,"RNA extraction (column, on-column DNase)",2026-08-20,current,ALXe0004;ALXe0005
 P_RTqPCR,"RT-qPCR (SYBR, 384-well)",2026-08-20,current,ALXe0005
 P_WesternBlot,"Western blot (wet transfer, PVDF)",2026-05-02,current,ALXe0001;ALXe0002;ALXe0003

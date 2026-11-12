@@ -11,7 +11,9 @@
 
    Optional: sha256(path) -> hex (a faster native hash), readChunks(path) -> async iterator of Uint8Array,
    existsOutside(text) -> boolean for a path that is not inside the notebook, remove(path), rmdir(path) for an
-   empty folder, copy(from, to) and move(from, to) for one file without holding it in memory, label.
+   empty folder, copy(from, to) and move(from, to) for one file without holding it in memory, lock() -> release
+   so two programs do not create a record at the same moment, label. A list entry may carry link: true (a
+   symbolic link) or kind 'other' (a link that leaves the notebook, a broken link, a pipe).
 
    Three stores ship: memory.js (tests, the try-it mode), fsaccess.js (a folder picked in Chrome or Edge),
    node.js (Node's fs, for the command line and the MCP server). A new backend (a sync service's API, a
@@ -39,15 +41,16 @@ export async function isFile(store, path) {
 }
 
 /** Every file under dir, recursively, as relative paths in pathlib order. [] if dir is not a folder. */
-export async function walkFiles(store, dir) {
+export async function walkFiles(store, dir, { links = true } = {}) {
   const out = [];
   async function visit(d) {
     const entries = await store.list(d);
     if (!entries) return;
     for (const e of entries) {
+      if (e.link && !links) continue;
       const p = joinPath(d, e.name);
       if (e.kind === 'dir') await visit(p);
-      else out.push(p);
+      else if (e.kind === 'file') out.push(p);
     }
   }
   await visit(dir);
@@ -92,22 +95,35 @@ export async function removeDir(store, path) {
   return !(await exists(store, path));
 }
 
-/** Every folder (parents first) and every file under dir, as paths relative to dir. */
+/** Run fn while holding the store's lock, if it has one. */
+export async function withLock(store, fn) {
+  const release = typeof store.lock === 'function' ? await store.lock() : null;
+  try {
+    return await fn();
+  } finally {
+    if (release) await release();
+  }
+}
+
+/** Every folder (parents first) and every file under dir, as paths relative to dir. Links are never walked
+    through: they, and anything that is neither a file nor a folder, are returned in `others`. */
 export async function walkTree(store, dir) {
   const dirs = [];
   const files = [];
+  const others = [];
   async function visit(rel) {
     const entries = ((await store.list(joinPath(dir, rel))) || []).slice().sort((a, b) => cmpPath(a.name, b.name));
     for (const e of entries) {
       const p = joinPath(rel, e.name);
-      if (e.kind === 'dir') {
+      if (e.link || (e.kind !== 'dir' && e.kind !== 'file')) others.push(p);
+      else if (e.kind === 'dir') {
         dirs.push(p);
         await visit(p);
       } else files.push(p);
     }
   }
   await visit('');
-  return { dirs, files: files.sort(cmpPath) };
+  return { dirs, files: files.sort(cmpPath), others };
 }
 
 /** A folder inside a store, seen as a store of its own (an export folder, one notebook among several). */

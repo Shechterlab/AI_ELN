@@ -31,7 +31,9 @@ export function resolveConfig(opt = {}) {
     /* no settings file is normal; a damaged one must not send the tools to a different folder */
     if (e.code !== 'ENOENT') throw new Error(`the settings file ${configFile} is damaged (${e.message}). Delete it and run init again`);
   }
-  const initials = String(opt.initials || process.env.AI_ELN_INITIALS || saved.initials || '').toUpperCase();
+  /* --initials on the command line is said for this run; the environment and the settings file are what
+     is saved on the computer. A notebook's own notebook.md comes between the two (see person in lib/tools.js). */
+  const initials = String(process.env.AI_ELN_INITIALS || saved.initials || '').toUpperCase();
   let labText = null;
   try {
     labText = fs.readFileSync(path.join(REPO, 'docs', 'lab.yaml'), 'utf8').replace(/\r\n?/g, '\n');
@@ -39,6 +41,7 @@ export function resolveConfig(opt = {}) {
   return {
     labText,
     root: path.resolve(opt.root || process.env.AI_ELN_ROOT || saved.root || REPO),
-    person: { initials, researcher: opt.researcher || process.env.AI_ELN_RESEARCHER || saved.researcher || initials },
+    person: { initials, researcher: process.env.AI_ELN_RESEARCHER || saved.researcher || initials },
+    explicit: { initials: String(opt.initials || '').toUpperCase(), researcher: opt.researcher || '' },
   };
 }

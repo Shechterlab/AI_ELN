@@ -2,7 +2,7 @@
 type: protocol
 protocol_id: P_CellularFractionation
 title: Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin)
-version: 2026-06-10         # bump this date whenever the procedure changes; add a Change log line
+version: 2026-06-14         # bump this date whenever the procedure changes; add a Change log line
 status: current           # current | archived
 supersedes:
 references: []
@@ -11,7 +11,7 @@ tags: []
 
 # Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin)
 
-`P_CellularFractionation` · version 2026-06-10
+`P_CellularFractionation` · version 2026-06-14
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Separate cytoplasm, nucleoplasm, and chromatin-bound protein from adherent cells
 ## Materials
 
 - Hypotonic buffer: 10 mM HEPES pH 7.9, 10 mM KCl, 1.5 mM MgCl2, 0.34 M sucrose, 10% glycerol, 1 mM DTT, protease inhibitors
-- Nucleoplasm buffer: as above with KCl at the working concentration (300 mM validated in ALXe0001)
+- Nucleoplasm buffer: as above with 300 mM KCl (validated in ALXe0001)
 - Chromatin release: benzonase in 2x Laemmli
 
 ## Procedure
@@ -37,5 +37,4 @@ Separate cytoplasm, nucleoplasm, and chromatin-bound protein from adherent cells
 
 ## Change log
 
-- 2026-06-10: current version
-- 2026-04-01: initial version
+- 2026-07-18: copied from Alex Example's notebook at version 2026-06-14, unchanged

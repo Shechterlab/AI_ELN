@@ -38,17 +38,28 @@ export async function adoptFolder(store, {
   if (date && !validDate(date)) throw new ElnError(`date must be YYYY-MM-DD (got ${pyRepr(date)})`, 'bad_date');
   if (!(await isDir(store, source))) throw new ElnError(`there is no folder at ${source}`, 'not_found');
   const parts = source.split('/');
+  const parentList = (await store.list(parts.slice(0, -1).join('/'))) || [];
+  if (parentList.some((e) => e.name === parts[parts.length - 1] && e.link)) {
+    throw new ElnError(`${source} is a link to a folder, not a folder. Adopt the folder it points to`, 'bad_path');
+  }
+  if (/[\x00-\x1f\x7f]/.test(basename(source))) {
+    throw new ElnError("the folder's name has a line break or another control character in it. Rename the folder, then adopt it", 'bad_name');
+  }
+  if (basename(source).toLowerCase() === 'readme.md') {
+    throw new ElnError('a folder named README.md cannot go into 2-data_raw/, which has a README.md of its own. Rename the folder, then adopt it', 'bad_name');
+  }
   if (NOTEBOOK_TOP.has(parts[0]) && (parts[0] !== 'Experiments' || parts.length < 2)) {
     throw new ElnError(`${source} is part of the notebook, not an older folder`, 'bad_path');
   }
   if (parts[0] === 'Experiments' && RE_EXP_FOLDER.test(parts[1])) {
-    throw new ElnError(`${source} is already in an experiment record (${parts[1]})`, 'bad_path');
+    throw new ElnError(`${source} is already in an experiment record (${parts[1]}). If it is a stray copy `
+      + 'with an ID in its name, rename it so the name no longer starts with an ID, then adopt it', 'bad_path');
   }
   if (!copy && typeof store.remove !== 'function' && typeof store.move !== 'function') {
     throw new ElnError('files cannot be moved here; adopt with copy instead', 'cannot_move');
   }
   const name = basename(source);
-  const { dirs, files } = await walkTree(store, source);
+  const { dirs, files, others } = await walkTree(store, source);
   const found = [];
   for (const rel of files) {
     const s = await store.stat(`${source}/${rel}`);
@@ -57,8 +68,9 @@ export async function adoptFolder(store, {
   if (!found.length) throw new ElnError(`${name} has no files in it; there is nothing to adopt`, 'empty');
   const [guessedTitle, nameDate] = guessFromFolderName(name);
   const times = found.map((f) => f.mtime);
-  const oldest = isoDate(new Date(Math.min(...times)));
-  const newest = isoDate(new Date(Math.max(...times)));
+  /* file dates are read in UTC, like the list of files, so the record is the same wherever it is adopted */
+  const oldest = utcStamp(times.reduce((a, b) => Math.min(a, b))).slice(0, 10);
+  const newest = utcStamp(times.reduce((a, b) => Math.max(a, b))).slice(0, 10);
   const started = date || nameDate || oldest;
   const startedFrom = date ? 'the date given' : nameDate ? 'the date in the folder name' : 'the oldest file date';
   const finished = started > newest ? started : newest;
@@ -71,13 +83,17 @@ export async function adoptFolder(store, {
   await writeText(store, listing, toCsv(['path', 'bytes', 'modified'],
     found.map((f) => ({ path: `2-data_raw/${name}/${f.rel}`, bytes: String(f.size), modified: utcStamp(f.mtime) }))));
   result.extra.push(listing);
+  if (started > today) result.warnings.push(`date_started ${started} is in the future; correct it in the header`);
 
   const dest = `${folder}/2-data_raw/${name}`;
   try {
     await store.mkdir(dest);
     for (const d of dirs) await store.mkdir(`${dest}/${d}`);
     for (const rel of files) await (copy ? copyFile : moveFile)(store, `${source}/${rel}`, `${dest}/${rel}`);
+    /* links and other special entries are moved as they are, never followed; a copy leaves them out */
+    if (copy && others.length) result.warnings.push(`${others.length} link${others.length !== 1 ? 's' : ''} or special file${others.length !== 1 ? 's' : ''} in the folder ${others.length !== 1 ? 'were' : 'was'} not copied: ${others.slice(0, 3).join(', ')}`);
     if (!copy) {
+      for (const rel of others) await moveFile(store, `${source}/${rel}`, `${dest}/${rel}`);
       for (const d of [...dirs].reverse()) await removeDir(store, `${source}/${d}`);
       if (!(await removeDir(store, source)) && await exists(store, source)) {
         result.warnings.push(`the old folder ${source} could not be removed (something in it could not be moved, or this place does not allow it). Its files are in ${dest}; delete the old folder by hand`);
@@ -104,7 +120,7 @@ export async function adoptFolder(store, {
   }
   await writeText(store, result.path, text);
   if (status === 'complete') {
-    const done = await completeExperiment(store, id, { when: finished, today, lab });
+    const done = await completeExperiment(store, id, { when: finished, today, lab, generated: today });
     result.extra.push(done.snapshot, done.manifest);
     result.warnings.push(...done.warnings);
   } else await writeIndex(store, await loadVault(store));

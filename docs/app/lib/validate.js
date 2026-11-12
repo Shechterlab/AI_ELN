@@ -9,7 +9,7 @@ import {
 import { sections, sectionIsEmpty, ciIn } from './vault.js';
 import { templateKeys } from './templates.js';
 import { strip, pyRepr, validDate, basename, stem, cmp, cmpPath } from './text.js';
-import { knownInitials, initialsOf, inAnotherNotebook } from './create.js';
+import { knownInitials, initialsOf, inAnotherNotebook, notebookProblems, NOTEBOOK_FILE } from './create.js';
 import { walkFiles } from '../store/base.js';
 
 /* Names sync services give the second copy when a file changed in two places:
@@ -57,6 +57,7 @@ export async function validateVault(store, vault) {
   for (const p of await syncConflictFiles(store)) {
     W(p, syncConflictAdvice(p));
   }
+  for (const problem of await notebookProblems(store)) W(NOTEBOOK_FILE, problem);
 
   const knownKeys = {};
   for (const kind of KINDS) knownKeys[kind] = new Set([...(await templateKeys(store, kind)), 'type']);

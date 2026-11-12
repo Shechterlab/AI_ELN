@@ -76,7 +76,7 @@ The launchers then work by double-click.
 Double-click **`launchers/Open ELN`**. A small window appears and your
 browser opens a page like this:
 
-![The home page: seven buttons and the recent experiments](img/home.png)
+![The home page: buttons for the common jobs, above the recent experiments](img/home.png)
 
 The page runs on your own computer (the address starts with `127.0.0.1`);
 and does not upload anything. Keep the small window open; closing it stops
@@ -205,21 +205,27 @@ one shell or one call:
 python3 scripts/eln.py --root "/path/to/another notebook" find --status active
 ```
 
-When no initials are saved on the computer, the tools use the `initials` and
-`owner` written in that notebook's `notebook.md`.
+A notebook that names its owner in `notebook.md` gives new records that
+person's initials, whatever is saved on the computer. `--initials` on a
+command overrides both. The tools refuse a `--root` that is not a notebook
+but holds notebooks (a lab folder with one folder per person), and name the
+notebooks in it.
 
 ## Adopting older folders
 
 Work you did before the notebook can be taken in without redoing it.
 
 - **In the browser page:** put the old folder into the notebook folder (into
-  `Experiments/`, or next to it). **Home** then shows **Adopt older
-  folders**. The screen lists each folder with a title and start date read
+  `Experiments/`, or next to it) and reload the page. **Home** then shows
+  **Adopt older folders**; the Experiments screen always has **Adopt an older
+  folder**. The screen lists each folder with a title and start date read
   from its name; correct them and click **Adopt this folder**.
 - **From the command line:** `python3 scripts/eln.py adopt "/path/to/old
   folder"`. The folder can be anywhere. `eln.py adopt` with no folder lists
   the ones in the notebook folder that are not records yet. `--copy` leaves
   the original where it is.
+
+The launcher page does not have Adopt; in Safari or Firefox use the command.
 
 Adopting makes an experiment record with the next ID. The old folder is
 moved, whole, into the new experiment's `2-data_raw/`. No file in it is
@@ -240,17 +246,24 @@ experiments, everything active, or everything):
 
 - **One Markdown file**, with a short explanation of the IDs and sections at
   the top. This is the one to paste into, or attach to, an AI chat.
-- **A folder of plain files** in `Exports/` inside the notebook folder: the
+- **A folder of plain files** (browser page and command line) in `Exports/`
+  inside the notebook folder: the
   experiments with their files, the protocols, samples, and projects they
   refer to, a `README.md`, `all-notes.md` (the single file above), and an
   index. It is laid out like a notebook, so the page can open it for viewing.
-  "Without raw data" leaves out what is in `2-data_raw/`. Copy the folder
+  "The same, without raw data" leaves out what is in `2-data_raw/`. A second
+  export on the same day gets `-2` at the end of its name. Copy the folder
   wherever it is needed; it can be deleted afterwards. From the command
   line: `eln.py export --project NAME --format folder [--no-raw] [--out DIR]`.
 - **A `.eln` archive**, under "For another electronic notebook", for import
   into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.
 
 ## More on the note's page
+
+These are in the browser page. The launcher page (Safari, Firefox) has the
+core jobs only: create, edit, Check, the meeting brief, Export as one file or
+`.eln`, Mark complete, and Verify. For the rest, use Chrome or Edge, or the
+command line (`eln.py adopt`, `eln.py export --format folder`, `eln.py render`).
 
 - **Repeat this experiment** starts a new experiment with the same title,
   project, type, protocols, and samples. It gets its own ID and today's
@@ -314,14 +327,15 @@ Do not delete it and do not reuse its number. Click **Edit here**, change
   `python3 scripts/eln_web.py` directly.
 - **Windows: a window flashes and closes, or "python is not recognized"**:
   install Python (§1) with *Add to PATH* ticked, then try again.
-- **The page says "First time here"**: click *settings* and enter your
-  initials and name.
+- **The page says "First time here: enter your initials and name"**: click
+  the link next to it and enter them.
 - **"could not open a port"**: the page tries several port numbers first.
   If you still see this, close the other notebook windows and try again.
-- **Check says a folder "does not match {ID}_{slug}"**: someone made or
-  renamed an experiment folder by hand. An ID can only come from the tool, so
-  create the experiment with New experiment, move the files into its
-  subfolders, and delete the hand-made folder.
+- **Check says a folder "does not match {ID}_{slug}"**: a folder in
+  `Experiments/` was made or renamed by hand. If it is older work, adopt it
+  (see "Adopting older folders"): it gets an ID and its files move in
+  unchanged. If it is an experiment folder someone renamed, give it back the
+  name that starts with its ID.
 - **The browser says it no longer has permission**: click **Reopen** on the
   first screen and allow it again.
 - **Check lists a "copy made by a sync service"**: see the next section.

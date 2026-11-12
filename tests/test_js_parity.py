@@ -110,6 +110,17 @@ class ParityCase(unittest.TestCase):
 
     cli = staticmethod(run_cli)
 
+    @staticmethod
+    def cli_env(*argv):
+        """scripts/eln.py in-process, keeping the AI_ELN_* environment as the test set it."""
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            try:
+                code = eln.main(list(argv))
+            except SystemExit as e:
+                code = e.code
+        return code, out.getvalue(), err.getvalue()
+
     def assertSameTree(self, a: Path, b: Path):
         ta, tb = tree(a), tree(b)
         self.assertEqual(sorted(ta), sorted(tb))
@@ -311,7 +322,8 @@ class TestOperations(ParityCase):
                                                  "related": "ALXe0003, JORe0099", "protocol": "P_WesternBlot",
                                                  "project": "PRMT5-ChromatinRelease"})
         self.assertEqual(r_js["id"], "JORe0005", "with no initials given, the owner in notebook.md is used")
-        self.assertEqual(r_py.warnings, ["sample JORp0009 is not in Samples/ (check the ID, or create it with New sample)"])
+        self.assertEqual(r_py.warnings, ["sample JORp0009 is not in Samples/ (check the ID, or create it with New sample)",
+                                         "related experiment JORe0099 is not in Experiments/ (check the ID)"])
         self.assertEqual(r_js["warnings"], r_py.warnings)
         self.assertSameTree(py, node)
         want = py_validate_text(py)
@@ -424,7 +436,7 @@ class TestOperations(ParityCase):
         self.assertEqual(len(modified) + len(missing) + len(added), 3)
         everything = tool(node, "verify_files", {}, ok_codes=(2,))
         self.assertEqual(everything["drift"], 1)
-        self.assertEqual(len(everything["results"]), 4, "the three completed here and the adopted ALXe0006")
+        self.assertEqual(len(everything["results"]), 5, "every completed experiment in Alex's notebook")
 
         vault = eln.load_vault(py)
         for nid in ("ALXa0001", "P_WesternBlot", "ALXe0003", "ALXe0006"):
@@ -681,14 +693,208 @@ class TestOperations(ParityCase):
         self.assertTrue(any("/2-data_raw/" in n and not n.endswith("README.md") for n in tree(py / "Exports" / "export_all_20261003")))
         with self.assertRaises(eln.ElnError):
             eln.export_folder(vault, chosen, py / "Exports" / "export_all_20261003")
-        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "--today", TODAY, "export_notes",
-                                  '{"all": true, "format": "folder"}'], capture_output=True, text=True)
+        # a second export on the same day does not overwrite and does not fail: it gets -2
+        code, out_text, err = self.cli("--root", str(py), "export", "--all", "--format", "folder")
+        self.assertEqual(code, 0, err)
+        again = tool(node, "export_notes", {"all": True, "format": "folder"})
+        self.assertEqual(again["path"], "Exports/export_all_20261003-2")
+        self.assertSameTree(py, node)
+        # a project and a status together narrow each other; everything together with a filter is refused
+        both = tool(node, "export_notes", {"project": "PRMT5-ChromatinRelease", "status": "active"})
+        self.assertEqual(both["experiments"], ["ALXe0004", "ALXe0005"])
+        self.assertEqual(both["experiments"], [n.id for n in eln.select_for_export(vault, "PRMT5-ChromatinRelease", [], "active", False)])
+        with self.assertRaises(eln.ElnError):
+            eln.select_for_export(vault, "PRMT5-ChromatinRelease", [], None, True)
+        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "export_notes",
+                                  '{"all": true, "status": "active"}'], capture_output=True, text=True)
         self.assertEqual(refused.returncode, 1)
-        self.assertIn("already exists", refused.stderr)
+        self.assertIn("not both", refused.stderr)
         code, out_text, err = self.cli("--root", str(py), "export", "--status", "active", "--format", "folder", "--no-raw")
         self.assertEqual(code, 0, err)
         self.assertIn("as a folder of plain files", out_text)
         self.assertTrue((py / "Exports" / "export_active_20261003" / "README.md").exists())
+
+    def test_findings_from_the_second_review_stay_fixed(self):
+        """Each block is a problem a reviewer found with made-up data; both tools must handle it the same way."""
+        py, node = self.sandbox_copy("py"), self.sandbox_copy("js")
+
+        # two programs creating records at the same moment: no ID is given out twice, no sample is overwritten
+        script = ("import sys, importlib.util as u; s = u.spec_from_file_location('eln', sys.argv[1]); m = u.module_from_spec(s); "
+                  "s.loader.exec_module(m); k = sys.argv[3]; "
+                  "r = m.create_sample(m.Path(sys.argv[2]), 'ALX', 'plasmid', 'race ' + k) if k[0] == 's' else "
+                  "m.create_experiment(m.Path(sys.argv[2]), 'ALX', 'Alex Example', 'race ' + k); print(r.id)")
+        call = [NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(py)]
+        jobs = []
+        for i in range(4):
+            jobs.append(subprocess.Popen([sys.executable, "-c", script, str(REPO_ROOT / "scripts" / "eln.py"), str(py), f"s{i}"], stdout=subprocess.PIPE, text=True))
+            jobs.append(subprocess.Popen(call + ["create_sample", json.dumps({"sample_type": "plasmid", "title": f"race js {i}"})], stdout=subprocess.PIPE, text=True))
+            jobs.append(subprocess.Popen([sys.executable, "-c", script, str(REPO_ROOT / "scripts" / "eln.py"), str(py), f"e{i}"], stdout=subprocess.PIPE, text=True))
+            jobs.append(subprocess.Popen(call + ["create_experiment", json.dumps({"title": f"race js {i}"})], stdout=subprocess.PIPE, text=True))
+        outs = [j.communicate()[0] for j in jobs]
+        self.assertTrue(all(j.returncode == 0 for j in jobs))
+        self.assertEqual(len(list((py / "Samples").glob("ALXp*.md"))), 8, "eight samples asked for, eight files")
+        folders = [p.name[:8] for p in (py / "Experiments").iterdir() if p.name.startswith("ALXe")]
+        self.assertEqual(len(folders), len(set(folders)), "no experiment ID twice")
+        self.assertEqual(len(folders), 6 + 8)
+        self.assertIn("0 errors", py_validate_text(py))
+        self.assertFalse((py / ".eln-lock").exists())
+        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0014, ALXi0001, ALXp0008]", (py / "notebook.md").read_text(encoding="utf-8"))
+        shutil.rmtree(py)
+        py = self.sandbox_copy("py")
+
+        # hidden data files are in the manifest; operating-system litter is not
+        for root in (py, node):
+            raw = next((root / "Experiments").glob("ALXe0003_*")) / "2-data_raw"
+            (raw / ".RData").write_bytes(b"workspace")
+            (raw / ".DS_Store").write_bytes(b"x")
+            (raw / "._resource").write_bytes(b"x")
+        eln.complete_experiment(py, "ALXe0003")
+        tool(node, "complete_experiment", {"id": "ALXe0003"})
+        manifest = next((py / "Experiments").glob("ALXe0003_*/1-notes/ALXe0003_MANIFEST.sha256")).read_text(encoding="utf-8")
+        self.assertIn("2-data_raw/.RData", manifest)
+        self.assertNotIn(".DS_Store", manifest)
+        self.assertNotIn("._resource", manifest)
+        self.assertSameTree(py, node)
+        for root in (py, node):
+            (next((root / "Experiments").glob("ALXe0003_*")) / "2-data_raw" / ".RData").write_bytes(b"changed!!")
+        self.assertEqual(eln.verify_manifest(next((py / "Experiments").glob("ALXe0003_*")), "ALXe0003")[1], ["2-data_raw/.RData"])
+        self.assertEqual(tool(node, "verify_files", {"id": "ALXe0003"}, ok_codes=(2,))["results"][0]["modified"], ["2-data_raw/.RData"])
+
+        # a completed experiment whose manifest was deleted is reported, not passed over
+        for root in (py, node):
+            next((root / "Experiments").glob("ALXe0001_*/1-notes/ALXe0001_MANIFEST.sha256")).unlink()
+        code, out, _ = self.cli("--root", str(py), "verify")
+        self.assertEqual(code, 1)
+        self.assertIn("ALXe0001: is complete, but there is no manifest to compare with", out)
+        self.assertEqual(tool(node, "verify_files", {}, text=True, ok_codes=(2,)).replace("mark the experiment complete again", "X"),
+                         out.replace("re-run `eln.py complete ID`", "X"))
+
+        # a snapshot lists the files of the experiment, not itself or the manifest, so writing it twice gives the same file
+        snap = next((py / "Experiments").glob("ALXe0002_*/1-notes/ALXe0002_snapshot_20260708.html"))
+        before = snap.read_bytes()
+        self.assertNotIn(b"MANIFEST.sha256</td>", before)
+        eln.complete_experiment(py, "ALXe0002")
+        tool(node, "complete_experiment", {"id": "ALXe0002"})
+        self.assertEqual(snap.read_bytes(), before)
+        self.assertEqual(next((node / "Experiments").glob("ALXe0002_*/1-notes/ALXe0002_snapshot_20260708.html")).read_bytes(), before)
+
+        # two experiment folders with the same ID (a hand merge): an export refuses instead of dropping one
+        for root in (py, node):
+            src = next((root / "Experiments").glob("ALXe0004_*"))
+            shutil.copytree(src, src.with_name("ALXe0004_copied-by-hand"))
+        with self.assertRaises(eln.ElnError) as cm:
+            eln.select_for_export(eln.load_vault(py), None, [], None, True)
+        self.assertIn("two experiments have the ID ALXe0004", str(cm.exception))
+        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "export_notes", '{"all": true}'], capture_output=True, text=True)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("two experiments have the ID ALXe0004", refused.stderr)
+        for root in (py, node):
+            shutil.rmtree(next((root / "Experiments").glob("ALXe0004_copied-by-hand")))
+
+        # notebook.md someone edited into a form the tools cannot keep: it is left alone, and Check says so
+        for root in (py, node):
+            eln.write_text_lf(root / "notebook.md", "---\ntype: notebook\nowner: Alex Example\ninitials: ALX\nlast_ids:\n  - ALXe0006\n---\nmine\n")
+        r_py = eln.create_experiment(py, "ALX", "Alex Example", "after the edit")
+        r_js = tool(node, "create_experiment", {"title": "after the edit"})
+        self.assertEqual((r_py.id, r_js["id"]), ("ALXe0007", "ALXe0007"))
+        self.assertIn("  - ALXe0006\n---\nmine\n", (py / "notebook.md").read_text(encoding="utf-8"))
+        self.assertSameTree(py, node)
+        want = py_validate_text(py)
+        self.assertIn("notebook.md\n  WARN   indented line in header", want)
+        self.assertIn("the last IDs are not being remembered", want)
+        self.assertEqual(want, tool(node, "check_notebook", text=True))
+        # a deleted notebook.md is made again from what the folders show, not from nothing
+        for root in (py, node):
+            (root / "notebook.md").unlink()
+        eln.create_sample(py, "ALX", "plasmid", "after the loss")
+        tool(node, "create_sample", {"sample_type": "plasmid", "title": "after the loss", "initials": "ALX"})
+        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0007, ALXi0001, ALXp0001]", (py / "notebook.md").read_text(encoding="utf-8"))
+        self.assertSameTree(py, node)
+
+        # whose record: the notebook's owner comes before settings saved on the computer; a flag comes before both
+        jordan = self.sandbox_copy("jordan-notebook", "jordan")
+        made = tool(jordan, "create_experiment", {"title": "saved settings say someone else"}, initials="", researcher="")
+        self.assertEqual(made["id"], "JORe0005")
+        env = dict(os.environ, AI_ELN_INITIALS="ALX", AI_ELN_RESEARCHER="Alex Example", AI_ELN_CONFIG=str(self.tmp / "none.json"))
+        saved = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(jordan), "create_experiment", '{"title": "env says ALX"}'],
+                               capture_output=True, text=True, env=env)
+        self.assertEqual(json.loads(saved.stdout)["id"], "JORe0006", saved.stderr)
+        self.assertIn("researcher: Jordan Example", (jordan / json.loads(saved.stdout)["path"]).read_text(encoding="utf-8"))
+        os.environ.update(AI_ELN_INITIALS="ALX", AI_ELN_RESEARCHER="Alex Example")
+        try:
+            code, out, err = self.cli_env("--root", str(jordan), "new", "experiment", "--title", "python, env says ALX")
+            self.assertIn("JORe0007", out, err)
+            code, out, err = self.cli_env("--root", str(jordan), "new", "experiment", "--title", "a flag wins", "--initials", "QQQ")
+            self.assertIn("QQQe0001", out, err)
+            self.assertIn("researcher: QQQ", next((jordan / "Experiments").glob("QQQe0001_*/1-notes/QQQe0001.md")).read_text(encoding="utf-8"))
+        finally:
+            del os.environ["AI_ELN_INITIALS"], os.environ["AI_ELN_RESEARCHER"]
+        flagged = tool(jordan, "create_experiment", {"title": "js flag"}, initials="QQQ", researcher="")
+        self.assertEqual(flagged["id"], "QQQe0002")
+
+        # the folder that holds the notebooks is not a notebook
+        lab = self.tmp / "lab"
+        shutil.copytree(REPO_ROOT / "sandbox" / "jordan", lab / "jordan")
+        shutil.copytree(REPO_ROOT / "sandbox" / "alex", lab / "alex")
+        for argv in (("validate",), ("find", "--text", "SNRPB"), ("new", "experiment", "--title", "x", "--initials", "ZZZ")):
+            code, out, err = self.cli("--root", str(lab), *argv)
+            self.assertEqual(code, 1, argv)
+            self.assertIn("is not a notebook. It holds 2 notebooks (alex, jordan)", err)
+        for name, args in (("check_notebook", {}), ("find_notes", {"text": "SNRPB"}), ("create_experiment", {"title": "x", "initials": "ZZZ"})):
+            refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(lab), name, json.dumps(args)], capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 1, name)
+            self.assertIn("is not a notebook. It holds 2 notebooks (alex, jordan)", refused.stderr)
+        self.assertEqual(sorted(p.name for p in lab.iterdir()), ["alex", "jordan"], "nothing was created next to them")
+
+    @unittest.skipIf(os.name == "nt", "symbolic links need extra rights on Windows")
+    def test_links_are_never_followed_when_adopting(self):
+        py, node = self.tmp / "py", self.tmp / "js"
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        (outside / "secret.txt").write_bytes(b"not part of any notebook\n")
+        for root in (py, node):
+            other = root / "Experiments" / "other project"
+            other.mkdir(parents=True)
+            (other / "precious.csv").write_bytes(b"a,b\n1,2\n")
+            old = root / "Experiments" / "2019-03-04 linked"
+            old.mkdir()
+            (old / "data.txt").write_bytes(b"data\n")
+            os.symlink("../other project", old / "see_other")
+            os.symlink(str(outside / "secret.txt"), old / "leak.txt")
+            os.symlink("nowhere", old / "dangling")
+        eln.adopt_folder(py, py / "Experiments" / "2019-03-04 linked", "ZZ", "Zed", today=TODAY)
+        r = tool(node, "adopt_folder", {"folder": "Experiments/2019-03-04 linked", "initials": "ZZ", "researcher": "Zed"})
+        self.assertEqual(r["warnings"], [])
+        for root in (py, node):
+            self.assertEqual((root / "Experiments" / "other project" / "precious.csv").read_bytes(), b"a,b\n1,2\n", "the other folder is untouched")
+            self.assertFalse((root / "Experiments" / "2019-03-04 linked").exists())
+            kept = root / "Experiments" / "ZZe0001_linked" / "2-data_raw" / "2019-03-04 linked"
+            self.assertTrue((kept / "see_other").is_symlink() and (kept / "leak.txt").is_symlink() and (kept / "dangling").is_symlink())
+            listing = (root / "Experiments" / "ZZe0001_linked" / "1-notes" / "ZZe0001_adopted-files.csv").read_text(encoding="utf-8")
+            self.assertEqual(len(listing.splitlines()), 2, "only the real file is listed")
+            manifest = (root / "Experiments" / "ZZe0001_linked" / "1-notes" / "ZZe0001_MANIFEST.sha256").read_text(encoding="utf-8")
+            self.assertNotIn("leak.txt", manifest)
+            self.assertNotIn("precious.csv", manifest)
+        self.assertEqual((outside / "secret.txt").read_bytes(), b"not part of any notebook\n")
+        # a link to a folder is not itself adopted
+        for root in (py, node):
+            os.symlink(str(outside), root / "Experiments" / "link to outside")
+            os.symlink("other project", root / "Experiments" / "link inside")
+        for name in ("link to outside", "link inside"):
+            with self.assertRaises(eln.ElnError):
+                eln.adopt_folder(py, py / "Experiments" / name, "ZZ", "Zed", today=TODAY)
+            refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "--initials", "ZZ", "adopt_folder",
+                                      json.dumps({"folder": f"Experiments/{name}"})], capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 1, name)
+        self.assertTrue((outside / "secret.txt").exists())
+        # an export does not copy what a link points to
+        for root in (py, node):
+            os.symlink(str(outside / "secret.txt"), root / "Experiments" / "ZZe0001_linked" / "4-data_processed" / "ZZe0001_leak.txt")
+        vault = eln.load_vault(py)
+        eln.export_folder(vault, eln.select_for_export(vault, None, [], None, True), py / "Exports" / "export_all_20261003")
+        tool(node, "export_notes", {"all": True, "format": "folder"})
+        for root in (py, node):
+            self.assertFalse(any("leak" in n for n in tree(root / "Exports")), "no linked file in the export")
 
     def test_eln_archive(self):
         root = self.sandbox_copy("s")

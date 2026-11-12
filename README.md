@@ -41,8 +41,9 @@ someone's notebook without being able to change it. Practice first on fictional 
 
 ![The home page](docs/img/home.png)
 
-There are two versions of the page, and they do the same things to the
-same files: one runs in the browser ([`docs/app/`](docs/app/README.md),
+There are two versions of the page, and they write the same files (the
+launcher page has the core jobs; adopting, adding files, printing, and the
+folder export are in the browser page and the command line): one runs in the browser ([`docs/app/`](docs/app/README.md),
 JavaScript), one is started by a launcher (`scripts/eln_web.py`, Python).
 Tests compare their output byte for byte. Terminal-window launchers (`New
 Experiment`, `Check Everything`, ...) and a command line do the same
@@ -158,10 +159,12 @@ subscription. Nothing needs an API key.
   the instructions of a ChatGPT Project so every chat already knows the rules.
 - **MCP.** `node mcp/server.mjs` offers the notebook's operations (create,
   find, read, check, complete, export) as tools to any MCP client. Claude
-  Code and Cowork pick it up from `.mcp.json` when opened in this folder.
+  Code and Cowork pick it up from `.mcp.json` when opened in this (the tools) folder.
   See [`mcp/README.md`](mcp/README.md).
 - **Codex, Claude Code, Cowork, Gemini CLI.** Open the tool inside this
-  folder. It reads [`AGENTS.md`](AGENTS.md) (the lab's rules: cite IDs,
+  folder (the tools folder). It works on the notebook you named with
+  `init --root`. A notebook folder itself holds only a short `AGENTS.md`
+  with the rules, not the skills. Here it reads [`AGENTS.md`](AGENTS.md) (the lab's rules: cite IDs,
   never invent a result, create experiments only through the tool) and the
   skills in [`.agents/skills/`](.agents/skills/README.md): how to record an
   experiment, how to search and cite, how to synthesize a project page,
@@ -208,8 +211,9 @@ python3 scripts/eln_web.py                                   # the page, by hand
 
 The same operations from Node, as JSON: `node mcp/call.mjs --list`.
 
-`--help` on any command. The record is the folder the tools sit in;
-`init --root` is only for the unusual case of keeping notes elsewhere.
+`--help` on any command. The commands work on the notebook folder named
+with `init --root` (or `--root` on one command); with neither, on the folder
+the tools sit in.
 Tests: `python3 -m unittest discover -s tests` (the JavaScript tests run when Node is installed).
 
 ## Read more

@@ -1,5 +1,5 @@
 protocol_id,title,version,status,used_in_experiments
-P_CellularFractionation,Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin),2026-06-10,current,JORe0001
+P_CellularFractionation,Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin),2026-06-14,current,JORe0001
 P_FLAG-IP,Anti-FLAG immunoprecipitation for mass spectrometry,2026-08-10,current,JORe0003
 P_Immunofluorescence,Immunofluorescence on coverslips,2026-08-18,current,JORe0002;JORe0004
 P_WesternBlot,"Western blot (wet transfer, PVDF)",2026-05-02,current,JORe0001

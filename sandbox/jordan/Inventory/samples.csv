@@ -1,3 +1,4 @@
 sample_id,sample_type,title,source,storage_location,date_created,status,used_in_experiments
+JORa0001,antibody,"anti-FLAG M2 (mouse monoclonal, Sigma F1804)",Sigma F1804,"Freezer -20C B, antibody box, A2",2026-07-10,active,JORe0001
 JORp0001,plasmid,pcDNA3-FLAG-SNRPB wild type,"in-house, cloned 2026-06 (see NB04-012)","Freezer -20C B, box 3, C4",2026-06-18,active,JORe0001;JORe0003
 JORp0002,plasmid,pcDNA3-FLAG-SNRPB R107K/R111K,"in-house, site-directed mutagenesis from JORp0001","Freezer -20C B, box 3, C5",2026-06-25,active,JORe0001

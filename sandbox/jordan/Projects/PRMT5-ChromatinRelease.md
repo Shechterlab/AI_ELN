@@ -47,7 +47,7 @@ Alex Example leads this project; the full project page is in Alex's notebook. Th
 
 ## Reagents in use
 
-JORp0001, JORp0002; from Alex's notebook: ALXc0001, ALXa0001, ALXa0003
+JORp0001, JORp0002, JORa0001; from Alex's notebook: ALXc0001, ALXa0001, ALXa0003
 
 ## Figures
 

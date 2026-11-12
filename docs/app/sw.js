@@ -2,7 +2,7 @@
    the first time it is opened, refreshed whenever the network is there, and served from that copy when
    it is not. Only this site's files are handled; the notebook folder is never touched from here. */
 
-const CACHE = 'ai-eln-3';
+const CACHE = 'ai-eln-4';
 /* every file the page loads; tests/test_site.py checks this list against docs/app/ */
 const FILES = [
   "./",

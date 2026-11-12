@@ -25,12 +25,12 @@ Hypothesis: PRMT5-dependent arginine methylation of Sm proteins (SNRPB in partic
 
 ### Supported conclusions
 
-- 48 h PRMT5 inhibition roughly doubles the chromatin-bound fraction of SNRPB in A549 (ALXe0002, n = 3); the same direction is seen in HeLa (ALXe0003, n = 2).
+- 48 h PRMT5 inhibition raises the chromatin-bound fraction of SNRPB in A549 from about 0.31 to about 0.56 (ALXe0002, n = 3, wide interval); the same direction is seen in HeLa (ALXe0003, n = 2).
 - The fractionation protocol cleanly separates compartments at 300 mM KCl (ALXe0001).
 
 ### Open questions / conflicting observations
 
-- Immunofluorescence shows no redistribution of SNRPB after PRMT5i (JORe0002, Jordan's notebook), which does not fit a simple relocalization model for the biochemical shift in ALXe0002. Extraction resistance is the leading alternative; JORe0004 tests it.
+- Immunofluorescence shows no redistribution of SNRPB after PRMT5i (JORe0002, Jordan's notebook), which does not fit a simple relocalization model for the biochemical shift in ALXe0002. Extraction resistance is the leading alternative. A first pre-extraction experiment points that way (JORe0004, Jordan's notebook, preliminary and not scored blind).
 - Whether the effect is mediated by SNRPB's own methylation is suggested by the R107K/R111K mutant (JORe0001, Jordan's notebook) but not established.
 - MDM4 isoform switch after PRMT5i looks as predicted in a first qPCR plate (ALXe0005, preliminary, no-RT controls missing).
 
@@ -45,7 +45,6 @@ Hypothesis: PRMT5-dependent arginine methylation of Sm proteins (SNRPB in partic
 - ALXe0003 - PRMT5i, HeLa - complete
 - ALXe0004 - RNA-seq - active
 - ALXe0005 - MDM4 isoform qPCR - active
-- ALXe0006 - growth curve, adopted from an older folder
 - In Jordan Example's notebook: JORe0001 (R107K/R111K mutant), JORe0002 (IF), JORe0004 (pre-extraction IF)
 
 ## Reagents in use
@@ -56,4 +55,4 @@ ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, ALXi0001; Jordan's plasmids JO
 
 ## Related protocols
 
-P_CellularFractionation, P_WesternBlot, P_RTqPCR
+P_CellularFractionation, P_WesternBlot, P_RNAextraction, P_RTqPCR

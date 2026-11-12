@@ -20,7 +20,7 @@ Separate cytoplasm, nucleoplasm, and chromatin-bound protein from adherent cells
 ## Materials
 
 - Hypotonic buffer: 10 mM HEPES pH 7.9, 10 mM KCl, 1.5 mM MgCl2, 0.34 M sucrose, 10% glycerol, 1 mM DTT, protease inhibitors
-- Nucleoplasm buffer: as above with KCl at the working concentration (300 mM validated in ALXe0001)
+- Nucleoplasm buffer: as above with KCl at the working concentration (still to be set by titration)
 - Chromatin release: benzonase in 2x Laemmli
 
 ## Procedure
@@ -37,5 +37,4 @@ Separate cytoplasm, nucleoplasm, and chromatin-bound protein from adherent cells
 
 ## Change log
 
-- 2026-06-10: current version
-- 2026-04-01: initial version
+- 2026-06-10: initial version

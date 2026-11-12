@@ -33,13 +33,44 @@ export class NodeStore {
     return full;
   }
 
+  /** The path of an entry whose folder is inside the notebook. The entry itself is not followed if it is a link. */
+  absEntry(rel) {
+    const parts = String(rel).split('/').filter(Boolean);
+    const name = parts.pop();
+    if (!name || name === '.' || name === '..') throw new ElnError(`path leaves the notebook folder: ${rel}`, 'bad_path');
+    return path.join(this.abs(parts.join('/')), name);
+  }
+
+  /** Held while an ID is chosen and its record written, so two programs cannot give out the same ID.
+      An empty folder, the same one scripts/eln.py uses. One left by a crash is taken over after a minute.
+      -> a function that releases it */
+  async lock(wait = 20000) {
+    const dir = path.join(this.root, '.eln-lock');
+    const started = Date.now();
+    for (;;) {
+      try {
+        await fsp.mkdir(dir);
+        return async () => { await fsp.rmdir(dir).catch(() => {}); };
+      } catch (e) {
+        if (e.code !== 'EEXIST') return async () => {}; // a folder that cannot be written to: the creation itself will say so
+        const s = await fsp.stat(dir).catch(() => null);
+        if (s && Date.now() - s.mtimeMs > 60000) {
+          await fsp.rmdir(dir).catch(() => {});
+        } else if (Date.now() - started > wait) {
+          throw new ElnError(`another program is creating a record in this notebook (${dir} is there). Try again in a moment. If nothing else is running, delete that folder.`, 'locked');
+        } else await new Promise((r) => setTimeout(r, 30));
+      }
+    }
+  }
+
   async list(dir) {
     try {
       const entries = await fsp.readdir(this.abs(dir), { withFileTypes: true });
       const out = [];
       for (const e of entries) {
         let kind = e.isDirectory() ? 'dir' : e.isFile() ? 'file' : null;
-        if (kind === null && e.isSymbolicLink()) {
+        const link = e.isSymbolicLink();
+        if (kind === null && link) {
           /* a link is listed only when it points to something inside the notebook folder */
           let target = null;
           try {
@@ -48,7 +79,9 @@ export class NodeStore {
           const s = target ? await fsp.stat(target).catch(() => null) : null;
           kind = s ? (s.isDirectory() ? 'dir' : 'file') : null;
         }
-        if (kind) out.push({ name: e.name, kind });
+        /* a link is marked, so that nothing walks through it into another folder; a link that leaves the
+           notebook, a broken link, a pipe: kind 'other', which only moving a whole folder looks at */
+        out.push({ name: e.name, kind: kind || 'other', ...(link ? { link: true } : {}) });
       }
       return out;
     } catch (e) {
@@ -115,8 +148,8 @@ export class NodeStore {
 
   /** Move a file. A rename when both places are on the same drive, otherwise copy and delete. */
   async move(from, to) {
-    const src = this.abs(from);
-    const dst = this.abs(to);
+    const src = this.absEntry(from); // a link is moved as a link, never followed
+    const dst = this.absEntry(to);
     if (fs.existsSync(dst)) throw new ElnError(`${to} already exists. Nothing was overwritten.`, 'exists');
     await fsp.mkdir(path.dirname(dst), { recursive: true });
     this.abs(to);

@@ -30,10 +30,10 @@ docs/app/, mcp/         the same operations in JavaScript: the browser page, `mc
 .agents/skills/vendor/  pinned methodology skills from K-Dense; never edit, see skills.lock.json
 ```
 
-**The data may not be in this checkout.** If `AI_ELN_ROOT` is set in the
-environment, or `~/.ai_eln.json` has a `root`, that is where `Experiments/`
-etc. live. Check before assuming paths are repo-relative; pass `--root` if
-needed. IDs: experiments `{INITIALS}e{NNNN}`, samples
+**The notebook is usually not this checkout.** A notebook is a person's own
+folder. If `AI_ELN_ROOT` is set in the environment, or `~/.ai_eln.json` has a
+`root`, that is where `Experiments/` etc. live; otherwise it is this folder.
+Check before assuming paths are repo-relative; pass `--root` if needed. IDs: experiments `{INITIALS}e{NNNN}`, samples
 `{INITIALS}{p|i|a|c|m|t|r|s|g}{NNNN}`, protocols `P_{Name}`, projects named.
 
 **`sandbox/` is fictional.** It holds two made-up notebooks for practice

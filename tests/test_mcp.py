@@ -321,7 +321,7 @@ class TestMcpServer(unittest.TestCase):
         settings = self.root.parent / "cfg.json"
         settings.write_bytes(b"\xef\xbb\xbf" + json.dumps({"root": str(self.root), "initials": "bom"}).encode())
         ok = run({"AI_ELN_CONFIG": str(settings)}, "find_notes", '{"kind": "protocol"}')
-        self.assertEqual((ok.returncode, json.loads(ok.stdout)["count"]), (0, 3), "a byte-order mark in the settings file is fine")
+        self.assertEqual((ok.returncode, json.loads(ok.stdout)["count"]), (0, 4), "a byte-order mark in the settings file is fine")
         settings.write_text("{not json", encoding="utf-8")
         bad = run({"AI_ELN_CONFIG": str(settings)}, "find_notes")
         self.assertEqual(bad.returncode, 1)
@@ -336,7 +336,7 @@ class TestMcpServer(unittest.TestCase):
         self.assertEqual(functions[0]["parameters"]["type"], "object")
         out = run("--root", str(self.root), "find_notes", '{"kind": "protocol"}')
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertEqual(json.loads(out.stdout)["count"], 3)
+        self.assertEqual(json.loads(out.stdout)["count"], 4)
         bad = run("--root", str(self.root), "read_note", '{"id": "nope"}')
         self.assertEqual(bad.returncode, 1)
         self.assertIn("no note nope", bad.stderr)

@@ -6,8 +6,8 @@ One living Markdown file per protocol, `P_{Name}.md`, from
 
 **Edit it in place** as the procedure improves. When the *procedure*
 changes, bump the `version` date in the header and add a line to the
-**Change log**. Don't keep dated copies here; version history is git's job
-and the experiment snapshots' job:
+**Change log**. Don't keep dated copies here. The copy placed next to each
+experiment's note is the record of what was run:
 
 When an experiment is created with `--protocol P_WesternBlot`, the tool
 copies this file into that experiment's `1-notes/` as

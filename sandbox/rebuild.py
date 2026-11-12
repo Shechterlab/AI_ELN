@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import calendar
 import os
+from contextlib import contextmanager
 import statistics
 import struct
 import subprocess
@@ -50,12 +51,21 @@ def wipe() -> None:
         eln.shutil.rmtree(p) if p.is_dir() else p.unlink()
 
 
-def backdate(path: Path, to: str) -> None:
-    """The templates stamp today's date into a new note; make the whole file say `to` instead."""
-    from datetime import date
-    today = date.today().isoformat()
-    if today != to:
-        eln.write_text_lf(path, path.read_text(encoding="utf-8").replace(today, to))
+@contextmanager
+def on(day: str):
+    """Make the tool believe today is `day` while a record is created, so the record carries that date."""
+    real = eln.date
+
+    class Day(real):
+        @classmethod
+        def today(cls):
+            return cls.fromisoformat(day)
+
+    eln.date = Day
+    try:
+        yield
+    finally:
+        eln.date = real
 
 
 set_field = eln.set_header_field  # line-level header edit, shared with the tool
@@ -139,39 +149,55 @@ def old_folder(path: Path, files: dict, day=None) -> None:
             os.utime(f, (noon(*day) + i * 86400,) * 2)
 
 
-def experiment(root: Path, person, title: str, started: str, completed=None, status="active", **kw):
+def experiment(root: Path, person, title: str, started: str, status="active", **kw):
+    """A new experiment dated `started`. Completed ones are closed later with the tool (see `complete`)."""
     ini, who = person
     r = eln.create_experiment(root, ini, who, title, index=False, today=started, **kw)
-    if completed:
-        set_field(r.path, "date_completed", completed)
     if status != "active":
         set_field(r.path, "status", status)
     return r
 
 
-def protocol(root: Path, name: str, title: str, version: str, purpose: str, materials, steps, log=None) -> None:
-    r = eln.create_protocol(root, name, title=title, index=False)
-    backdate(r.path, version)
-    set_field(r.path, "version", version)
+def complete(root: Path, exp_id: str, when: str) -> None:
+    """Close an experiment the way a person does: status, date, snapshot, and manifest of checksums."""
+    eln.complete_experiment(root, exp_id, when=when)
+
+
+def protocol(root: Path, name: str, title: str, version: str, purpose: str, materials, steps, log=None) -> Path:
+    with on(version):
+        r = eln.create_protocol(root, name, title=title, index=False)
     fill(r.path, "Purpose", purpose)
-    fill(r.path, "Materials", "\n".join(f"- {m}" for m in materials))
-    fill(r.path, "Procedure", "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps)))
-    fill(r.path, "Change log", log or f"- {version}: current version\n- 2026-04-01: initial version")
+    revise(r.path, version, materials, steps, log or f"- {version}: initial version")
+    return r.path
+
+
+def revise(path: Path, version: str, materials, steps, log: str) -> None:
+    """Edit a protocol in place, as the conventions say: new version date, new text, a change-log line."""
+    set_field(path, "version", version)
+    fill(path, "Materials", "\n".join(f"- {m}" for m in materials))
+    fill(path, "Procedure", "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps)))
+    fill(path, "Change log", log)
 
 
 def sample(root: Path, person, stype: str, title: str, source: str, storage: str, created: str):
-    r = eln.create_sample(root, person[0], stype, title, source=source, storage=storage, index=False)
-    backdate(r.path, created)
-    set_field(r.path, "date_created", created)
-    return r
+    with on(created):
+        return eln.create_sample(root, person[0], stype, title, source=source, storage=storage, index=False)
 
 
+def project(root: Path, project_id: str, title: str, lead: str, started: str) -> Path:
+    with on(started):
+        return eln.create_project(root, project_id, title=title, lead=lead, index=False).path
+
+
+FRACTIONATION_KCL_OPEN = "Nucleoplasm buffer: as above with KCl at the working concentration (still to be set by titration)"
+FRACTIONATION_KCL_SET = "Nucleoplasm buffer: as above with 300 mM KCl (validated in ALXe0001)"
+FRACTIONATION_LOG = "- 2026-06-14: working KCl concentration set to 300 mM after ALXe0001\n- 2026-06-10: initial version"
 FRACTIONATION = ("Sub-cellular fractionation (cytoplasm / nucleoplasm / chromatin)",
                  "Separate cytoplasm, nucleoplasm, and chromatin-bound protein from adherent cells "
                  "with a hypotonic lysis followed by a KCl extraction of the nuclear pellet.",
                  ["Hypotonic buffer: 10 mM HEPES pH 7.9, 10 mM KCl, 1.5 mM MgCl2, 0.34 M sucrose, "
                   "10% glycerol, 1 mM DTT, protease inhibitors",
-                  "Nucleoplasm buffer: as above with KCl at the working concentration (300 mM validated in ALXe0001)",
+                  FRACTIONATION_KCL_SET,
                   "Chromatin release: benzonase in 2x Laemmli"],
                  ["Wash 1x 10 cm dish twice in ice-cold PBS; scrape into 500 uL hypotonic buffer + 0.1% Triton X-100.",
                   "Ice 8 min; spin 1,300 x g 5 min 4C. Supernatant = cytoplasm.",
@@ -232,6 +258,8 @@ Standard library only. Run it from anywhere:
 
 It reads the plate export in 2-data_raw/, writes 4-data_processed/ALXe0005_ddCt.csv, and prints the
 fold changes quoted in Results. Reference gene: ACTB. Calibrator: the mean dCt of the DMSO samples.
+A technical replicate more than 0.5 Ct from the median of its three is left out (P_RTqPCR).
+The fold change of a condition is 2^-(mean ddCt of its samples).
 """
 import csv
 import statistics
@@ -241,11 +269,15 @@ folder = Path(__file__).resolve().parent.parent
 with open(folder / "2-data_raw" / "QuantStudio_20260903_plate1.csv", newline="", encoding="utf-8") as f:
     wells = list(csv.DictReader(f))
 
-ct = {}  # (sample, target) -> mean Ct of the technical replicates
+dropped = 0
+ct = {}  # (sample, target) -> mean Ct of the technical replicates that are kept
 for sample in sorted({w["Sample"] for w in wells}):
     for target in sorted({w["Target"] for w in wells}):
         values = [float(w["Ct"]) for w in wells if w["Sample"] == sample and w["Target"] == target]
-        ct[(sample, target)] = statistics.mean(values)
+        middle = statistics.median(values)
+        kept = [v for v in values if abs(v - middle) <= 0.5]
+        dropped += len(values) - len(kept)
+        ct[(sample, target)] = statistics.mean(kept)
 
 rows = []
 for target in ("MDM4-FL", "MDM4-S"):
@@ -264,9 +296,10 @@ with open(out, "w", newline="", encoding="utf-8") as f:
     w.writerows(rows)
 
 for target in ("MDM4-FL", "MDM4-S"):
-    folds = [float(r["fold_change"]) for r in rows if r["target"] == target and r["condition"] == "PRMT5i"]
-    print(f"{target}: PRMT5i / DMSO = {statistics.mean(folds):.2f} "
-          f"(replicates {', '.join(f'{x:.2f}' for x in folds)})")
+    mine = [r for r in rows if r["target"] == target and r["condition"] == "PRMT5i"]
+    fold = 2 ** -statistics.mean(float(r["ddct"]) for r in mine)
+    print(f"{target}: PRMT5i / DMSO = {fold:.2f} (per sample: {', '.join(r['fold_change'] for r in mine)})")
+print(f"technical replicates left out by the 0.5 Ct rule: {dropped} of {len(wells)}")
 '''
 
 
@@ -276,18 +309,22 @@ def build_alex() -> None:
     eln.ensure_vault_dirs(root)
     eln.set_notebook_owner(root, ALX[1], ALX[0])
 
-    project = root / "Projects" / "PRMT5-ChromatinRelease.md"
-    r = eln.create_project(root, "PRMT5-ChromatinRelease",
-                           title="PRMT5 inhibition and chromatin release of snRNP proteins", lead=ALX[1], index=False)
-    backdate(r.path, "2026-05-20")
-    set_field(project, "date_started", "2026-05-20")
-    set_field(project, "contributors", ["Jordan Example"])
-    fill(project, "Aim / hypothesis",
+    project_page = project(root, "PRMT5-ChromatinRelease", "PRMT5 inhibition and chromatin release of snRNP proteins", ALX[1], "2026-05-20")
+    set_field(project_page, "contributors", ["Jordan Example"])
+    fill(project_page, "Aim / hypothesis",
          "Hypothesis: PRMT5-dependent arginine methylation of Sm proteins (SNRPB in particular) is needed for "
          "snRNPs to be released from chromatin; inhibiting PRMT5 should increase the chromatin-bound fraction of SNRPB.")
 
-    protocol(root, "CellularFractionation", FRACTIONATION[0], "2026-06-10", *FRACTIONATION[1:])
+    # the protocol as it was before the titration; it is revised after ALXe0001, and later experiments get the new copy
+    fractionation = protocol(root, "CellularFractionation", FRACTIONATION[0], "2026-06-10", FRACTIONATION[1],
+                             [FRACTIONATION[2][0], FRACTIONATION_KCL_OPEN, FRACTIONATION[2][2]], FRACTIONATION[3])
     protocol(root, "WesternBlot", WESTERN[0], "2026-05-02", *WESTERN[1:])
+    protocol(root, "RNAextraction", "RNA extraction (column, on-column DNase)", "2026-08-20",
+             "Total RNA from adherent cells for RNA-seq and RT-qPCR.",
+             ["Lysis buffer with 2-mercaptoethanol", "Silica columns", "DNase I, on-column", "RNase-free water"],
+             ["Lyse one 6-well of cells in 350 uL; homogenise through a 21G needle.",
+              "Bind, wash, DNase 15 min on the column, wash twice, elute in 30 uL.",
+              "Measure concentration and A260/280; run 200 ng on a gel or TapeStation before sequencing."])
     protocol(root, "RTqPCR", "RT-qPCR (SYBR, 384-well)", "2026-08-20",
              "Measure transcript and isoform levels relative to a reference gene.",
              ["RNA: column prep with on-column DNase", "cDNA: 1 ug RNA, random hexamers", "SYBR master mix, 10 uL reactions",
@@ -312,7 +349,7 @@ def build_alex() -> None:
          "transcript). MDM4-S: reverse primer across the exon 5-7 junction (exon 6 skipped).")
 
     blots = "P_CellularFractionation, P_WesternBlot"
-    e1 = experiment(root, ALX, "Fractionation protocol validation: KCl titration in A549", "2026-06-11", "2026-06-13", "complete",
+    e1 = experiment(root, ALX, "Fractionation protocol validation: KCl titration in A549", "2026-06-11",
                     project="PRMT5-ChromatinRelease", exp_type="Fractionation, WesternBlot", protocol=blots,
                     samples="ALXc0001, ALXa0002, ALXa0003", notebook="NB03-041")
     fill(e1.path, "Objective", "Validate the fractionation protocol on A549 cells and find the KCl concentration in "
@@ -327,22 +364,24 @@ def build_alex() -> None:
          f"The chromatin-bound fraction of U1-70K is {titration[0][1]:.2f} without KCl, {titration[1][1]:.2f} at 150 mM, "
          f"{titration[2][1]:.2f} at 300 mM, and {titration[3][1]:.2f} at 450 mM: it moves to the nucleoplasm between 150 and 300 mM.\n\n"
          "![](../5-figures/ALXe0001_R_KCl-titration-U170K_20260613.png)\n\n"
-         "Band intensities: `4-data_processed/ALXe0001_U170K-chromatin-fraction.csv`.")
+         "Fractions per lane: `4-data_processed/ALXe0001_U170K-chromatin-fraction.csv`.")
     fill(e1.path, "Interpretation", "The protocol separates the compartments as intended and 300 mM KCl is a usable working "
          "concentration: enough to see salt-dependent release without stripping everything.")
     fill(e1.path, "Decision", "Protocol validated at 300 mM KCl (recorded in P_CellularFractionation). Apply to PRMT5i-treated A549 in ALXe0002.")
-    fill(e1.path, "Follow-up experiments", "- [x] ALXe0002")
+    fill(e1.path, "Follow-up experiments", "- [ ] PRMT5i-treated A549 at 300 mM KCl")
     raw_files(root, "ALXe0001", ["ChemiDoc_20260612_0931.scn", "ChemiDoc_20260612_0958.scn"])
     png(folder_of(root, "ALXe0001") / "5-figures" / "ALXe0001_R_KCl-titration-U170K_20260613.png",
         lanes([80, 70, 25, 8], 60, 85) + lanes([5, 20, 70, 90], 120, 145))
+    complete(root, "ALXe0001", "2026-06-13")
+    revise(fractionation, "2026-06-14", FRACTIONATION[2], FRACTIONATION[3], FRACTIONATION_LOG)
 
-    e2 = experiment(root, ALX, "SNRPB chromatin retention after 48 h PRMT5 inhibition in A549", "2026-06-20", "2026-07-08", "complete",
+    e2 = experiment(root, ALX, "SNRPB chromatin retention after 48 h PRMT5 inhibition in A549", "2026-06-20",
                     project="PRMT5-ChromatinRelease", exp_type="Fractionation, WesternBlot", protocol=blots,
                     samples="ALXc0001, ALXa0001, ALXa0002, ALXa0003", related="ALXe0001", notebook="NB03-047")
     f2 = folder_of(root, "ALXe0002")
     eln.write_text_lf(f2 / "4-data_processed" / "ALXe0002_chromatin-fraction.csv",
-                      "replicate,condition,chromatin,nucleoplasm,fraction\n1,DMSO,0.29,0.71,0.29\n1,PRMT5i,0.55,0.45,0.55\n"
-                      "2,DMSO,0.36,0.64,0.36\n2,PRMT5i,0.66,0.34,0.66\n3,DMSO,0.28,0.72,0.28\n3,PRMT5i,0.53,0.47,0.53\n")
+                      "replicate,condition,chromatin,nucleoplasm,fraction\n1,DMSO,0.26,0.74,0.26\n1,PRMT5i,0.47,0.53,0.47\n"
+                      "2,DMSO,0.37,0.63,0.37\n2,PRMT5i,0.68,0.32,0.68\n3,DMSO,0.30,0.70,0.30\n3,PRMT5i,0.52,0.48,0.52\n")
     eln.write_text_lf(f2 / "3-code" / "ALXe0002_paired-t-test.py", T_TEST)
     stats = run_script(f2 / "3-code" / "ALXe0002_paired-t-test.py")
     eln.write_text_lf(f2 / "4-data_processed" / "ALXe0002_paired-t-test-output.txt", stats)
@@ -352,17 +391,19 @@ def build_alex() -> None:
          "Quantification: chromatin / (chromatin + nucleoplasm) signal per replicate.")
     fill(e2.path, "Results", "SNRPB chromatin fraction, DMSO against PRMT5i, three paired replicates "
          "(output of `3-code/ALXe0002_paired-t-test.py`):\n\n```\n" + stats + "```\n\n"
-         "U1-70K shifted in the same direction but less (0.40 to 0.49). Loading controls behaved.\n\n"
+         "U1-70K shifted in the same direction but less; it was not quantified. Loading controls behaved.\n\n"
          "![](../5-figures/ALXe0002_R_SNRPB-chromatin-fraction_20260708.png)\n\nQuantification: `4-data_processed/ALXe0002_chromatin-fraction.csv`.")
     fill(e2.path, "Interpretation", "Consistent with the hypothesis: loss of PRMT5 activity keeps more SNRPB on chromatin. "
+         "With three replicates the interval is wide, so the size of the effect is known only roughly. "
          "Symmetric dimethyl-arginine loss was not directly confirmed in this experiment (no SDMA blot).")
-    fill(e2.path, "Decision", "Repeat in a second cell line (ALXe0003) and test whether the methyl-site mutant phenocopies (JORe0001, in Jordan's notebook).")
-    fill(e2.path, "Follow-up experiments", "- [x] ALXe0003 second cell line\n- [x] JORe0001 R107K/R111K mutant\n- [ ] SDMA blot on the same lysates")
+    fill(e2.path, "Decision", "Repeat in a second cell line, and ask Jordan to test whether the methyl-site mutant of SNRPB behaves the same way.")
+    fill(e2.path, "Follow-up experiments", "- [ ] second cell line\n- [ ] R107K/R111K mutant (Jordan)\n- [ ] SDMA blot on the same lysates")
     raw_files(root, "ALXe0002", ["ChemiDoc_20260706_1402.scn", "ChemiDoc_20260707_1015.scn", "ChemiDoc_20260708_0947.scn"])
     png(f2 / "5-figures" / "ALXe0002_R_SNRPB-chromatin-fraction_20260708.png",
         lanes([35, 90, 40, 95], 60, 85) + lanes([90, 90, 90, 90], 120, 145))
+    complete(root, "ALXe0002", "2026-07-08")
 
-    e3 = experiment(root, ALX, "SNRPB chromatin retention after PRMT5 inhibition in HeLa", "2026-07-14", "2026-07-25", "complete",
+    e3 = experiment(root, ALX, "SNRPB chromatin retention after PRMT5 inhibition in HeLa", "2026-07-14",
                     project="PRMT5-ChromatinRelease", exp_type="Fractionation, WesternBlot", protocol=blots,
                     samples="ALXc0002, ALXa0001, ALXa0003", related="ALXe0002", notebook="NB03-052")
     fill(e3.path, "Objective", "Is the PRMT5i effect on SNRPB chromatin retention (ALXe0002) specific to A549?")
@@ -378,9 +419,10 @@ def build_alex() -> None:
     raw_files(root, "ALXe0003", ["ChemiDoc_20260724_1130.scn"])
     png(folder_of(root, "ALXe0003") / "5-figures" / "ALXe0003_R_SNRPB-chromatin-fraction-HeLa_20260725.png",
         lanes([30, 60, 32, 70], 60, 85) + lanes([90, 90, 90, 95], 120, 145))
+    complete(root, "ALXe0003", "2026-07-25")
 
-    e4 = experiment(root, ALX, "RNA-seq after 48 h PRMT5 inhibition in A549", "2026-08-25", None, "active",
-                    project="PRMT5-ChromatinRelease", exp_type="RNAseq", protocol="P_CellularFractionation",
+    e4 = experiment(root, ALX, "RNA-seq after 48 h PRMT5 inhibition in A549", "2026-08-25",
+                    project="PRMT5-ChromatinRelease", exp_type="RNAseq", protocol="P_RNAextraction",
                     samples="ALXc0001", related="ALXe0002", notebook="NB03-060", tags="meeting")
     set_field(e4.path, "raw_data_path", "smb://einstein-storage/shechterlab/rnaseq/2026-09_ALXe0004")
     fill(e4.path, "Objective", "Which transcripts change splicing or abundance when PRMT5 is inhibited under the same conditions "
@@ -395,8 +437,8 @@ def build_alex() -> None:
                       "nothing is kept here.\n")
 
     # RT-qPCR: a made-up plate export, the script that analyses it, and Results written from the script's output
-    e5 = experiment(root, ALX, "RT-qPCR of MDM4 isoforms after 48 h PRMT5 inhibition in A549", "2026-09-01", None, "active",
-                    project="PRMT5-ChromatinRelease", exp_type="qPCR", protocol="P_RTqPCR",
+    e5 = experiment(root, ALX, "RT-qPCR of MDM4 isoforms after 48 h PRMT5 inhibition in A549", "2026-09-01",
+                    project="PRMT5-ChromatinRelease", exp_type="qPCR", protocol="P_RNAextraction, P_RTqPCR",
                     samples="ALXc0001, ALXi0001", related="ALXe0002, ALXe0004", notebook="NB03-063", tags="meeting")
     f5 = folder_of(root, "ALXe0005")
     rand = Rand(20260903)
@@ -421,24 +463,25 @@ def build_alex() -> None:
          "(the same RNA preparations as the RNA-seq libraries). Targets: MDM4-FL, MDM4-S (primers ALXi0001), reference ACTB. "
          "Technical triplicates. Prediction if the hypothesis holds: MDM4-FL goes down and MDM4-S goes up.")
     fill(e5.path, "Results", "Preliminary: one plate, analysed by delta-delta-Ct against ACTB "
-         "(output of `3-code/ALXe0005_ddCt.py`, fold change relative to the mean of the DMSO samples):\n\n```\n" + folds + "```\n\n"
+         "(output of `3-code/ALXe0005_ddCt.py`; fold change is 2^-(mean ddCt), relative to the DMSO samples):\n\n```\n" + folds + "```\n\n"
          "Per-sample values: `4-data_processed/ALXe0005_ddCt.csv`. Melt curves showed one peak for every target. "
          "No-RT controls have not been run yet.")
     fill(e5.path, "Interpretation", "Preliminary. The direction matches the prediction for both isoforms. Without the no-RT "
-         "controls, a contribution of genomic DNA to the MDM4-FL signal is not ruled out.")
+         "controls, a contribution of genomic DNA to the MDM4-FL signal is not ruled out. ACTB was assumed to be unaffected "
+         "by PRMT5 inhibition; a second reference gene has not been checked.")
     fill(e5.path, "Follow-up experiments", "- [ ] no-RT controls on the same cDNA\n- [ ] compare with the junction counts from ALXe0004 when they arrive")
 
-    fill(project, "Current state", """\
+    fill(project_page, "Current state", """\
 <!-- Kept short and current. Update this section in place; don't append to it. -->
 
 ### Supported conclusions
 
-- 48 h PRMT5 inhibition roughly doubles the chromatin-bound fraction of SNRPB in A549 (ALXe0002, n = 3); the same direction is seen in HeLa (ALXe0003, n = 2).
+- 48 h PRMT5 inhibition raises the chromatin-bound fraction of SNRPB in A549 from about 0.31 to about 0.56 (ALXe0002, n = 3, wide interval); the same direction is seen in HeLa (ALXe0003, n = 2).
 - The fractionation protocol cleanly separates compartments at 300 mM KCl (ALXe0001).
 
 ### Open questions / conflicting observations
 
-- Immunofluorescence shows no redistribution of SNRPB after PRMT5i (JORe0002, Jordan's notebook), which does not fit a simple relocalization model for the biochemical shift in ALXe0002. Extraction resistance is the leading alternative; JORe0004 tests it.
+- Immunofluorescence shows no redistribution of SNRPB after PRMT5i (JORe0002, Jordan's notebook), which does not fit a simple relocalization model for the biochemical shift in ALXe0002. Extraction resistance is the leading alternative. A first pre-extraction experiment points that way (JORe0004, Jordan's notebook, preliminary and not scored blind).
 - Whether the effect is mediated by SNRPB's own methylation is suggested by the R107K/R111K mutant (JORe0001, Jordan's notebook) but not established.
 - MDM4 isoform switch after PRMT5i looks as predicted in a first qPCR plate (ALXe0005, preliminary, no-RT controls missing).
 
@@ -446,33 +489,34 @@ def build_alex() -> None:
 
 - JORe0001 (n = 1; mutant migrates slower, unexplained).
 """)
-    fill(project, "Experiments",
+    fill(project_page, "Experiments",
          "- ALXe0001 - fractionation validation - complete\n- ALXe0002 - PRMT5i, A549 - complete\n- ALXe0003 - PRMT5i, HeLa - complete\n"
-         "- ALXe0004 - RNA-seq - active\n- ALXe0005 - MDM4 isoform qPCR - active\n- ALXe0006 - growth curve, adopted from an older folder\n"
+         "- ALXe0004 - RNA-seq - active\n- ALXe0005 - MDM4 isoform qPCR - active\n"
          "- In Jordan Example's notebook: JORe0001 (R107K/R111K mutant), JORe0002 (IF), JORe0004 (pre-extraction IF)")
-    fill(project, "Reagents in use", "ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, ALXi0001; Jordan's plasmids JORp0001, JORp0002")
-    fill(project, "Related protocols", "P_CellularFractionation, P_WesternBlot, P_RTqPCR")
-
-    # ALXe0002 closed out the way the tool does it: snapshot + manifest, dated to its completion.
-    eln.complete_experiment(root, "ALXe0002", when="2026-07-08")
+    fill(project_page, "Reagents in use", "ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, ALXi0001; Jordan's plasmids JORp0001, JORp0002")
+    fill(project_page, "Related protocols", "P_CellularFractionation, P_WesternBlot, P_RNAextraction, P_RTqPCR")
 
     # An older folder, from before the notebook, adopted as it was: it becomes ALXe0006.
+    # Growth is the same for every dose over the first two days and slows afterwards: the inhibitor acts late.
     rand = Rand(20251118)
     counts = ["day,dose_uM,well,cells_x1e4"]
-    for day in range(5):
-        for dose, rate in ((0, 0.62), (0.1, 0.60), (1, 0.52), (10, 0.31)):
+    for day in range(7):
+        for dose, late in ((0, 1.0), (0.1, 0.95), (1, 0.7), (10, 0.35)):
+            doublings = 0.62 * min(day, 2) + 0.62 * late * max(day - 2, 0)
             for well in (1, 2, 3):
-                counts.append(f"{day},{dose},{well},{2.0 * 2.718281828 ** (rate * day) * (1 + rand.around(0, 0.06)):.1f}")
+                counts.append(f"{day},{dose},{well},{2.0 * 2.718281828 ** doublings * (1 + rand.around(0, 0.06)):.1f}")
     old = root / "2025-11-18_A549 growth curve EPZ015666 dose"
     old_folder(old, {
-        "counts.csv": "\n".join(counts) + "\n",
         "plate map.txt": "12-well plates, one per day. Rows: 0, 0.1, 1, 10 uM EPZ015666. Three wells per dose.\nSeeded 2 x 10^4 cells per well on day 0.\n",
         "notes.txt": "Counted on the Countess, trypan blue. Day 3 plate was out of the incubator ~20 min while the scope was busy.\n",
         "photos/day4_10uM.png": b"",
+        "counts.csv": "\n".join(counts) + "\n",
     }, day=(2025, 11, 18))
     png(old / "photos" / "day4_10uM.png", lanes([30, 20, 25, 15], 40, 160))
-    os.utime(old / "photos" / "day4_10uM.png", (noon(2025, 11, 22),) * 2)
-    eln.adopt_folder(root, old, ALX[0], ALX[1], project="PRMT5-ChromatinRelease", today="2026-03-02")
+    for name, day in (("notes.txt", 21), ("photos/day4_10uM.png", 22), ("counts.csv", 24)):
+        os.utime(old / name, (noon(2025, 11, day),) * 2)
+    # adopted in September 2026, after the experiments above; it predates the project, so it is in none
+    eln.adopt_folder(root, old, ALX[0], ALX[1], today="2026-09-10")
 
     # ... and one that has not been adopted yet. Home shows "Adopt older folders" because of it.
     old_folder(root / "2026-02-10_HeLa transfection test", {
@@ -495,6 +539,8 @@ Standard library only. Run it from anywhere:
     python3 3-code/JORe0004_summarise.py
 
 It reads 4-data_processed/JORe0004_retained-signal.csv and prints the numbers quoted in Results.
+Quartiles are by the exclusive method (the default of statistics.quantiles); Excel's QUARTILE.INC
+and R's default give slightly different values.
 """
 import csv
 import statistics
@@ -517,35 +563,27 @@ def build_jordan() -> None:
     eln.ensure_vault_dirs(root)
     eln.set_notebook_owner(root, JOR[1], JOR[0])
 
-    methyl = root / "Projects" / "SNRPB-ArginineMethylation.md"
-    r = eln.create_project(root, "SNRPB-ArginineMethylation",
-                           title="Mapping arginine methylation sites on SNRPB", lead=JOR[1], index=False)
-    backdate(r.path, "2026-07-01")
-    set_field(methyl, "date_started", "2026-07-01")
+    methyl = project(root, "SNRPB-ArginineMethylation", "Mapping arginine methylation sites on SNRPB", JOR[1], "2026-07-01")
     fill(methyl, "Aim / hypothesis",
          "Which arginines on SNRPB are methylated by PRMT5 in cells, and which of them matter for chromatin release?")
-    release = root / "Projects" / "PRMT5-ChromatinRelease.md"
-    r = eln.create_project(root, "PRMT5-ChromatinRelease",
-                           title="PRMT5 inhibition and chromatin release of snRNP proteins (Jordan's part)", lead="Alex Example", index=False)
-    backdate(r.path, "2026-07-20")
-    set_field(release, "date_started", "2026-07-20")
+    release = project(root, "PRMT5-ChromatinRelease", "PRMT5 inhibition and chromatin release of snRNP proteins (Jordan's part)",
+                      "Alex Example", "2026-07-20")
     set_field(release, "contributors", ["Jordan Example"])
     fill(release, "Aim / hypothesis",
          "Alex Example leads this project; the full project page is in Alex's notebook. This page covers the experiments "
          "in this notebook: does the methyl-site mutant of SNRPB behave like PRMT5 inhibition, and is the chromatin shift visible by microscopy?")
 
-    protocol(root, "CellularFractionation", FRACTIONATION[0], "2026-06-10", *FRACTIONATION[1:],
-             log="- 2026-07-18: copied from Alex Example's notebook at version 2026-06-10, unchanged")
+    protocol(root, "CellularFractionation", FRACTIONATION[0], "2026-06-14", *FRACTIONATION[1:],
+             log="- 2026-07-18: copied from Alex Example's notebook at version 2026-06-14, unchanged")
     protocol(root, "WesternBlot", WESTERN[0], "2026-05-02", *WESTERN[1:],
              log="- 2026-07-18: copied from Alex Example's notebook at version 2026-05-02, unchanged")
-    protocol(root, "Immunofluorescence", "Immunofluorescence on coverslips", "2026-08-18",
-             "Fix, permeabilize, and stain adherent cells on coverslips for confocal imaging.",
-             ["4% PFA in PBS", "0.2% Triton X-100", "3% BSA", "DAPI", "ProLong Glass",
-              "Pre-extraction buffer (optional): CSK with 0.1% Triton X-100, on ice"],
-             ["Optional pre-extraction: CSK + 0.1% Triton X-100, 3 min on ice, before fixing. Removes soluble protein.",
-              "Fix 10 min RT; permeabilize 5 min; block 30 min.",
-              "Primary 1 h RT; secondary 45 min RT in the dark; DAPI 5 min; mount."],
-             log="- 2026-08-18: added the optional pre-extraction step (first used in JORe0004)\n- 2026-07-15: initial version")
+    if_materials = ["4% PFA in PBS", "0.2% Triton X-100", "3% BSA", "DAPI", "ProLong Glass"]
+    if_steps = ["Fix 10 min RT; permeabilize 5 min; block 30 min.",
+                "Primary 1 h RT; secondary 45 min RT in the dark; DAPI 5 min; mount."]
+    # the first version, used in JORe0002; the pre-extraction step is added on 2026-08-18, before JORe0004
+    immunofluorescence = protocol(root, "Immunofluorescence", "Immunofluorescence on coverslips", "2026-07-15",
+                                  "Fix, permeabilize, and stain adherent cells on coverslips for confocal imaging.",
+                                  if_materials, if_steps)
     protocol(root, "FLAG-IP", "Anti-FLAG immunoprecipitation for mass spectrometry", "2026-08-10",
              "Purify FLAG-tagged protein from transfected cells with as little keratin and antibody carry-over as possible.",
              ["Anti-FLAG M2 magnetic beads", "Lysis buffer: 50 mM Tris pH 7.5, 150 mM NaCl, 0.5% NP-40, protease and phosphatase inhibitors",
@@ -557,32 +595,35 @@ def build_jordan() -> None:
 
     sample(root, JOR, "plasmid", "pcDNA3-FLAG-SNRPB wild type", "in-house, cloned 2026-06 (see NB04-012)", "Freezer -20C B, box 3, C4", "2026-06-18")
     sample(root, JOR, "plasmid", "pcDNA3-FLAG-SNRPB R107K/R111K", "in-house, site-directed mutagenesis from JORp0001", "Freezer -20C B, box 3, C5", "2026-06-25")
+    sample(root, JOR, "antibody", "anti-FLAG M2 (mouse monoclonal, Sigma F1804)", "Sigma F1804", "Freezer -20C B, antibody box, A2", "2026-07-10")
     fill(root / "Samples" / "JORp0002.md", "Description",
          "SNRPB with both arginines of the C-terminal RG-rich region that PRMT5 is reported to methylate "
          "(R107, R111) changed to lysine. Sequence-verified 2026-06-25.")
     fill(root / "Samples" / "JORp0002.md", "Validation", "Expression confirmed by anti-FLAG western in JORe0001.")
 
     # ALXc0001 (A549), ALXa0001 and ALXa0003 (antibodies) are Alex's records: cited by ID, kept in Alex's notebook.
-    j1 = experiment(root, JOR, "Chromatin retention of FLAG-SNRPB R107K/R111K versus wild type", "2026-07-20", "2026-07-29", "complete",
+    j1 = experiment(root, JOR, "Chromatin retention of FLAG-SNRPB R107K/R111K versus wild type", "2026-07-20",
                     project="PRMT5-ChromatinRelease, SNRPB-ArginineMethylation", exp_type="Fractionation, WesternBlot",
-                    protocol="P_CellularFractionation, P_WesternBlot", samples="ALXc0001, JORp0001, JORp0002, ALXa0003",
+                    protocol="P_CellularFractionation, P_WesternBlot", samples="ALXc0001, JORp0001, JORp0002, JORa0001, ALXa0003",
                     related="ALXe0002", notebook="NB04-018")
     fill(j1.path, "Objective", "Does removing the PRMT5 target arginines on SNRPB (R107K/R111K) phenocopy PRMT5 inhibition (ALXe0002, Alex's notebook)?")
     fill(j1.path, "Experimental design", "A549 (ALXc0001, from Alex) transfected with FLAG-SNRPB WT (JORp0001) or R107K/R111K (JORp0002); 24 h; "
-         "fractionation at 300 mM KCl; anti-FLAG blot. n = 1.")
-    fill(j1.path, "Results", "FLAG signal chromatin fraction: WT 0.33, mutant 0.55. Expression of both constructs comparable in whole-cell input.\n\n"
-         "![](../5-figures/JORe0001_R_FLAG-SNRPB-WT-vs-RK_20260729.png)\n\nBand intensities: `4-data_processed/JORe0001_FLAG-chromatin-fraction.csv`.")
+         "fractionation at 300 mM KCl; anti-FLAG blot (JORa0001), H3 as chromatin control (ALXa0003). n = 1.")
+    fill(j1.path, "Results", "FLAG signal chromatin fraction: WT 0.33, mutant 0.55. Expression of both constructs comparable in whole-cell input. "
+         "The mutant band runs slightly higher than the wild-type band.\n\n"
+         "![](../5-figures/JORe0001_R_FLAG-SNRPB-WT-vs-RK_20260729.png)\n\nFractions per lane: `4-data_processed/JORe0001_FLAG-chromatin-fraction.csv`.")
     fill(j1.path, "Interpretation", "The methyl-site mutant is more chromatin-bound, the same direction as PRMT5 inhibition. "
          "Single replicate; the mutant also migrates slightly slower, which needs an explanation before this is trusted.")
-    fill(j1.path, "Decision", "Repeat with n = 3 and include a K107R/K111R revertant control before this goes in a figure.")
-    fill(j1.path, "Follow-up experiments", "- [ ] n = 3 repeat with revertant control")
+    fill(j1.path, "Decision", "Repeat with n = 3 and a lane of untransfected cells before this goes in a figure.")
+    fill(j1.path, "Follow-up experiments", "- [ ] n = 3 repeat with an untransfected control lane")
     eln.write_text_lf(folder_of(root, "JORe0001") / "4-data_processed" / "JORe0001_FLAG-chromatin-fraction.csv",
                       "construct,chromatin,nucleoplasm,fraction\nWT,0.33,0.67,0.33\nR107K/R111K,0.55,0.45,0.55\n")
     raw_files(root, "JORe0001", ["ChemiDoc_20260728_1607.scn"])
     png(folder_of(root, "JORe0001") / "5-figures" / "JORe0001_R_FLAG-SNRPB-WT-vs-RK_20260729.png",
         lanes([40, 85, 0, 0], 60, 85) + lanes([90, 90, 0, 0], 120, 145))
+    complete(root, "JORe0001", "2026-07-29")
 
-    j2 = experiment(root, JOR, "SNRPB localization by immunofluorescence after PRMT5 inhibition", "2026-08-04", "2026-08-12", "complete",
+    j2 = experiment(root, JOR, "SNRPB localization by immunofluorescence after PRMT5 inhibition", "2026-08-04",
                     project="PRMT5-ChromatinRelease", exp_type="IF, Microscopy",
                     protocol="P_Immunofluorescence", samples="ALXc0001, ALXa0001", related="ALXe0002", notebook="NB04-023")
     rand = Rand(20260811)
@@ -600,16 +641,21 @@ def build_jordan() -> None:
          "two coverslips per condition on two days. Scored: speckle count per nucleus and fraction of signal outside speckles.")
     fill(j2.path, "Results", f"No clear change in speckle number (median {med['DMSO']:g} in DMSO, {med['PRMT5i']:g} after PRMT5i) or in the "
          f"diffuse nucleoplasmic signal fraction (mean {dif['DMSO']:.2f} and {dif['PRMT5i']:.2f}); 30 nuclei per condition. "
+         "No statistical test was done: the 30 nuclei come from two coverslips per condition, so they are not 30 independent samples. "
          "Speckles looked slightly larger after PRMT5i but this was not quantified.\n\n"
          "Scores per nucleus: `4-data_processed/JORe0002_speckle-scores.csv`.")
     fill(j2.path, "Interpretation", "Conflicts with the simple reading of ALXe0002: a biochemical shift to the chromatin fraction is "
          "not accompanied by a visible redistribution. Either the change is below IF resolution, or the fractionation shift "
          "reflects extraction resistance rather than localization.")
-    fill(j2.path, "Decision", "Discussed at lab meeting 2026-08-14. Next: pre-extraction IF (0.1% Triton before fixation) to ask about extraction resistance directly: JORe0004.")
-    fill(j2.path, "Follow-up experiments", "- [x] pre-extraction IF: JORe0004")
+    fill(j2.path, "Decision", "Bring to lab meeting. Next: pre-extraction IF (0.1% Triton before fixation) to ask about extraction resistance directly.")
+    fill(j2.path, "Follow-up experiments", "- [ ] pre-extraction IF")
     raw_files(root, "JORe0002", ["LSM980_20260811_slide01.czi", "LSM980_20260811_slide02.czi", "LSM980_20260812_slide03.czi"])
+    complete(root, "JORe0002", "2026-08-12")
+    revise(immunofluorescence, "2026-08-18", if_materials + ["Pre-extraction buffer (optional): CSK with 0.1% Triton X-100, on ice"],
+           ["Optional pre-extraction: CSK + 0.1% Triton X-100, 3 min on ice, before fixing. Removes soluble protein."] + if_steps,
+           "- 2026-08-18: added the optional pre-extraction step (first used in JORe0004)\n- 2026-07-15: initial version")
 
-    j3 = experiment(root, JOR, "Arginine methylation sites on SNRPB by mass spectrometry", "2026-08-15", None, "paused",
+    j3 = experiment(root, JOR, "Arginine methylation sites on SNRPB by mass spectrometry", "2026-08-15", "paused",
                     project="SNRPB-ArginineMethylation", exp_type="MassSpec, IP", protocol="P_FLAG-IP",
                     samples="ALXc0001, JORp0001", notebook="NB04-030")
     fill(j3.path, "Objective", "Identify methylated arginines on FLAG-SNRPB immunoprecipitated from A549, with and without PRMT5i.")
@@ -617,7 +663,7 @@ def build_jordan() -> None:
     fill(j3.path, "Decision", "Paused 2026-09-01: proteomics core queue is 6 weeks; IP eluates are at -80C (JOR box 7). Resume when a slot is confirmed.")
 
     # Pre-extraction IF: made-up per-nucleus intensities, a script that summarises them, Results from its output
-    j4 = experiment(root, JOR, "Pre-extraction immunofluorescence of SNRPB after PRMT5 inhibition", "2026-08-24", None, "active",
+    j4 = experiment(root, JOR, "Pre-extraction immunofluorescence of SNRPB after PRMT5 inhibition", "2026-08-24",
                     project="PRMT5-ChromatinRelease", exp_type="IF, Microscopy", protocol="P_Immunofluorescence",
                     samples="ALXc0001, ALXa0001", related="JORe0002, ALXe0002", notebook="NB04-034", tags="meeting")
     f4 = folder_of(root, "JORe0004")
@@ -634,7 +680,7 @@ def build_jordan() -> None:
     fill(j4.path, "Experimental design", "A549, 48 h DMSO vs PRMT5i (1 uM). Pre-extraction: CSK + 0.1% Triton X-100, 3 min on ice, then fix "
          "(P_Immunofluorescence, optional step). Anti-SNRPB, DAPI, confocal, same settings for both conditions. Measured: mean nuclear "
          "SNRPB intensity divided by mean DAPI intensity, 25 nuclei per condition. So far one coverslip per condition, one day.")
-    fill(j4.path, "Results", "Preliminary: one coverslip per condition (output of `3-code/JORe0004_summarise.py`):\n\n```\n" + summary + "```\n\n"
+    fill(j4.path, "Results", "Preliminary: one coverslip per condition (output of `3-code/JORe0004_summarise.py`; quartiles by the exclusive method):\n\n```\n" + summary + "```\n\n"
          "Values per nucleus: `4-data_processed/JORe0004_retained-signal.csv`. The images were scored knowing which coverslip was which.")
     fill(j4.path, "Interpretation", "Preliminary, n = 1 coverslip per condition and not scored blind. More SNRPB signal survives pre-extraction after "
          "PRMT5i, which is what extraction resistance would look like and would reconcile JORe0002 with ALXe0002.")
@@ -661,13 +707,11 @@ def build_jordan() -> None:
 """)
     fill(release, "Experiments", "- JORe0001 - R107K/R111K mutant - complete (n = 1)\n- JORe0002 - IF localization - complete\n"
          "- JORe0004 - pre-extraction IF - active\n- In Alex Example's notebook: ALXe0001 to ALXe0005")
-    fill(release, "Reagents in use", "JORp0001, JORp0002; from Alex's notebook: ALXc0001, ALXa0001, ALXa0003")
+    fill(release, "Reagents in use", "JORp0001, JORp0002, JORa0001; from Alex's notebook: ALXc0001, ALXa0001, ALXa0003")
     fill(release, "Related protocols", "P_CellularFractionation, P_WesternBlot, P_Immunofluorescence")
     fill(methyl, "Experiments", "- JORe0001 - R107K/R111K mutant - complete (n = 1)\n- JORe0003 - methylation sites by mass spectrometry - paused")
     fill(methyl, "Reagents in use", "JORp0001, JORp0002")
     fill(methyl, "Related protocols", "P_FLAG-IP, P_WesternBlot")
-
-    eln.complete_experiment(root, "JORe0001", when="2026-07-29")
 
     # An older folder that has not been adopted yet.
     old = root / "2026-05-28_colony PCR FLAG-SNRPB clones"

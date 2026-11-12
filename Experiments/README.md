@@ -17,7 +17,9 @@ Each subfolder starts with a one-paragraph `README.md` saying what belongs
 in it (and keeping the folder from disappearing in git, which ignores empty
 directories). `README.md` is exempt from the filename rule everywhere.
 
-This folder starts empty. To see what filled-in experiments look like,
+This folder is empty in the tools repository. It is where experiments go if
+you use the tools folder itself as your notebook; with `init --root` they go
+into your own notebook folder instead. To see what filled-in experiments look like,
 open the fictional notebooks in [`sandbox/`](../sandbox/README.md)
 (`launchers/Try the Sandbox`); `sandbox/alex/Experiments/ALXe0002_*` is the
 best example.
@@ -28,5 +30,5 @@ Large raw data (microscopy, sequencing, mass spec) does not live in
 there is welcome.
 
 This folder may live somewhere other than inside this repo; see
-`--root` / `init` in [`docs/getting-started.md`](../docs/getting-started.md) §8.
+`--root` / `init` in [`docs/getting-started.md`](../docs/getting-started.md) §0 and §9.
 Rules: [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md).

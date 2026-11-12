@@ -34,7 +34,7 @@ if (opt.openai) {
   }
   console.log(`\n${TOOLS.length} tools.`);
 } else {
-  const ctx = { store: new NodeStore(config.root), person: config.person, today: opt.today || undefined, labText: config.labText };
+  const ctx = { store: new NodeStore(config.root), person: config.person, explicit: config.explicit, today: opt.today || undefined, labText: config.labText };
   try {
     const result = await callTool(ctx, rest[0], rest[1] ? JSON.parse(rest[1]) : {});
     if (opt.text) process.stdout.write(result.text ?? result.markdown ?? resultToJson(result) + '\n');

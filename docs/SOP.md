@@ -60,7 +60,7 @@ every filename and every note that touches them. Grammar and examples:
 ## 6. Where data physically lives
 
 - Markdown notes, small tables, protocol snapshots, compressed
-  representative images → the record folder.
+  representative images → your notebook folder.
 - Everything large (microscopy datasets, sequencing, mass spec, raw
   Western scans, Illustrator/Prism source files) → institutionally
   backed-up storage (OneDrive/SharePoint or a departmental server). The
@@ -115,6 +115,9 @@ Before a trainee leaves the lab:
   could read cold (`launchers/New Project` if it doesn't exist; the AI
   skill `eln-project-synthesis` can draft it from the experiments).
 - **Check Everything** is clean.
+- Their notebook folder is copied, whole, to lab storage that the PI controls.
+  The folder is the record; nothing else holds it. Check that the copy opens
+  with **View a notebook**.
 
 ## 10. What's flexible
 

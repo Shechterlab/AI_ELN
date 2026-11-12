@@ -6,7 +6,7 @@ import { loadVault, ciIn, sortedById } from './lib/vault.js';
 import { findNotes, exportScope } from './lib/query.js';
 import { mdToHtml } from './lib/markdown.js';
 import { splitFrontMatter, csvItems } from './lib/frontmatter.js';
-import { ensureVaultDirs, addFile, readNotebook, setNotebookOwner, NOTEBOOK_FILE, knownInitials, initialsOf, inAnotherNotebook } from './lib/create.js';
+import { ensureVaultDirs, addFile, readNotebook, setNotebookOwner, notebookPerson, NOTEBOOK_FILE, knownInitials, initialsOf, inAnotherNotebook } from './lib/create.js';
 import { manifestPath, renderSnapshotHtml } from './lib/closeout.js';
 import { loadLab, recordTitle } from './lib/lab.js';
 import { labReady } from '../assets/brand.js';
@@ -23,7 +23,7 @@ const $ = (sel) => document.querySelector(sel);
 const main = $('#main');
 const state = {
   store: null, kind: '', readOnly: false, pending: null, vault: null, person: readPerson(), flash: '', draft: null, urls: [], drawn: null,
-  labText: null, lab: null, dirty: false,
+  labText: null, lab: null, dirty: false, owner: null,
 };
 
 const NAV = [['#/', 'Home'], ['#/experiments', 'Experiments'], ['#/samples', 'Samples'], ['#/protocols', 'Protocols'],
@@ -150,13 +150,12 @@ async function childNotebooks(store) {
   return out;
 }
 
-/** Who is writing: the initials saved in this browser, or else the owner named in notebook.md. */
+/** Who is writing: the owner named in the notebook's notebook.md, or else the initials saved in this
+    browser. A notebook that names its owner is that person's, whoever used this browser last. */
 async function usePerson(store) {
-  state.person = readPerson();
-  if (state.person.initials) return;
-  const known = await readNotebook(store);
-  const initials = cleanInitials(text1(known.initials));
-  if (initials) state.person = { initials, researcher: text1(known.owner) || initials };
+  const [initials, owner] = await notebookPerson(store);
+  state.owner = initials ? { initials, researcher: owner || initials } : null;
+  state.person = state.owner || readPerson();
 }
 
 async function setUp(store) {
@@ -316,7 +315,7 @@ async function viewNote(id) {
   if (!n) {
     const elsewhere = inAnotherNotebook(id, await knownInitials(state.store));
     return `<h1>Not in this notebook</h1><p>There is no note with the ID ${esc(id)} here.${elsewhere
-      ? ` Its initials are ${esc(initialsOf(id))}, so it is a record in that person's notebook. Open their folder to see it.` : ''}</p>`;
+      ? ` Its initials are ${esc(initialsOf(id))}, so it is a record in that person's notebook, which is a different folder. To read it, open that folder with <a href="#/settings">Open a different folder</a>.` : ''}</p>`;
   }
   const body = mdToHtml(splitFrontMatter(n.text).body, {
     imgBase: dirname(n.path), imgSrc: (rel) => 'eln-file:' + rel, linkHref: (x) => `#/note/${x}`,
@@ -551,8 +550,9 @@ function viewAi() {
 }
 
 function viewSettings() {
-  const p = state.person;
+  const p = state.owner ? readPerson() : state.person;
   return `<h1>Settings</h1>
+    ${state.owner ? msg('ok', `This notebook belongs to <b>${esc(state.owner.researcher)} (${esc(state.owner.initials)})</b>, as its <code>notebook.md</code> says. Records made here get ${esc(state.owner.initials)} IDs. The initials below are this browser's own, used in notebooks that do not name an owner.`) : ''}
     <form class="stack" data-form="settings">
       <label for="s-initials">Your initials (three letters)</label><input type="text" id="s-initials" name="initials" required value="${esc(p.initials)}" placeholder="JSR" maxlength="4">
       <div class="hint">Your IDs will look like ${esc(p.initials || 'JSR')}e0001. Use first, middle, and last initial: three letters are less likely to be the same as someone else's than two. Two to four letters are accepted.</div>
@@ -657,10 +657,16 @@ const FORMS = {
       state.flash = msg('err', 'A folder name cannot be empty, start with a dot, end with a dot or space, or contain \\ / : * ? " < > |');
       return render();
     }
+    if ([...Object.values(KIND_DIR), 'Inventory', 'Exports', 'templates'].some((x) => x.toLowerCase() === name.toLowerCase())) {
+      state.flash = msg('err', `“${esc(name)}” is the name of a folder inside every notebook. Choose another name, such as the person's name.`);
+      return render();
+    }
     const child = await handle.getDirectoryHandle(name, { create: true });
     const store = new FsAccessStore(child);
-    if (!(await looksLikeNotebook(store))) await setUp(store);
-    state.flash = msg('ok', `The notebook “${esc(name)}” is ready.${state.person.initials ? '' : ' Enter your initials under settings, then create your first experiment.'}`);
+    const existed = await looksLikeNotebook(store);
+    if (!existed) await setUp(store);
+    state.flash = existed ? msg('ok', `There already is a notebook named “${esc(name)}”. It is open now; nothing in it was changed.`)
+      : msg('ok', `The notebook “${esc(name)}” is ready.${state.person.initials ? '' : ' Enter your initials under settings, then create your first experiment.'}`);
     return attach(store, kind, { handle: kind === 'folder' ? child : null });
   },
   adopt: async (d, form) => {
@@ -679,10 +685,12 @@ const FORMS = {
       state.flash = msg('err', 'Initials are 2 to 4 letters, like JSR.');
       return render();
     }
-    state.person = { initials, researcher: d.researcher || initials };
-    try { localStorage.setItem('ai-eln-person', JSON.stringify(state.person)); } catch (e) { /* private mode */ }
-    if (canWrite() && state.kind !== 'practice') await setNotebookOwner(state.store, state.person.researcher, initials);
-    state.flash = msg('ok', 'Saved.') + (initials.length === 2 ? msg('warn', `${SHORT_INITIALS} You can change them here before you create your first record.`) : '');
+    const saved = { initials, researcher: d.researcher || initials };
+    try { localStorage.setItem('ai-eln-person', JSON.stringify(saved)); } catch (e) { /* private mode */ }
+    if (canWrite() && state.kind !== 'practice') await setNotebookOwner(state.store, saved.researcher, initials);
+    await usePerson(state.store);
+    state.flash = msg('ok', 'Saved.') + (initials.length === 2 ? msg('warn', `${SHORT_INITIALS} You can change them here before you create your first record.`) : '')
+      + (state.owner && state.owner.initials !== initials ? msg('warn', `This notebook belongs to ${esc(state.owner.researcher)} (${esc(state.owner.initials)}), so records made here still get ${esc(state.owner.initials)} IDs. What you saved is used in notebooks that do not name an owner. To change this notebook's owner, edit <code>notebook.md</code> in its folder.`) : '');
     return go('#/');
   },
   'new-experiment': async (d) => {

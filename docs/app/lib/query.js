@@ -17,8 +17,8 @@ export function findNotes(vault, kind, { project, status, researcher, tag, sampl
     if (protocol && !ciIn(protocol, n.getList('protocols'))) continue;
     if (exp_type && !ciIn(exp_type, n.getList('experiment_type'))) continue;
     if (text) {
-      /* every word must appear somewhere in the ID, the title, or the body */
-      const hay = (n.id + '\n' + n.get('title') + '\n' + n.body).toLowerCase();
+      /* every word must appear somewhere in the ID, the header, or the body */
+      const hay = [n.id, ...Object.keys(n.fields).map((k) => n.get(k)), n.body].join('\n').toLowerCase();
       if (!words(text.toLowerCase()).every((w) => hay.includes(w))) continue;
     }
     out.push(n);
@@ -114,11 +114,14 @@ Rules for answering questions about this material:
 /** Which experiments an export covers: a project, a status, listed IDs, or everything. */
 export function selectForExport(vault, { project = '', experiment_ids = [], status = '', all = false } = {}) {
   const exps = vault.notes.experiment.filter((n) => n.id);
+  if (all && (project || status || experiment_ids.length)) {
+    throw new ElnError('choose everything, or a project, a status, or a list of experiments; not both', 'bad_scope');
+  }
   let chosen = [];
   if (all) chosen = exps;
   else {
-    if (project) chosen.push(...findNotes(vault, 'experiment', { project }));
-    if (status) chosen.push(...findNotes(vault, 'experiment', { status }));
+    /* a project and a status together mean "the experiments of this project with this status" */
+    if (project || status) chosen.push(...findNotes(vault, 'experiment', { project, status }));
     for (const id of experiment_ids) {
       const n = vault.get(id);
       if (n === null || n.kind !== 'experiment') throw new ElnError(`experiment ${id} not found`, 'not_found');
@@ -126,8 +129,19 @@ export function selectForExport(vault, { project = '', experiment_ids = [], stat
     }
   }
   const seen = new Set();
-  return [...chosen].sort((a, b) => cmp(a.id, b.id)).filter((n) => !seen.has(n.id) && seen.add(n.id));
+  const out = [...chosen].sort((a, b) => cmp(a.id, b.id)).filter((n) => !seen.has(n.id) && seen.add(n.id));
+  for (const n of out) {
+    const twins = exps.filter((x) => x.id === n.id).map((x) => x.path);
+    if (twins.length > 1) {
+      throw new ElnError(`two experiments have the ID ${n.id} (${twins.slice(0, 2).join(' and ')}). An export would leave one `
+        + 'of them out. Give one a new ID first; Check lists every such pair.', 'duplicate_id');
+    }
+  }
+  return out;
 }
+
+/** Text for one cell of a Markdown table: a | would start a new cell. */
+const tableCell = (text) => text.replaceAll('|', '\\|');
 
 const KIND_ORDER = { project: 0, protocol: 1, sample: 2, experiment: 3 };
 
@@ -155,7 +169,7 @@ export function buildExport(vault, experiments, { related = true, today = isoDat
   const out = [`# AI_ELN export - ${today}`, '', EXPORT_PRIMER.replace('@LAB@', labName), '## Inventory of exported experiments', '',
     '| ID | Title | Researcher | Project | Status | Started | Completed |', '|---|---|---|---|---|---|---|'];
   for (const e of experiments) {
-    out.push(`| ${e.id} | ${e.get('title')} | ${e.get('researcher')} | ${e.getList('project').join(', ') || '-'} | `
+    out.push(`| ${e.id} | ${tableCell(e.get('title'))} | ${tableCell(e.get('researcher'))} | ${e.getList('project').join(', ') || '-'} | `
       + `${e.get('status')} | ${e.get('date_started')} | ${e.get('date_completed') || '-'} |`);
   }
   out.push('', '## Notes', '');
@@ -183,11 +197,11 @@ export function exportReadme(experiments, extras, { raw = true, today = isoDate(
     '- `Experiments/`: one folder per experiment, laid out as in the notebook (`1-notes`, `2-data_raw`, `3-code`, `4-data_processed`, `5-figures`).'];
   if (others.length) out.push('- ' + others.map((d) => `\`${d}/\``).join(', ') + ': the records the experiments refer to.');
   out.push('- `Inventory/`: index tables (CSV) of what is in this folder.', '');
-  if (!raw) out.push('Raw data was left out: each `2-data_raw/` holds only its README. `raw_data_path` in each note says where the raw data is kept.', '');
+  if (!raw) out.push('Raw data was left out: each `2-data_raw/` holds only its README. `raw_data_path` in each note says where the raw data is kept. Verify lists the raw files as missing in this copy.', '');
   out.push('The folder is laid out like a notebook, so the notebook page and tools can open it.', '', '## Experiments', '',
     '| ID | Title | Researcher | Project | Status | Started | Completed |', '|---|---|---|---|---|---|---|');
   for (const e of experiments) {
-    out.push(`| ${e.id} | ${e.get('title')} | ${e.get('researcher')} | ${e.getList('project').join(', ') || '-'} | `
+    out.push(`| ${e.id} | ${tableCell(e.get('title'))} | ${tableCell(e.get('researcher'))} | ${e.getList('project').join(', ') || '-'} | `
       + `${e.get('status')} | ${e.get('date_started')} | ${e.get('date_completed') || '-'} |`);
   }
   return out.join('\n') + '\n';
