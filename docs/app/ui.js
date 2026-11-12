@@ -3,10 +3,10 @@
 
 import { TOOLS, callTool, experimentFiles, isReadOnlyCall, openAiTools, mcpTools } from './lib/tools.js';
 import { loadVault, ciIn, sortedById } from './lib/vault.js';
-import { findNotes } from './lib/query.js';
+import { findNotes, exportScope } from './lib/query.js';
 import { mdToHtml } from './lib/markdown.js';
 import { splitFrontMatter, csvItems } from './lib/frontmatter.js';
-import { ensureVaultDirs, addFile } from './lib/create.js';
+import { ensureVaultDirs, addFile, readNotebook, setNotebookOwner, NOTEBOOK_FILE } from './lib/create.js';
 import { manifestPath, renderSnapshotHtml } from './lib/closeout.js';
 import { loadLab, recordTitle } from './lib/lab.js';
 import { labReady } from '../assets/brand.js';
@@ -15,7 +15,7 @@ import { guessMime } from './lib/mime.js';
 import { AGENTS_MD } from './lib/conventions.js';
 import { ElnError, KIND_DIR, SUBFOLDERS, STATUS, SAMPLE_LETTERS, EXPERIMENT_TYPES, MEETING_TAG } from './lib/schema.js';
 import { esc, cmp, dirname, isoDate } from './lib/text.js';
-import { exists, isDir, writeText } from './store/base.js';
+import { exists, isDir, writeText, SubStore } from './store/base.js';
 import { MemoryStore } from './store/memory.js';
 import { FsAccessStore, canPickFolders, pickFolder, allowed, rememberFolder, recallFolder, forgetFolder } from './store/fsaccess.js';
 
@@ -128,10 +128,41 @@ async function work(fn) {
 /* ---------- opening a notebook ---------- */
 
 async function looksLikeNotebook(store) {
+  if (await exists(store, NOTEBOOK_FILE)) return true;
   for (const d of Object.values(KIND_DIR)) {
     if (await isDir(store, d)) return true;
   }
   return false;
+}
+
+const text1 = (v) => (typeof v === 'string' ? v : '');
+
+/** The notebooks directly inside a folder that is not one itself: one folder per person, side by side. */
+async function childNotebooks(store) {
+  const out = [];
+  const dirs = ((await store.list('')) || []).filter((e) => e.kind === 'dir' && !e.name.startsWith('.')).map((e) => e.name).sort(cmp);
+  for (const name of dirs) {
+    const sub = new SubStore(store, name);
+    if (!(await looksLikeNotebook(sub))) continue;
+    const known = await readNotebook(sub);
+    out.push({ name, owner: text1(known.owner), initials: text1(known.initials) });
+  }
+  return out;
+}
+
+/** Who is writing: the initials saved in this browser, or else the owner named in notebook.md. */
+async function usePerson(store) {
+  state.person = readPerson();
+  if (state.person.initials) return;
+  const known = await readNotebook(store);
+  const initials = cleanInitials(text1(known.initials));
+  if (initials) state.person = { initials, researcher: text1(known.owner) || initials };
+}
+
+async function setUp(store) {
+  await ensureVaultDirs(store);
+  if (!(await exists(store, 'AGENTS.md'))) await writeText(store, 'AGENTS.md', AGENTS_MD);
+  await setNotebookOwner(store, state.person.researcher, state.person.initials);
 }
 
 async function attach(store, kind, { handle = null, readOnly = false, keepScreen = false } = {}) {
@@ -139,6 +170,7 @@ async function attach(store, kind, { handle = null, readOnly = false, keepScreen
   state.kind = kind;
   state.readOnly = readOnly;
   state.pending = null;
+  await usePerson(store);
   if (handle) {
     await rememberFolder(handle);
     try { localStorage.setItem('ai-eln-view-only', readOnly ? '1' : ''); } catch (e) { /* private mode */ }
@@ -149,11 +181,12 @@ async function attach(store, kind, { handle = null, readOnly = false, keepScreen
 async function openHandle(handle, kind = 'folder', { readOnly = false, keepScreen = false } = {}) {
   const store = new FsAccessStore(handle);
   if (await looksLikeNotebook(store)) return attach(store, kind, { handle: kind === 'folder' ? handle : null, readOnly, keepScreen });
-  if (readOnly) {
+  const children = await childNotebooks(store);
+  if (readOnly && !children.length) {
     state.flash = msg('warn', `“${esc(store.label)}” is not a notebook folder: it has no Experiments, Protocols, Samples, or Projects folder. Choose the folder that contains them.`);
     return render();
   }
-  state.pending = { store, kind, handle, names: ((await store.list('')) || []).map((e) => e.name).sort(cmp) };
+  state.pending = { store, kind, handle, readOnly, children, names: ((await store.list('')) || []).map((e) => e.name).sort(cmp) };
   return render();
 }
 
@@ -174,23 +207,34 @@ async function seedPractice(store) {
 
 async function viewConnect() {
   if (state.pending) {
-    const { store, names } = state.pending;
+    const { store, names, children, readOnly } = state.pending;
+    const newHere = readOnly ? '' : `<form class="stack" data-form="new-child"><label for="c-name">Start another notebook here, in a new folder</label>
+        <div class="inline"><input type="text" id="c-name" name="name" required maxlength="80" placeholder="folder name, e.g. Ana Lopez"><button class="btn">Create</button></div></form>`;
+    if (children.length) {
+      return `<div class="connect"><h1>“${esc(store.label)}” holds ${children.length} notebook${children.length !== 1 ? 's' : ''}</h1>
+        <p>Each notebook is a folder of its own. Choose the one to ${readOnly ? 'view' : 'open'}.</p>
+        <div class="grid">${children.map((c) => `<a class="tile" href="#" data-act="open-child" data-name="${esc(c.name)}"><b>${esc(c.owner || c.name)}${c.initials ? ` (${esc(c.initials)})` : ''}</b><span>${esc(c.name)}/</span></a>`).join('')}</div>
+        ${newHere}
+        <div class="actions"><button class="btn" data-act="cancel-pending">Choose a different folder</button></div></div>`;
+    }
     return `<div class="connect"><h1>Set up a notebook in “${esc(store.label)}”?</h1>
       <p>This folder has no notebook in it yet. Setting one up creates five folders (<code>Experiments</code>, <code>Protocols</code>,
-      <code>Samples</code>, <code>Projects</code>, <code>Inventory</code>) and a short <code>AGENTS.md</code> that tells AI tools the rules. Nothing already in the folder is changed.</p>
+      <code>Samples</code>, <code>Projects</code>, <code>Inventory</code>), a <code>notebook.md</code> that says whose notebook it is, and a short <code>AGENTS.md</code> that tells AI tools the rules. Nothing already in the folder is changed.</p>
       ${names.length ? `<p class="hint">Already in this folder: ${names.slice(0, 10).map(esc).join(', ')}${names.length > 10 ? ', ...' : ''}</p>` : '<p class="hint">The folder is empty.</p>'}
       <div class="actions"><button class="btn primary" data-act="setup-here">Set up the notebook here</button>
-      <button class="btn" data-act="cancel-pending">Choose a different folder</button></div></div>`;
+      <button class="btn" data-act="cancel-pending">Choose a different folder</button></div>
+      <p class="hint">Folders already here stay as they are. Afterwards the notebook can adopt them one at a time as experiments.
+        If several people will keep notebooks side by side in this folder, give each a folder of its own instead:</p>${newHere}</div>`;
   }
   const can = canPickFolders();
   const remembered = can ? await recallFolder() : null;
   return `<div class="connect"><h1>Open your notebook</h1>
-    <p>The notebook is a folder on this computer, usually inside the lab's Dropbox or OneDrive. This page reads and writes the files in that folder. Nothing is uploaded.</p>
+    <p>A notebook is one folder on this computer, one per person, usually inside Dropbox or OneDrive. This page reads and writes the files in that folder. Nothing is uploaded.</p>
     ${can ? `<div class="actions">
         ${remembered ? `<button class="btn primary" data-act="reopen">Reopen “${esc(remembered.name)}”</button>` : ''}
         <button class="btn${remembered ? '' : ' primary'}" data-act="pick">${remembered ? 'Open a different folder' : 'Open notebook folder'}</button>
         <button class="btn" data-act="pick-view">View a notebook (read-only)</button></div>
-      <p class="hint">The browser asks once whether this page may view and edit the folder. Choose the notebook folder itself (the one that contains <code>Experiments</code>), or an empty folder to start a new notebook.
+      <p class="hint">The browser asks once whether this page may view and edit the folder. Choose your notebook folder (the one that contains <code>Experiments</code>), a folder that holds several people's notebooks, or any folder to start a new notebook in.
         <b>View</b> opens someone's notebook for reading: the page asks only for permission to view, and every button that changes something is hidden.</p>`
     : msg('warn', 'This browser cannot open folders. Use Chrome or Edge on a computer. In Safari or Firefox, start the notebook with the <b>Open ELN</b> launcher instead (<a href="../guide.html?d=getting-started">how</a>).')}
     <div class="card"><h2>Practice first</h2>
@@ -199,7 +243,8 @@ async function viewConnect() {
     <div class="card"><h2>What this page does</h2>
       <ul><li>Creates experiments, samples, protocols, and projects with the right IDs, folders, and file names.</li>
       <li>Shows and edits notes, adds files under the right names, checks the conventions.</li>
-      <li>Writes the lab-meeting brief, the export for ChatGPT, and the <code>.eln</code> archive.</li>
+      <li>Adopts older folders as experiments, without changing what is in them.</li>
+      <li>Writes the lab-meeting brief and exports: one file for ChatGPT, or a folder of plain files.</li>
       <li>Works on the same folder as the Python tools and the AI tools. Use whichever you like.</li></ul></div></div>`;
 }
 
@@ -215,8 +260,9 @@ function expTable(exps) {
   return `<div class="table-wrap"><table><tr><th>ID</th><th>Title</th><th>Who</th><th>Project</th><th>Started</th><th>Status</th></tr>${rows}</table></div>`;
 }
 
-function viewHome() {
+async function viewHome() {
   const v = state.vault;
+  const waiting = canWrite() ? (await run('adopt_folder', {})).folders.length : 0;
   const exps = sortedById(v.notes.experiment).reverse();
   const active = exps.filter((e) => e.get('status') === 'active');
   const flagged = exps.filter((e) => ciIn(MEETING_TAG, e.getList('tags')));
@@ -228,7 +274,8 @@ function viewHome() {
       ['#/new/project', 'New project', 'A summary page for a research project.']] : []),
     ['#/check', 'Check everything', 'Lists naming and metadata problems.'],
     ['#/brief', 'Lab meeting brief', 'Summary of experiments flagged for the meeting.'],
-    ['#/export', 'Export for ChatGPT', 'A single file to paste into a chat.'],
+    ['#/export', 'Export', 'One file to paste into a chat, or a folder of plain files.'],
+    ...(waiting ? [['#/adopt', 'Adopt older folders', `${waiting} folder${waiting !== 1 ? 's' : ''} here ${waiting !== 1 ? 'are' : 'is'} not a record yet.`]] : []),
   ];
   return `${canWrite() ? needSetup() : msg('warn', 'This notebook is open for viewing only. Nothing here can change it.')}<h1>${esc(recordTitle(state.lab))}</h1>
     <p>${canWrite() ? `You are <b>${who}</b> · ` : ''}${exps.length} experiments, ${active.length} active, ${flagged.length} flagged for lab meeting · <a href="#/settings">settings</a></p>
@@ -250,7 +297,7 @@ function viewExperiments(q) {
       <div><label for="f-r">Researcher</label><input id="f-r" name="researcher" value="${esc(f.researcher)}"></div>
       <div><label for="f-t">Tag</label><input id="f-t" name="tag" value="${esc(f.tag)}" placeholder="meeting"></div>
       <div><button class="btn small">Filter</button></div></form>
-    <div class="actions">${canWrite() ? '<a class="btn primary" href="#/new/experiment">New experiment</a>' : ''}<span class="hint">${hits.length} shown, newest first</span></div>
+    <div class="actions">${canWrite() ? '<a class="btn primary" href="#/new/experiment">New experiment</a><a class="btn" href="#/adopt">Adopt an older folder</a>' : ''}<span class="hint">${hits.length} shown, newest first</span></div>
     ${hits.length ? expTable(hits) : '<p>No matches.</p>'}`;
 }
 
@@ -386,6 +433,24 @@ function viewNew(kind, q = new URLSearchParams()) {
       <div class="actions" style="margin-top:18px"><button class="btn primary">Create project</button><a href="#/projects" class="btn">Cancel</a></div></form>`;
 }
 
+async function viewAdopt() {
+  if (!canWrite()) return VIEW_ONLY;
+  const { folders } = await run('adopt_folder', {});
+  const projects = sortedById(state.vault.notes.project).map((n) => n.id);
+  const cards = folders.map((f, i) => `<form class="card stack" data-form="adopt" data-folder="${esc(f.path)}" data-date="${esc(f.date)}">
+      <div class="path">${esc(f.path)}/</div>
+      <div class="row"><div><label for="a-title-${i}">Title</label><input type="text" id="a-title-${i}" name="title" value="${esc(f.title)}"></div>
+        <div><label for="a-date-${i}">Start date</label><input type="text" id="a-date-${i}" name="date" value="${esc(f.date)}" placeholder="YYYY-MM-DD, or blank to use the oldest file date"></div></div>
+      <div class="row"><div><label for="a-project-${i}">Project</label><input type="text" id="a-project-${i}" name="project" list="projects"></div>
+        <div><label class="check" style="margin-top:28px"><input type="checkbox" name="open" value="1"> Still in progress (leave the record open)</label></div></div>
+      <div class="actions"><button class="btn primary">Adopt this folder</button></div></form>`).join('');
+  return `<h1>Adopt older folders</h1>
+    <p>These folders are in the notebook folder but are not records. Adopting one makes an experiment record for it: it gets the next ID and a note, and the folder is moved,
+      exactly as it is, into the new experiment's <code>2-data_raw</code>. Nothing inside it is renamed or changed. A list of its files, with sizes and dates, is saved next to the note.</p>
+    <p class="hint">To adopt a folder that is somewhere else, move or copy it into the notebook folder first (into <code>Experiments</code>, or next to it), then reload this page. Folders you do not adopt are left alone.</p>
+    ${datalist('projects', projects)}${folders.length ? cards : '<p>No folder is waiting.</p>'}`;
+}
+
 async function viewCheck() {
   const r = await run('check_notebook');
   const byPath = new Map();
@@ -397,7 +462,8 @@ async function viewCheck() {
   const summary = msg(r.errors ? 'err' : r.warnings ? 'warn' : 'ok', `Checked ${esc(r.counts)}: <b>${plural(r.errors, 'error')}</b>, ${plural(r.warnings, 'warning')}. `
     + (r.issues.length ? 'ERROR must be fixed; WARN is advice.' : 'Everything follows the conventions.'));
   const blocks = [...byPath.keys()].sort(cmp).map((p) => `<div class="card"><div class="path">${esc(p)}</div>`
-    + byPath.get(p).map((i) => `<div class="issue"><span class="lvl ${i.level}">${i.level}</span>${esc(i.message)}</div>`).join('') + '</div>').join('');
+    + byPath.get(p).map((i) => `<div class="issue"><span class="lvl ${i.level}">${i.level}</span>${esc(i.message)}`
+      + `${canWrite() && i.message.includes('Adopt it') ? ' <a href="#/adopt">Adopt older folders</a>' : ''}</div>`).join('') + '</div>').join('');
   return `<h1>Check everything</h1>${summary}${blocks}`;
 }
 
@@ -439,17 +505,22 @@ async function viewExport(q) {
     }
     state.lastText = r.markdown;
     state.lastExport = args;
-    const name = `export_${scope === 'project' ? args.project : scope === 'ids' ? args.experiment_ids.slice(0, 3).join('-') : scope === 'active' ? 'active' : 'export'}_${isoDate().replaceAll('-', '')}`;
+    const name = `export_${exportScope(args)}_${isoDate().replaceAll('-', '')}`;
     result = `<h2>${r.experiments.length} experiment${r.experiments.length !== 1 ? 's' : ''}, ${r.characters.toLocaleString('en-US')} characters</h2>
       <div class="actions"><button class="btn primary" data-act="copy-text">Copy all</button>
         <button class="btn" data-act="download-text" data-name="${esc(name)}.md">Download .md</button>
         ${canWrite() ? '<button class="btn" data-act="export-save">Save .md into Inventory</button>' : ''}
-        <button class="btn" data-act="eln-download">Download .eln archive</button>
+        ${canWrite() ? `<button class="btn" data-act="folder-save">Save as a folder of plain files</button>
+        <button class="btn" data-act="folder-save" data-raw="0">The same, without raw data</button>` : ''}</div>
+      <p class="hint">Paste the text into a ChatGPT conversation, or attach the .md file. The folder goes into <code>Exports/</code> in the notebook folder: the notes and their files as they are,
+        a README, one file with every note, and an index. Copy it wherever it is needed.</p>
+      <details><summary class="hint">For another electronic notebook</summary>
+        <div class="actions"><button class="btn" data-act="eln-download">Download .eln archive</button>
         ${canWrite() ? '<button class="btn" data-act="eln-save">Save .eln into Inventory</button>' : ''}</div>
-      <p class="hint">Paste the text into a ChatGPT conversation, or attach the .md file. The <code>.eln</code> archive is for importing into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.</p>
+        <p class="hint">The <code>.eln</code> archive is for importing into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.</p></details>
       <textarea class="text" readonly aria-label="Export text">${esc(r.markdown)}</textarea>`;
   }
-  return `<h1>Export</h1><p>One document with the notes you choose, the records they refer to, and a short explanation of how to read them.</p>${form}${result}`;
+  return `<h1>Export</h1><p>The notes you choose and the records they refer to, as one document with a short explanation of how to read them, or as a folder of plain files.</p>${form}${result}`;
 }
 
 function exportArgs(q) {
@@ -481,7 +552,7 @@ function viewSettings() {
       <label for="s-initials">Your initials (2 to 4 letters)</label><input type="text" id="s-initials" name="initials" required value="${esc(p.initials)}" placeholder="JSR" maxlength="4">
       <div class="hint">Your IDs will look like ${esc(p.initials || 'JSR')}e0001. IDs start with your initials, so two people cannot get the same ID.</div>
       <label for="s-name">Your full name</label><input type="text" id="s-name" name="researcher" value="${esc(p.researcher)}">
-      <div class="hint">Saved in this browser only.</div>
+      <div class="hint">Saved in this browser. If <code>notebook.md</code> in the notebook folder does not name an owner yet, they are written there too.</div>
       <div class="actions" style="margin-top:18px"><button class="btn primary">Save</button><a href="#/" class="btn">Back</a></div></form>
     <h2>Notebook folder</h2>
     <p><span class="path">${esc(state.store.label || '')}</span> ${state.kind === 'practice' ? '(practice notebook, kept in memory, not saved)' : ''}${state.readOnly ? '(open for viewing only)' : ''}</p>
@@ -534,6 +605,7 @@ async function render() {
         edit: () => viewEdit(arg),
         new: () => viewNew(arg, q),
         check: () => viewCheck(),
+        adopt: () => viewAdopt(),
         brief: () => viewBrief(),
         export: () => viewExport(q),
         ai: () => viewAi(),
@@ -573,9 +645,30 @@ const created = (r, what) => msg('ok', `Created ${what} <b>${esc(r.id)}</b>. <sp
   + r.warnings.map((w) => msg('warn', esc(w))).join('');
 
 const FORMS = {
+  'new-child': async (d) => {
+    const { handle, kind } = state.pending;
+    const name = (d.name || '').trim();
+    if (!name || name.startsWith('.') || /[\\/:*?"<>|\x00-\x1f]/.test(name) || /[ .]$/.test(name)) {
+      state.flash = msg('err', 'A folder name cannot be empty, start with a dot, end with a dot or space, or contain \\ / : * ? " < > |');
+      return render();
+    }
+    const child = await handle.getDirectoryHandle(name, { create: true });
+    const store = new FsAccessStore(child);
+    if (!(await looksLikeNotebook(store))) await setUp(store);
+    state.flash = msg('ok', `The notebook “${esc(name)}” is ready.${state.person.initials ? '' : ' Enter your initials under settings, then create your first experiment.'}`);
+    return attach(store, kind, { handle: kind === 'folder' ? child : null });
+  },
+  adopt: async (d, form) => {
+    /* a date left as it was read from the folder name is not "given": the note then says where it came from */
+    const date = d.date && d.date !== form.dataset.date ? d.date : '';
+    const r = await run('adopt_folder', { folder: form.dataset.folder, title: d.title || '', date, project: d.project || '', status: d.open ? 'active' : 'complete' });
+    state.flash = msg('ok', `Adopted as <b>${esc(r.id)}</b>. The old folder is now in <span class="path">${esc(r.folder)}/2-data_raw/</span>. Write what the experiment was for, and correct the title or dates if they are wrong.`)
+      + r.warnings.map((w) => msg('warn', esc(w))).join('');
+    await go(`#/note/${r.id}`);
+  },
   filter: (d) => go('#/experiments?' + new URLSearchParams(Object.entries(d).filter(([, v]) => v))),
   export: (d) => go('#/export?' + new URLSearchParams({ scope: d.scope, project: d.project || '', ids: d.ids || '', related: d.related ? '1' : '0' })),
-  settings: (d) => {
+  settings: async (d) => {
     const initials = cleanInitials(d.initials);
     if (!initials) {
       state.flash = msg('err', 'Initials are 2 to 4 letters, like JSR.');
@@ -583,6 +676,7 @@ const FORMS = {
     }
     state.person = { initials, researcher: d.researcher || initials };
     try { localStorage.setItem('ai-eln-person', JSON.stringify(state.person)); } catch (e) { /* private mode */ }
+    if (canWrite() && state.kind !== 'practice') await setNotebookOwner(state.store, state.person.researcher, initials);
     state.flash = msg('ok', 'Saved.');
     return go('#/');
   },
@@ -671,10 +765,13 @@ const ACTS = {
   },
   'setup-here': async () => {
     const { store, kind, handle } = state.pending;
-    await ensureVaultDirs(store);
-    if (!(await exists(store, 'AGENTS.md'))) await writeText(store, 'AGENTS.md', AGENTS_MD);
-    state.flash = msg('ok', 'The notebook is set up. Enter your initials under settings, then create your first experiment.');
+    await setUp(store);
+    state.flash = msg('ok', `The notebook is set up.${state.person.initials ? '' : ' Enter your initials under settings, then create your first experiment.'}`);
     await attach(store, kind, { handle: kind === 'folder' ? handle : null });
+  },
+  'open-child': async ({ name }) => {
+    const { handle, kind, readOnly } = state.pending;
+    await openHandle(await handle.getDirectoryHandle(name), kind, { readOnly });
   },
   'cancel-pending': async () => {
     state.pending = null;
@@ -734,6 +831,11 @@ const ACTS = {
   'export-save': async () => {
     const r = await run('export_notes', { ...state.lastExport, save: true });
     state.flash = msg('ok', `Saved to <span class="path">${esc(r.path)}</span>.`);
+    await render();
+  },
+  'folder-save': async ({ raw }) => {
+    const r = await run('export_notes', { ...state.lastExport, format: 'folder', raw: raw !== '0' });
+    state.flash = msg('ok', `Saved <span class="path">${esc(r.path)}/</span> (${r.files} files, ${r.bytes.toLocaleString('en-US')} bytes). Start with the README.md in it.`);
     await render();
   },
   'eln-save': async () => {
@@ -823,6 +925,7 @@ async function start() {
         state.store = new FsAccessStore(handle);
         state.kind = 'folder';
         state.readOnly = readOnly;
+        await usePerson(state.store);
       }
     }
   } catch (e) {

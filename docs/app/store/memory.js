@@ -47,4 +47,19 @@ export class MemoryStore {
   async remove(path) {
     this.files.delete(path);
   }
+
+  async rmdir(path) {
+    const prefix = path + '/';
+    if ([...this.files.keys(), ...this.dirs].some((p) => p.startsWith(prefix))) throw new Error(`folder is not empty: ${path}`);
+    this.dirs.delete(path);
+  }
+
+  async move(from, to) {
+    const f = this.files.get(from);
+    if (!f) throw new Error(`no such file: ${from}`);
+    const i = to.lastIndexOf('/');
+    if (i > 0) await this.mkdir(to.slice(0, i));
+    this.files.set(to, f);
+    this.files.delete(from);
+  }
 }

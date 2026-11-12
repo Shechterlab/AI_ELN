@@ -1,6 +1,6 @@
 /* Finding notes, the lab-meeting brief, and the plain-text export for pasting into a chat. */
 
-import { ElnError, MEETING_TAG, REF_FIELDS } from './schema.js';
+import { ElnError, MEETING_TAG, REF_FIELDS, KIND_DIR } from './schema.js';
 import { sections, ciIn, sortedById } from './vault.js';
 import { cmp, isoDate, daysBefore, validDate, strip, rstrip, words, normpath, joinPath, dirname } from './text.js';
 
@@ -164,8 +164,31 @@ export function buildExport(vault, experiments, { related = true, today = isoDat
 }
 
 /** A short word for file names: the project, the first IDs, the status, or 'export'. */
-export function exportScope({ project = '', experiment_ids = [], status = '' } = {}) {
+export function exportScope({ project = '', experiment_ids = [], status = '', all = false } = {}) {
+  if (all) return 'all';
   if (project) return project;
   if (experiment_ids.length) return experiment_ids.slice(0, 3).join('-');
   return status || 'export';
+}
+
+/** README.md of an export folder: what the folder holds and a table of the experiments. */
+export function exportReadme(experiments, extras, { raw = true, today = isoDate(), labName = 'Lab' } = {}) {
+  const kinds = new Set(extras.map((n) => n.kind));
+  const others = ['protocol', 'sample', 'project'].filter((k) => kinds.has(k)).map((k) => KIND_DIR[k]);
+  const out = [`# Notebook export - ${today}`, '',
+    `${experiments.length} experiment${experiments.length !== 1 ? 's' : ''} from ${labName}, copied out of the lab notebook as ordinary files.`,
+    'The notes are Markdown text and the data files are as they were. No special software is needed to read them.',
+    '', '## What is here', '',
+    '- `all-notes.md`: every note in one file, with an explanation of the IDs and sections at the top. Paste it into an AI chat, or attach it.',
+    '- `Experiments/`: one folder per experiment, laid out as in the notebook (`1-notes`, `2-data_raw`, `3-code`, `4-data_processed`, `5-figures`).'];
+  if (others.length) out.push('- ' + others.map((d) => `\`${d}/\``).join(', ') + ': the records the experiments refer to.');
+  out.push('- `Inventory/`: index tables (CSV) of what is in this folder.', '');
+  if (!raw) out.push('Raw data was left out: each `2-data_raw/` holds only its README. `raw_data_path` in each note says where the raw data is kept.', '');
+  out.push('The folder is laid out like a notebook, so the notebook page and tools can open it.', '', '## Experiments', '',
+    '| ID | Title | Researcher | Project | Status | Started | Completed |', '|---|---|---|---|---|---|---|');
+  for (const e of experiments) {
+    out.push(`| ${e.id} | ${e.get('title')} | ${e.get('researcher')} | ${e.getList('project').join(', ') || '-'} | `
+      + `${e.get('status')} | ${e.get('date_started')} | ${e.get('date_completed') || '-'} |`);
+  }
+  return out.join('\n') + '\n';
 }

@@ -59,6 +59,7 @@ await page.waitForSelector('text=Set up a notebook in');
 check('an empty folder offers to set up a notebook', (await text()).includes('The folder is empty'));
 await click('Set up the notebook here');
 check('home asks for initials on first use', (await text()).includes('First time here'));
+check('with nothing to adopt, Home does not offer it', !(await text()).includes('Adopt older folders'));
 
 await open('#/settings');
 await page.fill('#s-initials', 'jsr');
@@ -180,6 +181,9 @@ await click('Build export');
 const exported = await page.inputValue('textarea.text');
 check('export holds the experiment and what it refers to',
   exported.includes('==== Experiments/JSRe0001_') && exported.includes('==== Protocols/P_WesternBlot.md ====') && exported.includes('==== Samples/JSRa0001.md ===='));
+await click('Save as a folder of plain files');
+check('export as a folder of plain files', (await text()).includes('Exports/export_all_') && (await text()).includes('Start with the README.md'), (await text()).slice(0, 300));
+await page.locator('summary', { hasText: 'For another electronic notebook' }).click();
 const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .eln archive', exact: true }).click()]);
 const elnPath = await dl.path();
 const zip = fs.readFileSync(elnPath);
@@ -244,6 +248,71 @@ await open('#/');
 check('viewer home has no New buttons', !(await text()).includes('New experiment') && (await text()).includes('viewing only'));
 await open('#/edit/JSRe0001');
 check('viewer cannot reach the editor', (await text()).includes('View only') && (await page.locator('textarea').count()) === 0);
+
+/* one folder per person, side by side in a parent folder; an older folder waiting in one of them */
+const labDir = `lab-${Date.now()}`;
+await page.evaluate(async ({ root, files }) => {
+  const top = await navigator.storage.getDirectory();
+  for (const [p, content] of Object.entries(files)) {
+    let dir = await top.getDirectoryHandle(root, { create: true });
+    const parts = p.split('/');
+    for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part, { create: true });
+    const w = await (await dir.getFileHandle(parts[parts.length - 1], { create: true })).createWritable();
+    await w.write(content);
+    await w.close();
+  }
+  localStorage.removeItem('ai-eln-person');
+}, { root: labDir, files: {
+  'Ana Lopez/notebook.md': '---\ntype: notebook\nowner: Ana Lopez\ninitials: AL\nlast_ids: [ALe0006]\n---\n\n# Lab notebook\n',
+  'Ana Lopez/Experiments/2019-03-04_PRMT5 western/scans/gel 1.tif': 'gel',
+  'Ana Lopez/Experiments/2019-03-04_PRMT5 western/notes.txt': 'ran it',
+  'Jorge/Protocols/README.md': 'protocols',
+  'not a notebook/readme.txt': 'x',
+} });
+await page.goto(`${base}/app/?store=opfs&name=${labDir}&view=1`);
+await page.waitForSelector('text=holds 2 notebooks');
+check('a folder of notebooks lists them for viewing, with the owner from notebook.md',
+  (await text()).includes('Ana Lopez (AL)') && (await text()).includes('Jorge/') && !(await text()).includes('not a notebook') && (await page.locator('#c-name').count()) === 0);
+await page.goto(`${base}/app/?store=opfs&name=${labDir}`);
+await page.waitForSelector('text=holds 2 notebooks');
+await shot('choose-notebook');
+await page.locator('a.tile', { hasText: 'Ana Lopez (AL)' }).click();
+await settle();
+await page.waitForSelector('text=Recent experiments');
+check('opening one of them uses the owner named in its notebook.md', (await text()).includes('You are Ana Lopez (AL)') && (await text('#where')).includes('Ana Lopez'), (await text()).slice(0, 200));
+check('Home says an older folder is waiting', (await text()).includes('Adopt older folders') && (await text()).includes('1 folder here is not a record yet'));
+await open('#/check');
+check('Check points an older folder to Adopt', (await text()).includes('Adopt it') && (await page.getByRole('link', { name: 'Adopt older folders' }).count()) === 1);
+await open('#/adopt');
+check('the adopt screen reads the title and date from the folder name',
+  (await page.inputValue('input[name="title"]')) === 'PRMT5 western' && (await page.inputValue('input[name="date"]')) === '2019-03-04');
+await shot('adopt');
+await click('Adopt this folder');
+body = await text();
+await shot('adopted-note');
+check('an adopted folder becomes the next experiment, after the last ID in notebook.md',
+  (await text('h1')).includes('ALe0007') && body.includes('Adopted as ALe0007') && body.includes('is the date in the folder name') && body.includes('2019-03-04') && body.includes('Not written.'), body.slice(0, 300));
+check('its files are listed where they now are, names unchanged', body.includes('2019-03-04_PRMT5 western/scans/gel 1.tif') && body.includes('ALe0007_adopted-files.csv'));
+const adopted = await page.evaluate(async () => {
+  const gone = await window.AIELN.call('adopt_folder', {});
+  const raw = await window.AIELN.call('read_file', { path: 'Experiments/ALe0007_PRMT5-western/2-data_raw/2019-03-04_PRMT5 western/scans/gel 1.tif' });
+  const check = await window.AIELN.call('check_notebook', {});
+  const book = await window.AIELN.call('read_file', { path: 'notebook.md' });
+  return { waiting: gone.folders.length, raw: raw.text, errors: check.errors, book: book.text };
+});
+check('the old folder is gone, the file is intact, the check has no errors, and notebook.md has the new last ID',
+  adopted.waiting === 0 && adopted.raw === 'gel' && adopted.errors === 0 && adopted.book.includes('last_ids: [ALe0007]') && adopted.book.includes('owner: Ana Lopez'), JSON.stringify(adopted));
+await page.goto(`${base}/app/?store=opfs&name=${labDir}`);
+await page.waitForSelector('text=holds 2 notebooks');
+await page.fill('#c-name', 'bad/name');
+await click('Create');
+check('a new notebook folder needs a usable name', (await text()).includes('A folder name cannot'));
+await page.fill('#c-name', 'New Person');
+await click('Create');
+check('a new notebook can be started next to the others', (await text()).includes('The notebook “New Person” is ready') && (await text('#where')).includes('New Person'));
+await page.goto(`${base}/app/?store=opfs&name=${labDir}`);
+await page.waitForSelector('text=holds 3 notebooks');
+check('the new notebook is listed with the others', (await text()).includes('New Person/'));
 
 /* another lab: only lab.yaml differs */
 /* a fresh context without the offline cache, so the substituted lab.yaml is what the page gets */

@@ -10,7 +10,8 @@
      mkdir(path)          -> creates the folder and its parents
 
    Optional: sha256(path) -> hex (a faster native hash), readChunks(path) -> async iterator of Uint8Array,
-   existsOutside(text) -> boolean for a path that is not inside the notebook, remove(path), label.
+   existsOutside(text) -> boolean for a path that is not inside the notebook, remove(path), rmdir(path) for an
+   empty folder, copy(from, to) and move(from, to) for one file without holding it in memory, label.
 
    Three stores ship: memory.js (tests, the try-it mode), fsaccess.js (a folder picked in Chrome or Edge),
    node.js (Node's fs, for the command line and the MCP server). A new backend (a sync service's API, a
@@ -65,4 +66,62 @@ export async function writeTextIfChanged(store, path, text) {
   if (old === text) return false;
   await writeText(store, path, text);
   return true;
+}
+
+/** Copy one file. A store's own copy() is used when it has one (no need to hold the file in memory). */
+export async function copyFile(store, from, to) {
+  if (typeof store.copy === 'function') return store.copy(from, to);
+  return store.writeBytes(to, await store.readBytes(from));
+}
+
+/** Move one file: the store's own move(), or copy and then remove. */
+export async function moveFile(store, from, to) {
+  if (typeof store.move === 'function') return store.move(from, to);
+  await copyFile(store, from, to);
+  return store.remove(from);
+}
+
+/** Remove a folder if it is empty. True when it is gone. */
+export async function removeDir(store, path) {
+  if (typeof store.rmdir !== 'function') return false;
+  try {
+    await store.rmdir(path);
+  } catch (e) {
+    return false;
+  }
+  return !(await exists(store, path));
+}
+
+/** Every folder (parents first) and every file under dir, as paths relative to dir. */
+export async function walkTree(store, dir) {
+  const dirs = [];
+  const files = [];
+  async function visit(rel) {
+    const entries = ((await store.list(joinPath(dir, rel))) || []).slice().sort((a, b) => cmpPath(a.name, b.name));
+    for (const e of entries) {
+      const p = joinPath(rel, e.name);
+      if (e.kind === 'dir') {
+        dirs.push(p);
+        await visit(p);
+      } else files.push(p);
+    }
+  }
+  await visit('');
+  return { dirs, files: files.sort(cmpPath) };
+}
+
+/** A folder inside a store, seen as a store of its own (an export folder, one notebook among several). */
+export class SubStore {
+  constructor(store, prefix) {
+    this.store = store;
+    this.prefix = prefix;
+    this.label = `${store.label || ''}/${prefix}`;
+  }
+
+  at(path) { return path ? `${this.prefix}/${path}` : this.prefix; }
+  list(dir) { return this.store.list(this.at(dir)); }
+  stat(path) { return this.store.stat(this.at(path)); }
+  readBytes(path) { return this.store.readBytes(this.at(path)); }
+  writeBytes(path, bytes) { return this.store.writeBytes(this.at(path), bytes); }
+  mkdir(path) { return this.store.mkdir(this.at(path)); }
 }

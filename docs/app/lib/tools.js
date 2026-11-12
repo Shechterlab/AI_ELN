@@ -10,19 +10,23 @@
 
 import { ElnError, KINDS, ID_FIELD, SUBFOLDERS, STATUS, SAMPLE_TYPES, MEETING_TAG, REQUIRED, DATE_FIELDS } from './schema.js';
 import { parseFrontMatter, setHeaderField, csvItems } from './frontmatter.js';
-import { loadVault, ciIn, sortedById, sections } from './vault.js';
+import { loadVault, ciIn, sortedById, writeSection } from './vault.js';
 import { templateKeys } from './templates.js';
 import { validateVault, formatIssues, countIssues } from './validate.js';
 import { writeIndex, formatIndexResult } from './inventory.js';
-import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder } from './create.js';
+import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder, readNotebook } from './create.js';
+import { adoptFolder, adoptableFolders } from './adopt.js';
+import { exportFolder } from './exportfolder.js';
 import { findNotes, buildReport, buildExport, selectForExport, exportScope } from './query.js';
 import { completeExperiment, verifyExperiments, formatVerify, renderSnapshot } from './closeout.js';
 import { buildEln } from './elnfile.js';
 import { CONVENTIONS_SUMMARY } from './conventions.js';
+
+export { writeSection };
 import { loadLab } from './lab.js';
 import { cleanInitials } from './names.js';
 import { isoDate, splitlines, strip, normpath, decodeText, fromBase64, toBase64, utf8, cmp, validDate, pyRepr } from './text.js';
-import { writeText } from '../store/base.js';
+import { writeText, walkFiles } from '../store/base.js';
 
 const str = (description, extra = {}) => ({ type: 'string', description, ...extra });
 /** one line of text for a header field */
@@ -31,15 +35,22 @@ const bool = (description) => ({ type: 'boolean', description });
 const list = (description) => ({ type: 'array', items: { type: 'string' }, description });
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
-function person(ctx, args) {
-  const own = (ctx.person && cleanInitials(ctx.person.initials || '')) || '';
+async function person(ctx, args) {
+  let own = (ctx.person && cleanInitials(ctx.person.initials || '')) || '';
+  let ownName = (ctx.person && ctx.person.researcher) || '';
+  if (!own) {
+    /* a personal notebook says whose it is */
+    const known = await readNotebook(ctx.store);
+    own = cleanInitials(typeof known.initials === 'string' ? known.initials : '');
+    ownName = own && typeof known.owner === 'string' ? known.owner : '';
+  }
   if (args.initials && !cleanInitials(args.initials)) {
     throw new ElnError(`initials must be 2 to 4 letters, e.g. JSR (got ${pyRepr(args.initials)})`, 'bad_initials');
   }
   const initials = cleanInitials(args.initials || '') || own;
   if (!initials) throw new ElnError('initials are needed (2 to 4 letters, e.g. JSR): pass "initials", or set them in the notebook settings', 'no_initials');
   /* someone else's initials do not get the configured person's name */
-  const researcher = args.researcher || (initials === own ? ctx.person.researcher : '') || initials;
+  const researcher = args.researcher || (initials === own ? ownName : '') || initials;
   return { initials, researcher };
 }
 
@@ -66,13 +77,14 @@ const brief = (n) => ({
   ...(n.kind === 'project' ? { lead: n.get('lead') } : {}),
 });
 
-/** The files of an experiment, by subfolder (READMEs and hidden files left out). */
+/** The files of an experiment, by subfolder, as paths inside the subfolder. Files in folders below it
+    (an adopted folder in 2-data_raw, for one) are included; the subfolder's README and hidden files are not. */
 export async function experimentFiles(store, note) {
   const out = {};
   for (const sub of SUBFOLDERS) {
-    const entries = (await store.list(`${note.folder}/${sub}`)) || [];
-    out[sub] = entries.filter((e) => e.kind === 'file' && !e.name.startsWith('.') && e.name.toLowerCase() !== 'readme.md')
-      .map((e) => e.name).sort(cmp);
+    const dir = `${note.folder}/${sub}`;
+    out[sub] = (await walkFiles(store, dir)).map((p) => p.slice(dir.length + 1))
+      .filter((rel) => rel.toLowerCase() !== 'readme.md' && !rel.split('/').some((part) => part.startsWith('.')));
   }
   return out;
 }
@@ -112,30 +124,6 @@ export async function saveNoteText(store, vault, id, input) {
   return note.path;
 }
 
-/** Replace or extend the text under one '## ' heading. Returns the new note text. */
-export function writeSection(text, section, content, mode = 'replace') {
-  const lines = splitlines(text);
-  const wanted = strip(String(section)).toLowerCase();
-  const start = lines.findIndex((l) => l.startsWith('## ') && strip(l.slice(3)).toLowerCase() === wanted);
-  if (start < 0) {
-    throw new ElnError(`the note has no '## ${strip(String(section))}' section. Its sections are: ${[...sections(text).keys()].join(', ')}`, 'no_section');
-  }
-  if (splitlines(String(content)).some((l) => /^#{1,2}\s/.test(l))) {
-    throw new ElnError("the text contains a line starting with '# ' or '## ', which would start a new section. Use '### ' for a sub-heading", 'bad_content');
-  }
-  let end = lines.findIndex((l, i) => i > start && l.startsWith('## '));
-  if (end < 0) end = lines.length;
-  const fresh = splitlines(strip(String(content)));
-  let middle;
-  if (mode === 'append') {
-    const kept = lines.slice(start + 1, end);
-    while (kept.length && !strip(kept[kept.length - 1])) kept.pop();
-    middle = [...kept, '', ...fresh, ''];
-    if (!strip(kept.join(''))) middle = ['', ...fresh, ''];
-  } else middle = ['', ...fresh, ''];
-  return [...lines.slice(0, start + 1), ...middle, ...lines.slice(end)].join('\n').replace(/\n+$/, '') + '\n';
-}
-
 const CREATE_COMMON = {
   initials: str('Initials of the researcher (2 to 4 letters). Defaults to the configured person.'),
   researcher: str('Full name of the researcher. Defaults to the configured person.'),
@@ -153,7 +141,7 @@ export const TOOLS = [
   {
     name: 'notebook_overview',
     title: 'Overview',
-    description: 'Counts of experiments, samples, protocols, and projects; the project and protocol IDs; experiments flagged for lab meeting.',
+    description: 'Counts of experiments, samples, protocols, and projects; the project and protocol IDs; experiments flagged for lab meeting; older folders that are not records yet (see adopt_folder).',
     readOnly: true,
     inputSchema: obj({}),
     handler: async (ctx) => {
@@ -171,6 +159,7 @@ export const TOOLS = [
         notes_with_problems: v.allNotes().filter((n) => n.problems.length).map((n) => n.path),
         researchers: [...new Set(exps.map((e) => e.get('researcher')).filter(Boolean))].sort(cmp),
         flagged_for_meeting: exps.filter((e) => ciIn(MEETING_TAG, e.getList('tags'))).map((e) => e.id),
+        folders_not_yet_records: (await adoptableFolders(ctx.store)).map((f) => f.path),
       };
     },
   },
@@ -247,7 +236,7 @@ export const TOOLS = [
       raw_data_path: line('Where the raw data is, if not in 2-data_raw.'),
       ...CREATE_COMMON,
     }, ['title']),
-    handler: async (ctx, a) => createExperiment(ctx.store, { ...a, ...person(ctx, a), today: ctx.today || isoDate() }),
+    handler: async (ctx, a) => createExperiment(ctx.store, { ...a, ...(await person(ctx, a)), today: ctx.today || isoDate() }),
   },
   {
     name: 'create_sample',
@@ -261,7 +250,7 @@ export const TOOLS = [
       tags: str('Tags, comma-separated.'),
       ...CREATE_COMMON,
     }, ['sample_type', 'title']),
-    handler: async (ctx, a) => createSample(ctx.store, { ...a, initials: person(ctx, a).initials, today: ctx.today || isoDate() }),
+    handler: async (ctx, a) => createSample(ctx.store, { ...a, initials: (await person(ctx, a)).initials, today: ctx.today || isoDate() }),
   },
   {
     name: 'create_protocol',
@@ -287,6 +276,28 @@ export const TOOLS = [
     handler: async (ctx, a) => createProject(ctx.store, {
       ...a, lead: a.lead || (ctx.person && ctx.person.researcher) || '', today: ctx.today || isoDate(),
     }),
+  },
+  {
+    name: 'adopt_folder',
+    title: 'Adopt an older folder',
+    description: 'Make an experiment record out of an older folder that is inside the notebook folder (for example a folder dropped into Experiments/). The folder is moved, exactly as it is, into the new experiment\'s 2-data_raw/; nothing in it is renamed or changed. A CSV in 1-notes/ lists every file with its size and last-modified time. The title and dates are read from the folder name and the file dates unless given. Call with no folder to list the folders that are not records yet.',
+    readOnlyWhen: (a) => !a.folder,
+    inputSchema: obj({
+      folder: str('Path of the old folder, relative to the notebook folder, e.g. "Experiments/2019-03-04 PRMT5 western". Leave out to list the candidates.'),
+      title: line('Title of the record. Default: read from the folder name.'),
+      date: str('Start date, YYYY-MM-DD. Default: a date in the folder name, else the oldest file date.'),
+      project: line('Project ID(s), comma-separated.'),
+      status: str('complete (default) also writes the snapshot and the manifest of file hashes; active leaves the record open.', { enum: ['complete', 'active'], default: 'complete' }),
+      copy: bool('Copy the folder and leave the original where it is. Default false: the folder is moved.'),
+      ...CREATE_COMMON,
+    }),
+    handler: async (ctx, a) => {
+      if (!a.folder) return { folders: await adoptableFolders(ctx.store) };
+      return adoptFolder(ctx.store, {
+        folder: insidePath(a.folder), title: a.title || '', date: a.date || '', project: a.project || '', status: a.status || 'complete',
+        copy: !!a.copy, ...(await person(ctx, a)), today: ctx.today || isoDate(), lab: await loadLab(ctx.store, ctx.labText),
+      });
+    },
   },
   {
     name: 'update_note',
@@ -423,16 +434,17 @@ export const TOOLS = [
   },
   {
     name: 'export_notes',
-    readOnlyWhen: (a) => !a.save && ((a.format || 'md') !== 'eln' || !!a.return_bytes),
+    readOnlyWhen: (a) => !a.save && ((a.format || 'md') === 'md' || (a.format === 'eln' && !!a.return_bytes)),
     title: 'Export',
-    description: 'Bundle experiments and the notes they refer to. format "md" gives one Markdown document to paste into a chat. format "eln" writes a .eln archive (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import. Choose what to export with project, experiment_ids, status, or all.',
+    description: 'Bundle experiments and the notes they refer to. format "md" gives one Markdown document to paste into a chat. format "folder" writes a folder of plain files into Exports/: the notes and their data files in the notebook layout, a README, one file with every note, and an index. format "eln" writes a .eln archive (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import. Choose what to export with project, experiment_ids, status, or all.',
     inputSchema: obj({
       project: str('Export every experiment of this project.'),
       experiment_ids: list('Export these experiments.'),
       status: str('Export every experiment with this status, e.g. active.'),
       all: bool('Export every experiment.'),
       related: bool('Include the protocols, samples, and projects the experiments refer to. Default true.'),
-      format: str('md or eln.', { enum: ['md', 'eln'], default: 'md' }),
+      format: str('md, folder, or eln.', { enum: ['md', 'folder', 'eln'], default: 'md' }),
+      raw: bool('For folder: include what is in 2-data_raw/. Default true.'),
       save: bool('Save into Inventory/ (always true for eln unless return_bytes is set).'),
       return_bytes: bool('For eln: return the archive as base64 instead of saving it.'),
     }),
@@ -487,6 +499,9 @@ async function runExport(ctx, a) {
   const lab = await loadLab(ctx.store, ctx.labText);
   const stem = `export_${exportScope(choice)}_${today.replaceAll('-', '')}`;
   const ids = experiments.map((e) => e.id);
+  if (a.format === 'folder') {
+    return exportFolder(ctx.store, v, experiments, { dest: `Exports/${stem}`, related, raw: a.raw !== false, today, lab });
+  }
   if ((a.format || 'md') === 'eln') {
     const { bytes, files } = await buildEln(ctx.store, v, experiments, { related, today, rootName: stem, lab });
     if (a.return_bytes) return { experiments: ids, files, bytes, name: `${stem}.eln` };

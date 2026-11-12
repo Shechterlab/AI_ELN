@@ -5,13 +5,13 @@ import {
   ElnError, SUBFOLDERS, VAULT_DIRS, RE_INITIALS, RE_EXP_FOLDER, RE_PROTOCOL_NAME, RE_PROJECT_ID,
   SAMPLE_LETTERS, SAMPLE_TYPES, NAMED_SUBFOLDERS,
 } from './schema.js';
-import { parseFrontMatter, parseHeaderLines, formatValue, csvItems } from './frontmatter.js';
+import { parseFrontMatter, formatValue, quoteIfNeeded, setHeaderField, csvItems } from './frontmatter.js';
 import { renderTemplate } from './templates.js';
 import { slugify, nextNumber, fileNameFor } from './names.js';
 import { loadVault } from './vault.js';
 import { writeIndex } from './inventory.js';
-import { isoDate, pyRepr, strip, rstrip, stem, validDate, utf8, oneLine, stripBom, splitlines, decodeText } from './text.js';
-import { writeText, writeTextIfChanged, readText, exists, isFile, isDir } from '../store/base.js';
+import { isoDate, pyRepr, strip, rstrip, stem, validDate, utf8, oneLine, decodeText, cmp } from './text.js';
+import { writeText, readText, exists, isFile, isDir } from '../store/base.js';
 
 export const SUBFOLDER_READMES = {
   '1-notes': 'Your experiment note `{ID}.md` lives here, next to the protocol snapshot(s) `{ID}_P_...md`\n'
@@ -63,47 +63,82 @@ async function headerId(store, path, key) {
   return typeof v === 'string' ? v : null;
 }
 
-/* ---- People/{INITIALS}.yaml: who the initials are, and the last serial numbers they used ---- */
+/* ---- notebook.md: one small note at the top of a notebook folder ---- */
 
-const PERSON_HEAD = '# One file per person: who these initials are, and the last serial numbers used.\n'
-  + '# The notebook tools update it when a record is created. A number recorded here is not\n'
-  + '# given out again, even if the folder it belonged to is deleted. You may add lines of\n'
-  + '# your own (orcid, email, role); they are kept.\n';
-const PERSON_KEYS = ['initials', 'name', 'last_experiment', ...Object.keys(SAMPLE_LETTERS).map((l) => `last_sample_${l}`)];
-export const personPath = (initials) => `People/${initials}.yaml`;
+export const NOTEBOOK_FILE = 'notebook.md';
+const NOTEBOOK_BODY = `
+# Lab notebook
 
-export async function readPerson(store, initials) {
+This folder is a plain-text lab notebook. Each experiment is a folder in
+\`Experiments/\` with a Markdown note. Protocols, samples, and projects are
+Markdown notes in their own folders. \`Inventory/\` is an index made from them.
+
+The lines at the top are kept by the notebook tools. \`owner\` and \`initials\`
+say whose notebook this is; correct them if they are wrong. \`last_ids\` holds
+the last ID given out for each kind of record, so a number is not used twice
+even if a folder is deleted. Do not lower them.
+`;
+
+export function notebookText(owner = '', initials = '', lastIds = []) {
+  const lines = ['type: notebook', `owner: ${quoteIfNeeded(owner)}`, `initials: ${initials}`, `last_ids: ${formatValue([...lastIds])}`];
+  return '---\n' + lines.map(rstrip).join('\n') + '\n---\n' + NOTEBOOK_BODY;
+}
+
+/** The header of notebook.md, or {} when there is none. */
+export async function readNotebook(store) {
   try {
-    if (!(await isFile(store, personPath(initials)))) return {};
-    return { ...parseHeaderLines(splitlines(stripBom(decodeText(await store.readBytes(personPath(initials)), true)))).fields };
+    if (!(await isFile(store, NOTEBOOK_FILE))) return {};
+    return { ...parseFrontMatter(decodeText(await store.readBytes(NOTEBOOK_FILE), true)).fields };
   } catch (e) {
     return {};
   }
 }
 
-async function lastSerial(store, initials, key) {
-  const value = (await readPerson(store, initials))[key];
-  return typeof value === 'string' && /^[0-9]+$/.test(value) ? parseInt(value, 10) : 0;
+async function lastIds(store) {
+  const value = (await readNotebook(store)).last_ids;
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
-/** Write the serial just used into the person's file. Returns a warning when the file says these
-    initials belong to someone with a different name. */
-export async function recordSerial(store, initials, key, number, rawName = '') {
-  const person = await readPerson(store, initials);
-  let warning = null;
-  const known = typeof person.name === 'string' ? person.name : '';
-  const name = strip(oneLine(rawName));
-  if (name && name !== initials && known && known !== initials && known.toLowerCase() !== name.toLowerCase()) {
-    warning = `the initials ${initials} belong to ${known} (People/${initials}.yaml), and this record was made as ${name}. `
-      + 'If you are two people, one of you needs different initials';
+/** The highest number notebook.md remembers for these initials and this kind of record. */
+async function lastIssued(store, initials, letter) {
+  const re = new RegExp(`^${initials}${letter}(\\d{4})$`);
+  for (const known of await lastIds(store)) {
+    const m = re.exec(known);
+    if (m) return parseInt(m[1], 10);
   }
-  person.initials = initials;
-  person.name = known && known !== initials ? known : (name || known || initials);
-  person[key] = String(Math.max(number, await lastSerial(store, initials, key)));
-  const keys = [...PERSON_KEYS.filter((k) => k in person), ...Object.keys(person).filter((k) => !PERSON_KEYS.includes(k))];
-  const text = PERSON_HEAD + keys.map((k) => rstrip(`${k}: ${formatValue(person[k])}`) + '\n').join('');
-  await writeTextIfChanged(store, personPath(initials), text);
-  return warning;
+  return 0;
+}
+
+async function updateNotebook(store, values) {
+  if (!(await exists(store, NOTEBOOK_FILE))) {
+    const current = { owner: '', initials: '', last_ids: [], ...values };
+    await writeText(store, NOTEBOOK_FILE, notebookText(String(current.owner), String(current.initials), current.last_ids));
+    return;
+  }
+  try {
+    let text = decodeText(await store.readBytes(NOTEBOOK_FILE), true);
+    for (const [key, value] of Object.entries(values)) text = setHeaderField(text, key, value, NOTEBOOK_FILE);
+    await writeText(store, NOTEBOOK_FILE, text);
+  } catch (e) { /* a notebook.md someone broke must not stop a record from being made */ }
+}
+
+/** Remember an ID that was just given out, in notebook.md. */
+export async function recordId(store, newId) {
+  const prefix = newId.slice(0, -4);
+  const known = await lastIds(store);
+  const same = known.filter((x) => x.slice(0, -4) === prefix && /^[0-9]{4}$/.test(x.slice(-4))).map((x) => parseInt(x.slice(-4), 10));
+  const number = Math.max(parseInt(newId.slice(-4), 10), ...same);
+  const ids = [...known.filter((x) => x.slice(0, -4) !== prefix), `${prefix}${String(number).padStart(4, '0')}`].sort(cmp);
+  if (ids.join('\n') !== known.join('\n') || !(await exists(store, NOTEBOOK_FILE))) await updateNotebook(store, { last_ids: ids });
+}
+
+/** Write whose notebook this is, where notebook.md does not say yet. */
+export async function setNotebookOwner(store, owner, initials) {
+  const known = await readNotebook(store);
+  const values = {};
+  if (owner && !known.owner) values.owner = strip(oneLine(owner));
+  if (initials && !known.initials) values.initials = initials;
+  if (Object.keys(values).length || !(await exists(store, NOTEBOOK_FILE))) await updateNotebook(store, values);
 }
 
 export async function nextExperimentId(store, initials) {
@@ -118,7 +153,7 @@ export async function nextExperimentId(store, initials) {
       if (id) seen.push(id);
     }
   }
-  const number = Math.max(nextNumber(seen, initials), (await lastSerial(store, initials, 'last_experiment')) + 1);
+  const number = Math.max(nextNumber(seen, initials), (await lastIssued(store, initials, 'e')) + 1);
   return `${initials}e${String(number).padStart(4, '0')}`;
 }
 
@@ -130,7 +165,7 @@ export async function nextSampleId(store, initials, letter) {
     const id = await headerId(store, `Samples/${f.name}`, 'sample_id');
     if (id) seen.push(id);
   }
-  const number = Math.max(nextNumber(seen, initials, letter), (await lastSerial(store, initials, `last_sample_${letter}`)) + 1);
+  const number = Math.max(nextNumber(seen, initials, letter), (await lastIssued(store, initials, letter)) + 1);
   return `${initials}${letter}${String(number).padStart(4, '0')}`;
 }
 
@@ -186,8 +221,7 @@ export async function createExperiment(store, {
     RELATED: related || '', TAGS: tags || '',
   }, firstType));
   const result = { id: expId, path: notePath, folder, extra: [], warnings: [] };
-  const sameInitials = await recordSerial(store, initials, 'last_experiment', parseInt(expId.slice(-4), 10), researcher || '');
-  if (sameInitials) result.warnings.push(sameInitials);
+  await recordId(store, expId);
   for (const p of csvItems(project)) {
     if (!(await exists(store, `Projects/${p}.md`))) result.warnings.push(`project ${p} has no page in Projects/ yet (create it with New project)`);
   }
@@ -230,7 +264,7 @@ export async function createSample(store, { initials, sample_type, title, source
     SAMPLE_ID: sampleId, SAMPLE_TYPE: stype, TITLE: strip(title), DATE: today,
     SOURCE: source || '', STORAGE: storage || '', TAGS: tags || '',
   }));
-  await recordSerial(store, initials, `last_sample_${letter}`, parseInt(sampleId.slice(-4), 10));
+  await recordId(store, sampleId);
   if (index) await reindex(store);
   return { id: sampleId, path, extra: [], warnings: [] };
 }

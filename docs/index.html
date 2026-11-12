@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title data-lab="{product_name} · {lab_name}">Plain-text lab notebook · Shechter Lab</title>
   <meta name="application-name" content="Plain-text lab notebook">
-  <meta name="description" content="A lab notebook kept as plain files in a shared folder. Each experiment has an ID, a folder, and a Markdown note. A page in your browser creates the files in your own folder and checks the naming conventions.">
+  <meta name="description" content="A lab notebook kept as plain files in a folder of your own. Each experiment has an ID, a folder, and a Markdown note. A page in your browser creates the files in your own folder and checks the naming conventions.">
   <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +46,7 @@
 
     <div class="wrap hero-grid">
       <div>
-        <h1>A lab notebook kept as plain files in a shared folder</h1>
+        <h1>A lab notebook kept as plain files in a folder of your own</h1>
         <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You fill in a form in your browser, and the folders and files are created in your own folder. It needs no account or server. In Chrome or Edge it needs no installation. The notes open in any plain-text editor.</p>
         <div class="cta">
           <a class="btn" href="app/">Open the notebook</a>
@@ -220,7 +220,7 @@ has not been blotted directly.</pre>
           <div class="card"><h3>Convention check</h3><p><em>Check</em> reads every folder and note and lists misnamed files, missing fields, and IDs that do not match anything.</p></div>
           <div class="card"><h3>Read-only viewing and printing</h3><p>Anyone in the lab can open a notebook with <em>View a notebook</em>, which cannot change it. <em>Print / save as PDF</em> prints a note with its figures, file list, checksum, page numbers, and signature lines.</p></div>
           <div class="card"><h3>Lab meeting brief</h3><p>Flag an experiment for lab meeting. <em>Meeting brief</em> collects the objective, results, and decision from each flagged experiment.</p></div>
-          <div class="card"><h3>Standard export</h3><p><em>Export</em> makes text to paste into ChatGPT, or a <code>.eln</code> archive, the exchange format read by eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog.</p></div>
+          <div class="card"><h3>Export</h3><p><em>Export</em> makes one text file to paste into ChatGPT, or a folder of plain files with a README and an index. A <code>.eln</code> archive is there for eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog.</p></div>
         </div>
 
         <div class="table-wrap" style="margin-top:28px">
@@ -229,7 +229,7 @@ has not been blotted directly.</pre>
             <tbody>
               <tr><td>Readable without the software</td><td class="yes">Yes</td><td class="no">After export</td><td class="yes">Yes</td></tr>
               <tr><td>Works offline</td><td class="yes">Yes</td><td class="no">Depends on the product</td><td class="yes">Yes</td></tr>
-              <tr><td>Cost</td><td class="yes">None beyond the shared drive</td><td class="no">License or a server</td><td class="yes">None</td></tr>
+              <tr><td>Cost</td><td class="yes">None beyond the storage you already have</td><td class="no">License or a server</td><td class="yes">None</td></tr>
               <tr><td>Same structure for every experiment</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
               <tr><td>Checks naming and missing fields</td><td class="yes">Yes</td><td class="no">Depends on the product</td><td class="no">No</td></tr>
               <tr><td>AI tools can read notes and cite experiment IDs</td><td class="yes">Yes</td><td class="no">Depends on the vendor</td><td class="no">No consistent structure</td></tr>
@@ -283,12 +283,14 @@ has not been blotted directly.</pre>
           <details><summary>Where does large data go?</summary><p>Large data stays on institutional storage and the note records the location. The experiment folder holds notes, small tables, figures, and scripts.</p></details>
           <details><summary>Does it work with Dropbox and OneDrive?</summary><p>Yes, either one, as long as its desktop app syncs the notebook folder to your computer. The page writes ordinary files into that folder and the sync app does the rest. The Dropbox or OneDrive website alone is not enough.</p></details>
           <details><summary>What if two people edit the same note?</summary><p>The sync service keeps both copies and marks one as a conflict. <em>Check</em> lists conflict copies; open both and keep one. Experiment IDs include your initials, so two people cannot be assigned the same ID.</p></details>
-          <details><summary>Is it private?</summary><p>The page reads and writes the files in the folder you choose and does not send them anywhere. The notes are as private as the shared folder. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
+          <details><summary>Is it private?</summary><p>The page reads and writes the files in the folder you choose and does not send them anywhere. The notes are as private as the folder they are in. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
           <details><summary>Can other people read my notebook without changing it?</summary><p>Yes. In the notebook page they click <em>View a notebook (read-only)</em> and choose the folder; the page then asks only for permission to view and hides every button that changes something. To make the folder view-only in every program, share it as "can view" in Dropbox or OneDrive.</p></details>
           <details><summary>Can I print a note or keep a PDF?</summary><p>Yes. <em>Print / save as PDF</em> on a note prints it with its figures, the list of files, the checksum of the note, page numbers, and lines for signatures. <em>Mark complete</em> also saves the same page as an HTML file next to the note.</p></details>
           <details><summary>Can another lab use this?</summary><p>Yes. Copy the repository, edit <code>docs/lab.yaml</code> (lab name, links, colours, fonts), and replace the logo. The website, the notebook page, and the printouts all read that one file.</p></details>
           <details><summary>What about LabArchives?</summary><p>LabArchives remains the official archive. <em>Mark complete</em> saves a single HTML file with the figures embedded. Print it to PDF and upload it under the same experiment ID.</p></details>
           <details><summary>What if we stop using it?</summary><p>The folder of text files and figures stays usable without the tools. The <code>.eln</code> export can be imported into other notebook systems.</p></details>
+          <details><summary>What about the folders I already have?</summary><p>Start the notebook in the folder where they are, or put them into it. Nothing is changed until you choose <em>Adopt</em> for a folder. It then gets an experiment ID and a note, and the folder is moved, as it is, into that experiment's raw-data folder.</p></details>
+          <details><summary>Does the lab need one shared notebook?</summary><p>No. Each person keeps a notebook folder of their own. If the folders sit side by side in a shared folder, the page lists them, and anyone with access can open one for viewing.</p></details>
         </div>
       </div>
     </section>
@@ -300,7 +302,7 @@ has not been blotted directly.</pre>
           <h2>Getting started</h2>
           <h3>In Chrome or Edge: nothing to install</h3>
           <ol class="plain">
-            <li><b>Find the lab's notebook folder</b> in your Dropbox or OneDrive folder on this computer. To start a new notebook, make an empty folder there.</li>
+            <li><b>Choose a folder for your notebook</b> in your Dropbox or OneDrive folder on this computer. An empty folder works, and so does one that already holds your work.</li>
             <li><b><a href="app/">Open the notebook page</a></b> and click <em>Open notebook folder</em>.</li>
             <li><b>Choose the folder</b> and allow the page to edit it. The browser asks once.</li>
             <li><b>Enter your initials and name</b> under settings. Then click <em>New experiment</em>.</li>
@@ -313,14 +315,14 @@ has not been blotted directly.</pre>
             <button type="button" role="tab" data-os="windows" aria-selected="false">Windows</button>
           </div>
           <ol class="plain" data-os-panel="mac">
-            <li><b>Open the lab's notebook folder</b> in your Dropbox or OneDrive. (Setting it up for the lab? <a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a>, unzip it, and move it into the shared drive.)</li>
+            <li><b><a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a></b>, unzip it, and put it in your Dropbox or OneDrive. It holds the tools, and your notebook is kept in it unless you name another folder.</li>
             <li><b>Open the <code>launchers</code> folder</b> and right-click <em>Open ELN</em>, then choose Open. macOS asks once whether you trust it.</li>
             <li><b>If macOS offers to install developer tools</b>, click Install and wait a few minutes. This installs Python.</li>
             <li><b>Enter your initials and name</b> when the page asks. Then click <em>New experiment</em>.</li>
           </ol>
           <ol class="plain" data-os-panel="windows" hidden>
             <li><b>Install Python</b> from <a href="https://www.python.org/downloads/">python.org</a>, once. Tick <em>Add python.exe to PATH</em> on the first screen.</li>
-            <li><b>Open the lab's notebook folder</b> in your Dropbox or OneDrive. (Setting it up for the lab? <a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a>, unzip it, and move it into the shared drive.)</li>
+            <li><b><a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a></b>, unzip it, and put it in your Dropbox or OneDrive. It holds the tools, and your notebook is kept in it unless you name another folder.</li>
             <li><b>Open the <code>launchers</code> folder</b> and double-click <em>Open ELN</em>.</li>
             <li><b>Enter your initials and name</b> when the page asks. Then click <em>New experiment</em>.</li>
           </ol>

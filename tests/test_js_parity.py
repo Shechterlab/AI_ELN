@@ -6,6 +6,7 @@ runs one operation through Python and through Node and compares the results byte
 created, the validator's messages, the index, the brief, the export, the snapshot and the manifest.
 The tests are skipped when Node is not installed.
 """
+import calendar
 import hashlib
 import importlib.util
 import io
@@ -18,7 +19,7 @@ import tempfile
 import unittest
 import zipfile
 import zlib
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date as real_date
 from pathlib import Path
 
@@ -59,6 +60,23 @@ def tool(root, name, args=None, text=False, initials="", researcher="", ok_codes
     return out.stdout if text else json.loads(out.stdout)
 
 
+def run_cli(*argv):
+    """scripts/eln.py in-process with no saved settings: (exit code, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    saved = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith("AI_ELN_")}
+    os.environ["AI_ELN_CONFIG"] = os.path.join(tempfile.gettempdir(), "ai-eln-no-such-settings.json")
+    try:
+        with redirect_stdout(out), redirect_stderr(err):
+            try:
+                code = eln.main(list(argv))
+            except SystemExit as e:
+                code = e.code
+    finally:
+        del os.environ["AI_ELN_CONFIG"]
+        os.environ.update(saved)
+    return code, out.getvalue(), err.getvalue()
+
+
 def tree(root: Path):
     """{relative path: bytes} for every file under root."""
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
@@ -90,6 +108,8 @@ class ParityCase(unittest.TestCase):
         for extra in ("README.md", "PILOT.md"):
             (dst / extra).unlink()
         return dst
+
+    cli = staticmethod(run_cli)
 
     def assertSameTree(self, a: Path, b: Path):
         ta, tb = tree(a), tree(b)
@@ -469,7 +489,7 @@ class TestOperations(ParityCase):
                 pass
         self.assertSameTree(py, node)
 
-    def test_serial_numbers_are_remembered_per_person(self):
+    def test_notebook_md_remembers_the_last_ids(self):
         py, node = self.tmp / "py", self.tmp / "js"
         for root in (py, node):
             root.mkdir()
@@ -477,28 +497,162 @@ class TestOperations(ParityCase):
         a_js = tool(node, "create_experiment", {"title": "first", "initials": "ZZ", "researcher": "Zed Zed"})
         eln.create_sample(py, "ZZ", "antibody", "ab one")
         tool(node, "create_sample", {"sample_type": "antibody", "title": "ab one", "initials": "ZZ"})
-        self.assertEqual((py / "People" / "ZZ.yaml").read_text(encoding="utf-8").splitlines()[-4:],
-                         ["initials: ZZ", "name: Zed Zed", "last_experiment: 1", "last_sample_a: 1"])
-        # a line the person added is kept
+        self.assertEqual((py / "notebook.md").read_text(encoding="utf-8").splitlines()[:6],
+                         ["---", "type: notebook", "owner:", "initials:", "last_ids: [ZZa0001, ZZe0001]", "---"])
+        self.assertFalse((py / "People").exists())
+        # the owner writes their name in; the tools keep it, and use it when nobody else is named
         for root in (py, node):
-            with open(root / "People" / "ZZ.yaml", "a", encoding="utf-8", newline="\n") as f:
-                f.write("orcid: 0000-0002-1825-0097\n")
+            text = (root / "notebook.md").read_text(encoding="utf-8").replace("owner:", "owner: Zed Zed").replace("initials:", "initials: ZZ")
+            eln.write_text_lf(root / "notebook.md", text + "\nMy own line stays.\n")
         # the folder and the sample are deleted (or lost by a sync): their numbers are not given out again
         shutil.rmtree(a_py.path.parent.parent)
         shutil.rmtree(node / a_js["folder"])
         (py / "Samples" / "ZZa0001.md").unlink()
         (node / "Samples" / "ZZa0001.md").unlink()
-        b_py = eln.create_experiment(py, "ZZ", "Someone Else", "second")
-        b_js = tool(node, "create_experiment", {"title": "second", "initials": "ZZ", "researcher": "Someone Else"})
-        self.assertEqual((b_py.id, b_js["id"]), ("ZZe0002", "ZZe0002"))
+        code, out, err = self.cli("--root", str(py), "new", "experiment", "--title", "second")
+        self.assertEqual(code, 0, err)
+        b_js = tool(node, "create_experiment", {"title": "second"})
+        self.assertIn("ZZe0002", out)
+        self.assertEqual(b_js["id"], "ZZe0002")
+        self.assertIn("researcher: Zed Zed", (node / b_js["path"]).read_text(encoding="utf-8"))
         self.assertEqual(eln.create_sample(py, "ZZ", "antibody", "ab two").id, "ZZa0002")
-        self.assertEqual(tool(node, "create_sample", {"sample_type": "antibody", "title": "ab two", "initials": "ZZ"})["id"], "ZZa0002")
-        # two names for one set of initials is said out loud
-        self.assertEqual(b_js["warnings"], b_py.warnings)
-        self.assertIn("the initials ZZ belong to Zed Zed", b_py.warnings[0])
-        self.assertIn("orcid: 0000-0002-1825-0097", (node / "People" / "ZZ.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(tool(node, "create_sample", {"sample_type": "antibody", "title": "ab two"})["id"], "ZZa0002")
+        self.assertIn("My own line stays.", (node / "notebook.md").read_text(encoding="utf-8"))
+        self.assertIn("last_ids: [ZZa0002, ZZe0002]", (py / "notebook.md").read_text(encoding="utf-8"))
         self.assertSameTree(py, node)
-        self.assertEqual(py_validate_text(py), tool(node, "check_notebook", text=True, ok_codes=(0, 2)))
+        # a sync copy of notebook.md is pointed out
+        for root in (py, node):
+            shutil.copy(root / "notebook.md", root / "notebook (Zed's conflicted copy 2026-10-03).md")
+        want = py_validate_text(py)
+        self.assertIn("copy of notebook.md made by a sync service", want)
+        self.assertEqual(want, tool(node, "check_notebook", text=True, ok_codes=(0, 2)))
+
+    def test_adopting_an_older_folder(self):
+        py, node = self.tmp / "py", self.tmp / "js"
+        noon = calendar.timegm((2019, 3, 5, 12, 0, 0))
+        for root in (py, node):
+            old = root / "Experiments" / "2019-03-04_PRMT5 western"
+            (old / "scans" / "empty").mkdir(parents=True)
+            (old / "scans" / "gel 1.tif").write_bytes(b"\x00\x01gel")
+            (old / "notes, final.txt").write_text("ran it\n", encoding="utf-8")
+            (old / "README.md").write_text("old readme\n", encoding="utf-8")
+            (old / ".DS_Store").write_bytes(b"x")
+            (root / "blot run").mkdir()
+            (root / "blot run" / "a.csv").write_text("a,b\n", encoding="utf-8")
+            for i, f in enumerate(sorted(p for p in root.rglob("*") if p.is_file())):
+                os.utime(f, (noon + i * 86400, noon + i * 86400))
+        waiting = [p.relative_to(py).as_posix() for p in eln.adoptable_folders(py)]
+        self.assertEqual(waiting, ["Experiments/2019-03-04_PRMT5 western", "blot run"])
+        listed = tool(node, "adopt_folder", {})["folders"]
+        self.assertEqual([f["path"] for f in listed], waiting)
+        self.assertEqual(listed[0], {"path": waiting[0], "title": "PRMT5 western", "date": "2019-03-04"})
+        self.assertEqual(tool(node, "notebook_overview")["folders_not_yet_records"], waiting)
+        self.assertEqual(eln.guess_from_folder_name("20200115-KCl_titration (2)"), ("KCl titration (2)", "2020-01-15"))
+        self.assertEqual(eln.guess_from_folder_name("run 20201341 x"), ("run 20201341 x", ""))
+
+        a_py = eln.adopt_folder(py, py / waiting[0], "ZZ", "Zed Zed", today=TODAY)
+        a_js = tool(node, "adopt_folder", {"folder": waiting[0], "initials": "ZZ", "researcher": "Zed Zed"})
+        self.assertEqual((a_js["id"], a_js["path"]), ("ZZe0001", a_py.path.relative_to(py).as_posix()))
+        self.assertEqual(a_js["extra"], [x.relative_to(py).as_posix() for x in a_py.extra])
+        b_py = eln.adopt_folder(py, py / "blot run", "ZZ", "Zed Zed", title="Blot, second run", when="2020-01-15",
+                                project="Some-Project", status="active", copy=True, today=TODAY)
+        b_js = tool(node, "adopt_folder", {"folder": "blot run", "initials": "ZZ", "researcher": "Zed Zed", "title": "Blot, second run",
+                                           "date": "2020-01-15", "project": "Some-Project", "status": "active", "copy": True})
+        self.assertEqual((b_js["id"], b_js["warnings"]), (b_py.id, b_py.warnings))
+        self.assertSameTree(py, node)
+
+        for root in (py, node):
+            self.assertFalse((root / waiting[0]).exists(), "the old folder was moved")
+            self.assertTrue((root / "blot run" / "a.csv").exists(), "a copied folder stays where it was")
+            kept = root / "Experiments" / "ZZe0001_PRMT5-western" / "2-data_raw" / "2019-03-04_PRMT5 western"
+            self.assertEqual((kept / "scans" / "gel 1.tif").read_bytes(), b"\x00\x01gel")
+            self.assertTrue((kept / "scans" / "empty").is_dir() and (kept / ".DS_Store").exists(), "moved whole")
+            self.assertEqual(int((kept / "scans" / "gel 1.tif").stat().st_mtime), noon + 3 * 86400, "the file date is kept")
+        note = (py / "Experiments" / "ZZe0001_PRMT5-western" / "1-notes" / "ZZe0001.md").read_text(encoding="utf-8")
+        for line in ("title: PRMT5 western", "date_started: 2019-03-04", "date_completed: 2019-03-08", "tags: [adopted]",
+                     "Not written. This record was made by adopting an older folder; see Files.",
+                     "Adopted on 2026-10-03 from an older folder named `2019-03-04_PRMT5 western`. The folder was moved, as it was,"):
+            self.assertIn(line, note)
+        self.assertRegex(note, r"status: complete\b")
+        listing = (py / "Experiments" / "ZZe0001_PRMT5-western" / "1-notes" / "ZZe0001_adopted-files.csv").read_text(encoding="utf-8")
+        self.assertEqual(listing.splitlines()[:3], ["path,bytes,modified",
+                                                     "2-data_raw/2019-03-04_PRMT5 western/.DS_Store,1,2019-03-05T12:00:00Z",
+                                                     "2-data_raw/2019-03-04_PRMT5 western/README.md,11,2019-03-06T12:00:00Z"])
+        self.assertIn('"2-data_raw/2019-03-04_PRMT5 western/notes, final.txt",7,', listing)
+        self.assertEqual(eln.verify_manifest(py / "Experiments" / "ZZe0001_PRMT5-western", "ZZe0001"), ([], [], []))
+        active = (py / b_py.path.relative_to(py)).read_text(encoding="utf-8")
+        self.assertIn("date_started: 2020-01-15", active)
+        self.assertIn("`date_started` is the date given. Correct", active)
+        self.assertNotIn("Not written", active)
+        want = py_validate_text(py)
+        self.assertIn("0 errors", want)
+        self.assertEqual(want, tool(node, "check_notebook", text=True))
+
+        # what cannot be adopted is refused the same way
+        for root in (py, node):
+            (root / "hollow" / "inner").mkdir(parents=True)
+        for folder, said in (("Experiments", "is part of the notebook"), ("Experiments/ZZe0001_PRMT5-western/2-data_raw", "already in an experiment record"),
+                             ("hollow", "has no files in it"), ("nowhere", "there is no folder at")):
+            with self.assertRaises(eln.ElnError) as cm:
+                eln.adopt_folder(py, py / folder, "ZZ", "Zed Zed")
+            self.assertIn(said, str(cm.exception))
+            refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "--initials", "ZZ", "adopt_folder",
+                                      json.dumps({"folder": folder})], capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 1, folder)
+            self.assertIn(said, refused.stderr)
+        self.assertSameTree(py, node)
+
+        # the command line: list what is waiting, then adopt by the path the list shows
+        (py / "Experiments" / "third old one").mkdir()
+        (py / "Experiments" / "third old one" / "x.txt").write_text("x\n", encoding="utf-8")
+        code, out, _ = self.cli("--root", str(py), "adopt")
+        self.assertEqual(code, 0)
+        self.assertIn("Experiments/third old one    title: third old one", out)
+        code, out, err = self.cli("--root", str(py), "adopt", "Experiments/third old one", "--initials", "ZZ", "--status", "active")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Adopted third old one as ZZe0003", out)
+
+    def test_export_as_a_folder_of_plain_files(self):
+        py, node = self.sandbox_copy("py"), self.sandbox_copy("js")
+        vault = eln.load_vault(py)
+        chosen = eln.select_for_export(vault, "PRMT5-ChromatinRelease", [], None, False)
+        r_py = eln.export_folder(vault, chosen, py / "Exports" / "export_PRMT5-ChromatinRelease_20261003", raw=False)
+        r_js = tool(node, "export_notes", {"project": "PRMT5-ChromatinRelease", "format": "folder", "raw": False})
+        self.assertEqual(r_js["path"], "Exports/export_PRMT5-ChromatinRelease_20261003")
+        self.assertEqual((r_js["experiments"], r_js["notes"], r_js["files"], r_js["bytes"]),
+                         (r_py["experiments"], r_py["notes"], r_py["files"], r_py["bytes"]))
+        self.assertSameTree(py, node)
+        out = py / "Exports" / "export_PRMT5-ChromatinRelease_20261003"
+        names = set(tree(out))
+        self.assertTrue({"README.md", "all-notes.md", "Inventory/experiments.csv", "Protocols/P_WesternBlot.md"} <= names)
+        self.assertEqual((out / "all-notes.md").read_text(encoding="utf-8"), eln.build_export(vault, chosen))
+        raw_kept = [n for n in names if "/2-data_raw/" in n]
+        self.assertTrue(raw_kept and all(n.endswith("/2-data_raw/README.md") for n in raw_kept), "raw data left out")
+        self.assertIn("Raw data was left out", (out / "README.md").read_text(encoding="utf-8"))
+        # the export is itself a notebook folder: the check runs on it and finds no errors
+        exported = py_validate_text(out)
+        self.assertIn("0 errors", exported)
+        self.assertEqual(exported, tool(node / "Exports" / "export_PRMT5-ChromatinRelease_20261003", "check_notebook", text=True, ok_codes=(0, 2)))
+        # the notebook's own check does not read Exports/
+        self.assertEqual(py_validate_text(py), py_validate_text(self.sandbox_copy("untouched")))
+
+        # everything, raw data included; a second export to the same place is refused
+        r_py = eln.export_folder(vault, eln.select_for_export(vault, None, [], None, True), py / "Exports" / "export_all_20261003")
+        r_js = tool(node, "export_notes", {"all": True, "format": "folder"})
+        self.assertEqual(r_js["path"], "Exports/export_all_20261003")
+        self.assertEqual((r_js["files"], r_js["bytes"]), (r_py["files"], r_py["bytes"]))
+        self.assertSameTree(py, node)
+        self.assertTrue(any("/2-data_raw/" in n and not n.endswith("README.md") for n in tree(py / "Exports" / "export_all_20261003")))
+        with self.assertRaises(eln.ElnError):
+            eln.export_folder(vault, chosen, py / "Exports" / "export_all_20261003")
+        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "--today", TODAY, "export_notes",
+                                  '{"all": true, "format": "folder"}'], capture_output=True, text=True)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("already exists", refused.stderr)
+        code, out_text, err = self.cli("--root", str(py), "export", "--status", "active", "--format", "folder", "--no-raw")
+        self.assertEqual(code, 0, err)
+        self.assertIn("as a folder of plain files", out_text)
+        self.assertTrue((py / "Exports" / "export_active_20261003" / "README.md").exists())
 
     def test_eln_archive(self):
         root = self.sandbox_copy("s")

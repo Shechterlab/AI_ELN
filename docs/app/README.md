@@ -25,8 +25,10 @@ app/
     vault.js            read every note in the notebook
     validate.js         Check
     inventory.js        Inventory/*.csv
-    create.js           new experiment, sample, protocol, project; add a file
+    create.js           new experiment, sample, protocol, project; add a file; notebook.md
+    adopt.js            an older folder becomes an experiment record
     query.js            find, lab-meeting brief, Markdown export
+    exportfolder.js     export as a folder of plain files
     markdown.js         Markdown to HTML
     closeout.js         mark complete, HTML snapshot, sha256 manifest, verify
     elnfile.js, zip.js  the .eln archive (RO-Crate in a ZIP)
@@ -40,6 +42,14 @@ app/
     memory.js           in memory, for practice mode and tests
     node.js             Node's fs, for mcp/server.mjs and mcp/call.mjs
 ```
+
+## One folder per person
+
+A notebook is one folder with a `notebook.md` at its top (owner, initials,
+the last IDs given out). The page opens that folder. If the folder you pick
+is not a notebook but holds notebooks, the page lists them, opens the one you
+choose, and can start a new one next to them. There is no list of people
+anywhere else.
 
 ## Viewing, printing, repeating
 
@@ -59,7 +69,8 @@ app/
   `ui.js` if people need it.
 - **A new place to keep files** (a WebDAV share, a sync service's API): one
   file in `store/` with `list`, `stat`, `readBytes`, `writeBytes`, `mkdir`.
-  Nothing in `lib/` changes.
+  Nothing in `lib/` changes. `remove`, `rmdir`, `copy`, and `move` are
+  optional; with them, adopting and exporting do not hold large files in memory.
 - **A new AI integration:** an adapter over `TOOLS`. `mcpTools()` and
   `openAiTools()` in `lib/tools.js` are the two that exist.
 - **A change to a convention:** change `scripts/eln.py` and the matching

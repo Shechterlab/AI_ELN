@@ -79,6 +79,18 @@ export class FsAccessStore {
     const parent = await this.dir(i < 0 ? '' : path.slice(0, i));
     await parent.removeEntry(path.slice(i + 1));
   }
+
+  /** Removes a folder only when it is empty (the browser refuses otherwise). */
+  async rmdir(path) {
+    await this.remove(path);
+  }
+
+  /** Copy a file as a stream, so a large instrument file is never held in memory. */
+  async copy(from, to) {
+    const f = await (await this.file(from)).getFile();
+    const w = await (await this.file(to, true)).createWritable();
+    await f.stream().pipeTo(w);
+  }
 }
 
 export const canPickFolders = () => typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';

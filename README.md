@@ -34,8 +34,9 @@ a checksum list next to the note. **Check** tells you if anything is
 misnamed or missing; **Meeting brief** writes the summary for the next lab
 meeting from whatever you flagged. **Print / save as PDF** prints a note
 with page numbers and signature lines, **Repeat this experiment** starts the
-next run from the last one, and **View a notebook** opens someone's notebook
-without being able to change it. Practice first on fictional data with
+next run from the last one, **Adopt** takes in an older folder as an
+experiment without changing its files, and **View a notebook** opens
+someone's notebook without being able to change it. Practice first on fictional data with
 `launchers/Try the Sandbox`.
 
 ![The home page](docs/img/home.png)
@@ -60,22 +61,38 @@ The layering follows `configs/lab.yaml` in the lab's pipelines repository.
 
 ## Where it lives
 
-The whole thing is **one folder**: these tools, the templates, and the
-lab's `Experiments/`, `Protocols/`, `Samples/`, `Projects/`. Put that
-folder in the lab's Dropbox or OneDrive and everyone who syncs it has the
-record and the tools. There is no server, no database, no git, and no
-central copy; the synced folder *is* the record, and every file in it is
-plain text (Markdown with a small header, CSV, JSON) or a standard image.
-The notes are complete and readable in any editor without the scripts.
+A notebook is **one folder per person**. Keep it where you already keep
+your work: your Dropbox or OneDrive, a lab share, or a drive. It holds
+`notebook.md`, `Experiments/`, `Protocols/`, `Samples/`, `Projects/`, and
+`Inventory/`. Every file in it is plain text (Markdown with a small header,
+CSV) or an ordinary data file, and the notes are complete and readable in
+any editor without the tools. There is no server, no database, and no
+central list of people or notebooks.
 
-A sync conflict produces two readable copies, and **Check** lists them. This GitHub repository is only where the tools
-are developed; nobody in the lab needs it day to day.
+The tools are separate from the notebook. The browser page works on
+whichever folder you open. The Python tools work on the folder you name
+once with `eln.py init --root`, or on this folder itself if you name none.
 
-If the lab moves to a hosted ELN, **Export → Save as .eln
-archive** produces the standard [`.eln`](https://github.com/TheELNConsortium/TheELNFileFormat)
-exchange file (an RO-Crate ZIP) that eLabFTW, RSpace, Kadi4Mat, PASTA,
-SampleDB, OpenSemanticLab, and SciLog import, files and checksums
-included.
+- **Several people.** Each person keeps their own folder. If the folders
+  sit next to each other in a shared folder, the page lists them when
+  someone opens the shared folder, and **View a notebook** opens any of them
+  read-only. IDs start with the owner's initials, so records from different
+  notebooks never share an ID.
+- **Old folders.** A notebook can be started in a folder that already holds
+  work; nothing there is changed. **Adopt** turns an older folder into an
+  experiment record when you want it to be one: it gets an ID and a note,
+  and the folder is moved, exactly as it is, into the experiment's
+  `2-data_raw/`.
+- **Exports.** **Export** writes one Markdown file to paste into an AI chat,
+  or a folder of plain files: the notes, their data files, a README, and an
+  index, laid out like the notebook. For a hosted ELN there is also the
+  standard [`.eln`](https://github.com/TheELNConsortium/TheELNFileFormat)
+  archive (an RO-Crate ZIP) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB,
+  OpenSemanticLab, and SciLog import.
+
+A sync conflict produces two readable copies, and **Check** lists them.
+This GitHub repository is only where the tools are developed; nobody needs
+it day to day.
 
 ## Layout
 
@@ -91,7 +108,8 @@ Protocols/    P_WesternBlot.md          one living file per protocol
 Samples/      JSRp0001.md               plasmids, oligos, antibodies, cell lines, gels...
 Projects/     PRMT5-ChromatinRelease.md rolled-up state of a research thread, citing experiment IDs
 Inventory/    *.csv                     generated index of all of the above; open in Excel
-People/       JSR.yaml                  one small file per person: name, and the last serial numbers used
+Exports/      export_.../               folders written by Export; copies, safe to delete
+notebook.md                             whose notebook this is, and the last ID given out for each kind of record
 ```
 
 | Thing | ID looks like | Made by |
@@ -101,7 +119,7 @@ People/       JSR.yaml                  one small file per person: name, and the
 | Protocol | `P_WesternBlot` | New protocol |
 | Project | `PRMT5-ChromatinRelease` | New project |
 
-The initials are yours, so numbering never collides with anyone else's. An
+The initials are yours, so your IDs never collide with anyone else's, in your folder or theirs. An
 ID written anywhere is a link. The complete rules fit on one page:
 [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). The one-page version to pin
 above your bench: [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md).

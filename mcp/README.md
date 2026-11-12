@@ -21,10 +21,11 @@ folder.
 
 - Read: `get_conventions`, `notebook_overview`, `find_notes`, `read_note`,
   `read_file`, `check_notebook`, `verify_files`
-- Create: `create_experiment`, `create_sample`, `create_protocol`, `create_project`
+- Create: `create_experiment`, `create_sample`, `create_protocol`, `create_project`,
+  `adopt_folder` (an older folder becomes an experiment; with no folder it lists the candidates)
 - Edit: `write_section`, `set_field` (with `mode` add or remove for one tag), `update_note`, `add_file`
 - Finish and export: `complete_experiment`, `render_snapshot`,
-  `meeting_brief`, `export_notes`, `rebuild_index`
+  `meeting_brief`, `export_notes` (one Markdown file, a folder of plain files, or `.eln`), `rebuild_index`
 
 The server sends the lab's rules (cite experiment IDs, never invent a
 result, never touch `2-data_raw`) to the client as its instructions.
@@ -34,7 +35,7 @@ result, never touch `2-data_raw`) to the client as its instructions.
 The server takes `--root DIR` (default: the folder this repository is in),
 `--initials` and `--researcher` (default: what `python3 scripts/eln.py init`
 saved, or the environment variables `AI_ELN_INITIALS` and
-`AI_ELN_RESEARCHER`), and `--read-only` (offer only the tools that change
+`AI_ELN_RESEARCHER`, or else the owner named in the notebook's `notebook.md`), and `--read-only` (offer only the tools that change
 nothing; the brief and the export are included and refuse to save).
 
 **Claude Code and Cowork.** The repository includes `.mcp.json`, so opening

@@ -811,6 +811,90 @@ class TestCloseOutAndArchive(TempVault):
 # The repo's own example vault must satisfy its own rules
 # ---------------------------------------------------------------------------
 
+class TestNotebookAdoptExport(TempVault):
+    """notebook.md, adopting an older folder, and the export as a folder of plain files."""
+
+    def test_notebook_md_says_whose_it_is_and_remembers_ids(self):
+        nb = self.tmp / "ana"
+        self.ok("init", "--yes", "--initials", "al", "--researcher", "Ana Lopez", "--root", str(nb))
+        text = (nb / "notebook.md").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\ntype: notebook\nowner: Ana Lopez\ninitials: AL\nlast_ids: []\n---\n"))
+        self.assertFalse((nb / "People").exists())
+        # with no saved settings and no flags, a notebook's own notebook.md says who is writing
+        for k in ("AI_ELN_INITIALS", "AI_ELN_RESEARCHER", "AI_ELN_ROOT"):
+            del os.environ[k]
+        self.config.unlink()
+        out, _ = self.ok("--root", str(nb), "new", "experiment", "--title", "First")
+        self.assertIn("ALe0001", out)
+        note = next(nb.glob("Experiments/ALe0001_*/1-notes/ALe0001.md")).read_text(encoding="utf-8")
+        self.assertIn("researcher: Ana Lopez", note)
+        self.assertIn("last_ids: [ALe0001]", (nb / "notebook.md").read_text(encoding="utf-8"))
+        # a folder without notebook.md and without settings still asks for initials
+        _, err = self.fail("--root", str(self.root), "new", "experiment", "--title", "x")
+        self.assertIn("No initials", err)
+
+    def test_adopt_a_folder_from_outside_the_notebook(self):
+        old = self.tmp / "old work" / "KCl titration 2021.06.30"
+        (old / "raw").mkdir(parents=True)
+        (old / "raw" / "plate.xlsx").write_bytes(b"cells")
+        (old / "summary.txt").write_text("worked\n", encoding="utf-8")
+        stamp = 1625140800  # 2021-07-01 12:00 UTC
+        for f in old.rglob("*"):
+            if f.is_file():
+                os.utime(f, (stamp, stamp))
+        out, _ = self.ok("adopt", str(old), "--copy", "--project", "Some-Project")
+        self.assertIn("Adopted KCl titration 2021.06.30 as TSTe0001", out)
+        self.assertTrue((old / "summary.txt").exists(), "--copy leaves the original")
+        folder = self.root / "Experiments" / "TSTe0001_KCl-titration"
+        self.assertEqual((folder / "2-data_raw" / old.name / "raw" / "plate.xlsx").read_bytes(), b"cells")
+        note = (folder / "1-notes" / "TSTe0001.md").read_text(encoding="utf-8")
+        for line in ("title: KCl titration", "date_started: 2021-06-30", "project: [Some-Project]", "tags: [adopted]",
+                     "The folder was copied, as it was,", "2 files, 12 bytes"):
+            self.assertIn(line, note)
+        self.assertRegex(note, r"date_completed: 2021-0[67]-\d\d")
+        self.assertEqual((folder / "1-notes" / "TSTe0001_adopted-files.csv").read_text(encoding="utf-8"),
+                         "path,bytes,modified\n"
+                         f"2-data_raw/{old.name}/raw/plate.xlsx,5,2021-07-01T12:00:00Z\n"
+                         f"2-data_raw/{old.name}/summary.txt,7,2021-07-01T12:00:00Z\n")
+        self.assertEqual(eln.verify_manifest(folder, "TSTe0001"), ([], [], []))
+        # moved this time, with a title and a date given, left open
+        out, _ = self.ok("adopt", str(old), "--title", "KCl titration, second look", "--date", "2021-06-01", "--status", "active")
+        self.assertIn("TSTe0002", out)
+        self.assertFalse(old.exists(), "without --copy the folder is moved")
+        note = next(self.root.glob("Experiments/TSTe0002_*/1-notes/TSTe0002.md")).read_text(encoding="utf-8")
+        self.assertIn("date_started: 2021-06-01", note)
+        self.assertRegex(note, r"status: active\b")
+        self.assertNotIn("Not written", note)
+        out, _ = self.ok("find", "--tag", "adopted")
+        self.assertIn("TSTe0001", out)
+        self.assertIn("TSTe0002", out)
+        code, out, err = run("validate")
+        self.assertEqual(code, 0, out + err)
+        # refusals
+        _, err = self.fail("adopt", str(self.root))
+        self.assertIn("contains the notebook itself", err)
+        _, err = self.fail("adopt", str(self.tmp / "old work"), str(self.tmp), "--title", "x")
+        self.assertIn("one at a time", err)
+        _, err = self.fail("adopt", str(self.tmp / "old work"), "--date", "June 2021")
+        self.assertIn("YYYY-MM-DD", err)
+        out, _ = self.ok("adopt")
+        self.assertIn("No folder here is waiting", out)
+
+    def test_export_folder_to_a_place_outside_the_notebook(self):
+        self.make_clean_vault()
+        dest = self.tmp / "handover"
+        out, _ = self.ok("export", "--all", "--format", "folder", "--out", str(dest))
+        self.assertIn("as a folder of plain files", out)
+        for name in ("README.md", "all-notes.md", "Inventory/experiments.csv"):
+            self.assertTrue((dest / name).is_file(), name)
+        exported = eln.load_vault(dest)
+        self.assertEqual(sorted(n.id for n in exported.all_notes()), sorted(n.id for n in eln.load_vault(self.root).all_notes()))
+        self.assertEqual([i.message for i in eln.validate_vault(exported) if i.level == "ERROR"], [])
+        self.assertFalse((self.root / "Exports").exists())
+        _, err = self.fail("export", "--all", "--format", "folder", "--out", str(dest))
+        self.assertIn("already exists", err)
+
+
 class TestRepoExample(unittest.TestCase):
     def test_example_vault_validates_strict(self):
         code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT))

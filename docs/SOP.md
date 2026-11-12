@@ -99,7 +99,9 @@ Nothing is locked. If you revisit the experiment, edit the note, then
 **Refresh snapshot & manifest**. For LabArchives, upload the snapshot (or
 its PDF) under the experiment ID; when the API bridge exists this becomes
 automatic. To hand a project to another ELN (eLabFTW, RSpace, Kadi4Mat,
-and others), use **Export → Save as .eln archive**.
+and others), use **Export → For another electronic notebook → .eln archive**.
+To hand a project to a collaborator as ordinary files, use **Export → Save
+as a folder of plain files**.
 
 ## 9. Ownership and offboarding
 

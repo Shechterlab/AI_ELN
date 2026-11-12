@@ -1,7 +1,7 @@
 /* Names: slugs, IDs, folder and file names. Pure functions; the same rules as scripts/eln.py. */
 
 import { RE_EXP_ID, RE_SAMPLE_ID, RE_INITIALS } from './schema.js';
-import { extname, stem } from './text.js';
+import { extname, stem, validDate, stripChars } from './text.js';
 
 /** 'SNRPB chromatin retention: KCl' -> 'SNRPB-chromatin-retention-KCl'. Case kept; cut on a word boundary. */
 export function slugify(text, maxLen = 60) {
@@ -55,4 +55,18 @@ export function fileNameFor(id, { originalName = '', description = '', result = 
 
 export function yyyymmdd(d = new Date()) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const RE_DATE_IN_NAME = /(?<!\d)((?:19|20)\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?!\d)/;
+
+/** [title, date or ''] read from an old folder's name: '2019-03-04_PRMT5 western' -> ['PRMT5 western', '2019-03-04']. */
+export function guessFromFolderName(input) {
+  let name = String(input);
+  let when = '';
+  const m = RE_DATE_IN_NAME.exec(name);
+  if (m && validDate(`${m[1]}-${m[2]}-${m[3]}`)) {
+    when = `${m[1]}-${m[2]}-${m[3]}`;
+    name = name.slice(0, m.index) + ' ' + name.slice(m.index + m[0].length);
+  }
+  return [stripChars(name.replace(/[\s_]+/g, ' '), ' -_.,'), when];
 }

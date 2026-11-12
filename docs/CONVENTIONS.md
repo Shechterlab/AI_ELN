@@ -74,7 +74,8 @@ reference and tells you if one points nowhere.
 ├── Samples/      {SAMPLE_ID}.md
 ├── Projects/     {PROJECT_ID}.md
 ├── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv  (generated)
-├── People/       {INITIALS}.yaml: one per person, written by the tool
+├── Exports/      folders written by Export: copies, safe to delete
+├── notebook.md   whose notebook this is and the last IDs given out; kept by the tool
 └── lab.yaml      optional: lab name and house style for printouts
 ```
 
@@ -85,22 +86,49 @@ reference and tells you if one points nowhere.
 - The five subfolders are created by the tool and are never renamed,
   reordered, or added to per experiment. The value of the system is that
   every experiment looks the same.
-- `<root>` is the folder these tools sit in: the one the lab syncs with
-  Dropbox or OneDrive. Tools and record travel together; there is no
-  server and no central copy. (`eln.py init --root` exists for the unusual
-  case of keeping the notes somewhere else. See `docs/getting-started.md`.)
+- `<root>` is the notebook folder: one per person, kept wherever that
+  person keeps their work (Dropbox, OneDrive, a lab share, a drive). There
+  is no server, no central copy, and no list of people. The browser page
+  works on the folder you open; the Python tools work on the folder named
+  with `eln.py init --root`, or on the folder the tools sit in if none is
+  named. Other folders may sit in `<root>` next to these; the tools leave
+  them alone.
 - `Inventory/` is **generated** by `eln.py index` from the notes. Never
   hand-edit it; edit the note and re-index.
 
-### People/ and lab.yaml
+### notebook.md and lab.yaml
 
-`People/{INITIALS}.yaml` holds a person's name and the last serial numbers
-their initials used (`last_experiment`, `last_sample_p`, ...). The tool
-writes it when it creates a record. The next ID is one more than the higher
-of that number and what is in the folders, so a number is not given out
-again when a folder is deleted or has not synced yet. If a record is created
-under initials that the file says belong to someone with a different name,
-the tool says so. You may add lines of your own (`orcid`, `email`, `role`).
+`notebook.md` is a short note at the top of the notebook folder. Its header
+says whose notebook it is and remembers the last ID given out for each kind
+of record:
+
+```yaml
+---
+type: notebook
+owner: Jacob Roth
+initials: JSR
+last_ids: [JSRa0003, JSRe0012, JSRp0004]
+---
+```
+
+The tool writes it. The next ID is one more than the higher of the number
+here and what is in the folders, so a number is not given out again when a
+folder is deleted or has not synced yet. When nobody has set initials on a
+computer, the tools use the owner's. You may correct `owner` and
+`initials`, and write anything you like below the header. Do not lower a
+number in `last_ids`.
+
+### Adopted folders
+
+An older folder becomes a record with **Adopt** (`eln.py adopt`). The
+experiment gets the next ID and the tag `adopted`. The old folder is moved,
+whole and unchanged, to `2-data_raw/{old folder name}/`.
+`1-notes/{ID}_adopted-files.csv` lists every file with its size and the time
+it was last modified before the move. The title and `date_started` are read
+from the folder name where it holds a date (`2019-03-04_PRMT5 western`),
+otherwise from the oldest file date; `date_completed` is the newest file
+date. Results and Interpretation say "Not written" until someone writes
+them.
 
 `lab.yaml` (optional, at the top of the notebook folder) holds the lab's
 name, institution, and house style in the same flat `key: value` form. It

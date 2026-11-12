@@ -5,39 +5,52 @@ create an experiment by filling in a form.
 
 ## 0. Where the record lives
 
-The record is one folder: these tools plus `Experiments/`, `Protocols/`,
-`Samples/`, `Projects/`. It lives in the lab's Dropbox or OneDrive. There
-is no server, account, or central copy. The synced folder is the record,
-and the files in it are plain text.
+Your notebook is one folder, and it is yours. Keep it where you keep your
+work, usually inside Dropbox or OneDrive so it is backed up and on your
+other computers. It holds `notebook.md` (whose notebook it is, and the last
+IDs given out) and the folders `Experiments/`, `Protocols/`, `Samples/`,
+`Projects/`, and `Inventory/`. There is no server, account, or central
+copy, and the files are plain text.
 
-**If someone has already set it up:** make sure the lab's folder is synced
-to your computer (it will be in your Dropbox or OneDrive), and go to §1.
+A lab does not need one shared notebook. Each person keeps their own folder.
+If the folders sit next to each other in a shared lab folder, opening the
+shared folder in the page lists the notebooks in it.
 
-**If you are setting it up for the lab** (once, by whoever runs the lab):
+You can start a notebook in a folder that already has work in it. Nothing
+already there is changed. See "Adopting older folders" below for turning old
+folders into experiment records.
 
-1. Download this folder from GitHub: green **Code** button → **Download
-   ZIP**, unzip. If you used `git clone` instead, delete the hidden `.git`
-   folder inside it; git and sync services corrupt each other.
-2. Rename the folder if you like (`ShechterLab-ELN`) and move it into the
-   lab's shared Dropbox or OneDrive.
-3. Double-click `launchers/Open ELN` once to see the page come up. The
-   record starts empty. `tests/` and `.github/` are not needed for daily use
-   and can be deleted. Keep `sandbox/` (the practice notebook). `reference/`
-   holds Jacob's original materials.
+**For the browser page** (§1) you need nothing else.
 
-After that, do not move or rename experiment folders or notes by hand. Use
-the page or the launchers. Putting your own files into an experiment's
-subfolders is fine.
+**For the launchers and the command line** you need the tools: download this
+repository from GitHub (green **Code** button → **Download ZIP**, unzip) and
+put the folder anywhere. Then tell the tools once where your notebook is:
+
+```bash
+python3 scripts/eln.py init --root "/path/to/My Notebook"
+```
+
+That writes `~/.ai_eln.json` and puts your name and initials into the
+notebook's `notebook.md`. If you skip this, the tools keep the records inside
+the tools folder itself. If you put the tools folder in Dropbox or OneDrive
+and it came from `git clone`, delete the hidden `.git` folder inside it; git
+and sync services corrupt each other.
+
+Do not move or rename experiment folders or notes by hand. Use the page or
+the launchers. Putting your own files into an experiment's subfolders is
+fine.
 
 ## 1. Open the notebook
 
 **In Chrome or Edge (nothing to install).** Go to
 <https://shechterlab.github.io/AI_ELN/app/>, click **Open notebook folder**,
-choose the lab's notebook folder, and allow the page to edit it. The page
-works on the files in that folder and does not upload them. Next time, click
-**Reopen**. If you choose an empty folder, the page offers to set up a new
-notebook in it. Then click **settings**, enter your initials and name (they
-are saved in this browser only), and go to §3.
+choose your notebook folder, and allow the page to edit it. The page works
+on the files in that folder and does not upload them. Next time, click
+**Reopen**. If the folder has no notebook in it yet, the page offers to set
+one up there. If it holds several people's notebooks, the page lists them
+and can start a new one next to them. Then click **settings**, enter your
+initials and name (saved in this browser, and in the notebook's
+`notebook.md` if it does not name an owner yet), and go to §3.
 
 **In Safari or Firefox, or if you prefer the launchers.** These browsers
 cannot open folders, so the notebook starts from a launcher and needs
@@ -71,7 +84,7 @@ the page. The first time, it asks for your initials and name under
 **settings**. Your initials become your ID prefix (`JSRe0001`, `JSRe0002`,
 …), so two people cannot get the same ID.
 
-To practice without touching the lab's record, double-click
+To practice without touching a real notebook, double-click
 **`launchers/Try the Sandbox`**. It opens the same page on fictional data
 that can be reset. In the browser version, click **Open the practice
 notebook** on the first screen; it is kept in memory and is gone when you
@@ -140,7 +153,8 @@ note links to it. In the note, type a line like this, with your file's name:
 | **New project** | A summary of a research project. Conclusions cite experiment IDs. |
 | **Check** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
 | **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. **Save into Inventory** saves it in the notebook; **Download** saves it to your Downloads folder. |
-| **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
+| **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT, or into a folder of plain files. See "Exports" below and [`ai-agents.md`](ai-agents.md). |
+| **Adopt older folders** | Shown on Home when the notebook folder holds folders that are not records. See "Adopting older folders" below. |
 | **Experiments / Samples / Protocols / Projects** | Browse and filter. Every ID on every page is a link. |
 | **Ask the AI** | Example questions for an AI assistant, and which of the three ways (pasting an export into ChatGPT, an agent opened in the folder, or an MCP client) each one works with. |
 
@@ -173,25 +187,68 @@ python3 scripts/eln.py validate                            # --strict makes warn
 python3 scripts/eln.py find --status active --project PRMT5-ChromatinRelease
 python3 scripts/eln.py report
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
+python3 scripts/eln.py export --project PRMT5-ChromatinRelease --format folder   # plain files in Exports/
+python3 scripts/eln.py adopt "/path/to/an old folder"       # make it an experiment; files move in unchanged
 python3 scripts/eln_web.py                                 # the page, by hand
 ```
 
 The terminal-window launchers (`New Experiment`, `Check Everything`, and
 so on) run the same commands and prompt for the values.
 
-## 9. Keeping the notes somewhere other than the tools (unusual)
+## 9. More than one notebook, or a different folder for one command
 
-Normally the notes sit next to the tools in the synced folder and no
-configuration is needed. If the lab keeps notes somewhere else (a server
-mount, a different shared folder), tell the tool once:
+`eln.py init --root` sets the notebook the tools use by default.
+`AI_ELN_ROOT` in the environment, or `--root` on a command, overrides it for
+one shell or one call:
 
 ```bash
-python3 scripts/eln.py init --root "/path/to/ShechterLab/ELN"
+python3 scripts/eln.py --root "/path/to/another notebook" find --status active
 ```
 
-That writes `~/.ai_eln.json`; the page, the launchers, and every command
-use it from then on. `AI_ELN_ROOT` in the environment or `--root` on a
-command overrides it for one shell or one call.
+When no initials are saved on the computer, the tools use the `initials` and
+`owner` written in that notebook's `notebook.md`.
+
+## Adopting older folders
+
+Work you did before the notebook can be taken in without redoing it.
+
+- **In the browser page:** put the old folder into the notebook folder (into
+  `Experiments/`, or next to it). **Home** then shows **Adopt older
+  folders**. The screen lists each folder with a title and start date read
+  from its name; correct them and click **Adopt this folder**.
+- **From the command line:** `python3 scripts/eln.py adopt "/path/to/old
+  folder"`. The folder can be anywhere. `eln.py adopt` with no folder lists
+  the ones in the notebook folder that are not records yet. `--copy` leaves
+  the original where it is.
+
+Adopting makes an experiment record with the next ID. The old folder is
+moved, whole, into the new experiment's `2-data_raw/`. No file in it is
+renamed or changed. `1-notes/{ID}_adopted-files.csv` lists every file with
+its size and the time it was last modified. The dates in the header come from
+the folder name or the file dates, and Results and Interpretation say "Not
+written". Open the note, write what the experiment was for, and correct the
+title or dates if they are wrong. Folders you do not adopt are left alone.
+
+The record is marked complete, with a snapshot and a manifest of checksums,
+unless you tick **Still in progress** (`--status active`). `eln.py find
+--tag adopted` lists every adopted experiment.
+
+## Exports
+
+**Export** offers three forms of the same selection (a project, some
+experiments, everything active, or everything):
+
+- **One Markdown file**, with a short explanation of the IDs and sections at
+  the top. This is the one to paste into, or attach to, an AI chat.
+- **A folder of plain files** in `Exports/` inside the notebook folder: the
+  experiments with their files, the protocols, samples, and projects they
+  refer to, a `README.md`, `all-notes.md` (the single file above), and an
+  index. It is laid out like a notebook, so the page can open it for viewing.
+  "Without raw data" leaves out what is in `2-data_raw/`. Copy the folder
+  wherever it is needed; it can be deleted afterwards. From the command
+  line: `eln.py export --project NAME --format folder [--no-raw] [--out DIR]`.
+- **A `.eln` archive**, under "For another electronic notebook", for import
+  into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.
 
 ## More on the note's page
 
@@ -207,8 +264,9 @@ command overrides it for one shell or one call.
 ## Viewing someone else's notebook
 
 On the first screen of the browser version, click **View a notebook
-(read-only)** and choose the folder. The page asks only for permission to
-view. You can read, search, print, and export; every button that changes
+(read-only)** and choose the folder. If you choose a folder that holds
+several notebooks, the page lists them by owner. The page asks only for
+permission to view. You can read, search, print, and export; every button that changes
 something is hidden. To make a folder view-only for other people no matter
 which program they use, share it as *can view* in Dropbox or OneDrive.
 
@@ -233,9 +291,11 @@ other as a copy, with a name such as `JSRe0004 (Ana's conflicted copy
   still be syncing. Wait until Dropbox or OneDrive shows it is up to date and
   run Check again.
 
-The tools keep one small file per person in `People/` (for example
-`People/JSR.yaml`) with your name and the last numbers you used. A number
-written there is not given out again, even if a folder is deleted.
+`notebook.md` at the top of the notebook folder remembers the last ID given
+out for each kind of record. A number written there is not given out again,
+even if a folder is deleted. If Check lists a copy of `notebook.md`, records
+were created on two computers before they synced: look for two records with
+the same ID, then delete the copy.
 
 ## If you made an experiment by mistake
 

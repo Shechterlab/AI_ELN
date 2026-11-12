@@ -1,6 +1,6 @@
 /* Reading the notebook: every note, parsed, plus what is wrong with the folder layout. */
 
-import { KINDS, KIND_DIR, ID_FIELD, RE_EXP_FOLDER } from './schema.js';
+import { KINDS, KIND_DIR, ID_FIELD, RE_EXP_FOLDER, ElnError } from './schema.js';
 import { parseFrontMatter } from './frontmatter.js';
 import { cmp, decodeText, splitlines, strip } from './text.js';
 
@@ -93,7 +93,7 @@ export async function loadVault(store) {
       const folder = `${KIND_DIR.experiment}/${name}`;
       const m = RE_EXP_FOLDER.exec(name);
       const folderId = m ? m[1] : null;
-      if (!m) vault.folderIssues.push([folder, 'folder name does not match {ID}_{slug}']);
+      if (!m) vault.folderIssues.push([folder, 'folder name does not match {ID}_{slug} (an older folder? Adopt it: the tool gives it an ID and moves its files in)']);
       const notesDir = `${folder}/1-notes`;
       const listing = await store.list(notesDir);
       let noteName = folderId ? `${folderId}.md` : null;
@@ -138,6 +138,30 @@ export function sections(body) {
   }
   if (current !== null) out.set(current, strip(buf.join('\n')));
   return out;
+}
+
+/** Replace or extend the text under one '## ' heading. Returns the new note text. */
+export function writeSection(text, section, content, mode = 'replace') {
+  const lines = splitlines(text);
+  const wanted = strip(String(section)).toLowerCase();
+  const start = lines.findIndex((l) => l.startsWith('## ') && strip(l.slice(3)).toLowerCase() === wanted);
+  if (start < 0) {
+    throw new ElnError(`the note has no '## ${strip(String(section))}' section. Its sections are: ${[...sections(text).keys()].join(', ')}`, 'no_section');
+  }
+  if (splitlines(String(content)).some((l) => /^#{1,2}\s/.test(l))) {
+    throw new ElnError("the text contains a line starting with '# ' or '## ', which would start a new section. Use '### ' for a sub-heading", 'bad_content');
+  }
+  let end = lines.findIndex((l, i) => i > start && l.startsWith('## '));
+  if (end < 0) end = lines.length;
+  const fresh = splitlines(strip(String(content)));
+  let middle;
+  if (mode === 'append') {
+    const kept = lines.slice(start + 1, end);
+    while (kept.length && !strip(kept[kept.length - 1])) kept.pop();
+    middle = [...kept, '', ...fresh, ''];
+    if (!strip(kept.join(''))) middle = ['', ...fresh, ''];
+  } else middle = ['', ...fresh, ''];
+  return [...lines.slice(0, start + 1), ...middle, ...lines.slice(end)].join('\n').replace(/\n+$/, '') + '\n';
 }
 
 /** True when a section holds only comments, sub-headers, or empty bullets. */

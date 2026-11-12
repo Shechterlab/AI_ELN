@@ -243,8 +243,10 @@ class App:
             parts = []
             for sub in eln.SUBFOLDERS:
                 d = n.folder / sub
-                names = sorted(p.name for p in d.iterdir() if p.is_file() and not p.name.startswith(".")
-                               and p.name.lower() != "readme.md") if d.is_dir() else []
+                # files in folders below (an adopted folder in 2-data_raw, for one) are listed with their path
+                found = [p.relative_to(d) for p in d.rglob("*") if p.is_file()] if d.is_dir() else []
+                names = sorted((p.as_posix() for p in found if p.as_posix().lower() != "readme.md"
+                                and not any(part.startswith(".") for part in p.parts)), key=lambda s: s.split("/"))
                 parts.append(f"<b>{esc(sub)}/</b> " + (", ".join(esc(x) for x in names) if names else "<i>empty</i>"))
             files_html = "<h2>Files</h2><div class=card>" + "<br>".join(parts) + "</div>"
         usage = ""

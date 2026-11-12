@@ -16,6 +16,10 @@ Layout
   Samples/{ID}.md            plasmids, oligos, antibodies, cell lines, gels and so on
   Projects/{Name}.md         summary of a research project; conclusions cite experiment IDs
   Inventory/*.csv            index generated from the note headers; do not edit by hand
+  notebook.md                whose notebook this is and the last IDs given out; kept by the tools
+  Exports/                   folders written by Export: copies, never cite or edit them
+  Other folders here are not records. An older folder becomes an experiment with the adopt tool:
+  it gets an ID and is moved, unchanged, into that experiment's 2-data_raw/.
 
 IDs
   Experiment  {INITIALS}e{NNNN}        JSRe0002

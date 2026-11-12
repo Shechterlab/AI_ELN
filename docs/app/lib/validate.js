@@ -21,11 +21,15 @@ const RE_NUMBERED_COPY = / \(\d+\)(?=\.[^.]*$|$)/;
 /** Files a sync service made when the same file changed on two computers. */
 export async function syncConflictFiles(store) {
   const out = [];
-  for (const d of [...VAULT_DIRS, 'People']) {
+  for (const d of VAULT_DIRS) {
     for (const p of await walkFiles(store, d)) {
       const name = basename(p);
       if (RE_SYNC_CONFLICT.test(name) || (RE_NUMBERED_COPY.test(name) && !p.split('/').includes('2-data_raw'))) out.push(p);
     }
+  }
+  /* copies of notebook.md at the top of the folder */
+  for (const e of (await store.list('')) || []) {
+    if (e.kind === 'file' && e.name.toLowerCase().startsWith('notebook') && (RE_SYNC_CONFLICT.test(e.name) || RE_NUMBERED_COPY.test(e.name))) out.push(e.name);
   }
   return out.sort(cmpPath);
 }
@@ -33,8 +37,8 @@ export async function syncConflictFiles(store) {
 export function syncConflictAdvice(path) {
   const parts = path.split('/');
   if (parts.includes('Inventory')) return 'copy of a generated file, made by a sync service: delete it (the index is rebuilt from the notes)';
-  if (parts.includes('People')) {
-    return 'copy made by a sync service: the same person created records on two computers before they synced. '
+  if (parts.length === 1) {
+    return 'copy of notebook.md made by a sync service: records were created on two computers before they synced. '
       + 'Check for two records with the same ID, then delete this copy';
   }
   return 'copy made by a sync service when the same file changed on two computers: open both, move anything you '

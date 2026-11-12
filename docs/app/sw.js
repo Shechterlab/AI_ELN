@@ -2,7 +2,7 @@
    the first time it is opened, refreshed whenever the network is there, and served from that copy when
    it is not. Only this site's files are handled; the notebook folder is never touched from here. */
 
-const CACHE = 'ai-eln-2';
+const CACHE = 'ai-eln-3';
 /* every file the page loads; tests/test_site.py checks this list against docs/app/ */
 const FILES = [
   "./",
@@ -13,12 +13,14 @@ const FILES = [
   "../assets/brand.js",
   "../assets/shechterlab-icon.svg",
   "../lab.yaml",
+  "lib/adopt.js",
   "lib/builtin_lab.js",
   "lib/builtin_templates.js",
   "lib/closeout.js",
   "lib/conventions.js",
   "lib/create.js",
   "lib/elnfile.js",
+  "lib/exportfolder.js",
   "lib/frontmatter.js",
   "lib/inventory.js",
   "lib/lab.js",

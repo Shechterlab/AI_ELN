@@ -62,6 +62,16 @@ class TestBrowserNotebook(unittest.TestCase):
             eln.write_index(vault, quiet=True)
             self.assertEqual({p.name: p.read_bytes() for p in (root / "Inventory").glob("*.csv")}, before)
             self.assertIn("AI_ELN", (root / "AGENTS.md").read_text(encoding="utf-8"))
+            # notebook.md: whose notebook, and the last IDs given out; the browser writes what Python would
+            book = eln.read_notebook(root)
+            self.assertEqual((book["owner"], book["initials"], book["last_ids"]), ("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002"]))
+            self.assertEqual((root / "notebook.md").read_text(encoding="utf-8"),
+                             eln.notebook_text("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002"]))
+            # the folder export is plain files, and is itself a notebook folder with no errors
+            exported = next((root / "Exports").glob("export_all_*"))
+            self.assertTrue((exported / "README.md").exists() and (exported / "all-notes.md").exists())
+            self.assertTrue((exported / note.folder.relative_to(root) / "2-data_raw" / "ChemiDoc 2026-09-04.scn").exists())
+            self.assertEqual([i.message for i in eln.validate_vault(eln.load_vault(exported)) if i.level == "ERROR"], [])
 
             with zipfile.ZipFile(io.BytesIO((Path(tmp) / "e2e-export.eln").read_bytes())) as z:
                 self.assertIsNone(z.testzip())

@@ -33,6 +33,10 @@ Experiments/JSRe0002_short-title/
   5-figures/         JSRe0002_R_what-it-shows_20260904.png   (R = the results figure)
 ```
 
+One notebook folder per person. `notebook.md` at its top says whose it is and
+remembers the last IDs. An older folder becomes an experiment with **Adopt**;
+its files go into `2-data_raw/` unchanged.
+
 ## Filenames
 
 `ID` `_` `[R|P]` `_` `words-with-hyphens` `_` `[YYYYMMDD]` `.ext`
@@ -62,11 +66,11 @@ Results · Interpretation · Decision · Follow-up experiments · Files
 ## Buttons on the page (and the matching double-clicks in `launchers/`)
 
 **New experiment** · **New sample** · **New protocol** · **New project** ·
-**Check** · **Meeting brief** · **Export** for ChatGPT or `.eln` ·
+**Check** · **Meeting brief** · **Export** (one file for ChatGPT, or a folder of plain files) · **Adopt older folders** ·
 on a note: **Edit here** · **Add files** · **Repeat this experiment** · **Print / save as PDF** · **Mark complete** · **Verify files**
 
 Same from a terminal: `python3 scripts/eln.py new experiment --title "..."`,
-`validate`, `find`, `report`, `export`, `index`, `init`; `python3 scripts/eln_web.py` for the page.
+`validate`, `find`, `report`, `export`, `adopt`, `index`, `init`; `python3 scripts/eln_web.py` for the page.
 
 ## When you finish
 
@@ -87,5 +91,8 @@ Example questions: *do the numbers in JSRe0007's Results match its data file?* �
 
 ## Leaving, or sending to another ELN
 
-**Export → Save as .eln archive**: a standard RO-Crate ZIP that eLabFTW,
-RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import.
+The notebook is already plain files; copy the folder. **Export → Save as a
+folder of plain files** makes a copy of part of it with a README and an
+index. **Export → For another electronic notebook** makes a `.eln` archive: a
+standard RO-Crate ZIP that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB,
+OpenSemanticLab, and SciLog import.

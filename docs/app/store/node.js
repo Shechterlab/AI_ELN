@@ -98,6 +98,37 @@ export class NodeStore {
     await fsp.rm(this.abs(rel), { force: true });
   }
 
+  async rmdir(rel) {
+    await fsp.rmdir(this.abs(rel));
+  }
+
+  /** Copy a file without reading it into memory; the modified time is kept. */
+  async copy(from, to) {
+    const src = this.abs(from);
+    const dst = this.abs(to);
+    await fsp.mkdir(path.dirname(dst), { recursive: true });
+    this.abs(to);
+    await fsp.copyFile(src, dst, fs.constants.COPYFILE_EXCL);
+    const s = await fsp.stat(src);
+    await fsp.utimes(dst, s.atime, s.mtime);
+  }
+
+  /** Move a file. A rename when both places are on the same drive, otherwise copy and delete. */
+  async move(from, to) {
+    const src = this.abs(from);
+    const dst = this.abs(to);
+    if (fs.existsSync(dst)) throw new ElnError(`${to} already exists. Nothing was overwritten.`, 'exists');
+    await fsp.mkdir(path.dirname(dst), { recursive: true });
+    this.abs(to);
+    try {
+      await fsp.rename(src, dst);
+    } catch (e) {
+      if (e.code !== 'EXDEV') throw e;
+      await this.copy(from, to);
+      await fsp.rm(src);
+    }
+  }
+
   sha256(rel) {
     return new Promise((resolve, reject) => {
       const h = createHash('sha256');

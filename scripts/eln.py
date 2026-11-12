@@ -35,7 +35,7 @@ import subprocess
 import sys
 import unicodedata
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.parse import quote
@@ -425,6 +425,12 @@ def resolve_person(args, config: Dict[str, str], interactive: bool = False) -> T
                 or config.get("initials") or "").strip().upper()
     researcher = (getattr(args, "researcher", None) or os.environ.get("AI_ELN_RESEARCHER")
                   or config.get("researcher") or "").strip()
+    if not initials:
+        # a personal notebook says whose it is
+        known = read_notebook(resolve_root(getattr(args, "root", None), config))
+        if isinstance(known.get("initials"), str) and RE_INITIALS.match(known["initials"].upper()):
+            initials = known["initials"].upper()
+            researcher = researcher or (known.get("owner") if isinstance(known.get("owner"), str) else "") or ""
     if not initials and interactive:
         print("First time here. Two quick questions (asked only once):")
         while not RE_INITIALS.match(initials):
@@ -566,7 +572,7 @@ def load_vault(root: Path) -> Vault:
             m = RE_EXP_FOLDER.match(folder.name)
             folder_id = m.group(1) if m else None
             if not m:
-                vault.folder_issues.append((folder, "folder name does not match {ID}_{slug}"))
+                vault.folder_issues.append((folder, "folder name does not match {ID}_{slug} (an older folder? Adopt it: the tool gives it an ID and moves its files in)"))
             notes_dir = folder / "1-notes"
             note_path = notes_dir / f"{folder_id}.md" if folder_id else None
             if note_path is None or not note_path.exists():
@@ -677,19 +683,22 @@ RE_NUMBERED_COPY = re.compile(r" \(\d+\)(?=\.[^.]*$|$)")
 def sync_conflict_files(root: Path) -> List[Path]:
     """Files a sync service made when the same file changed on two computers."""
     out: List[Path] = []
-    for d in list(KIND_DIR.values()) + ["Inventory", "People"]:
+    for d in list(KIND_DIR.values()) + ["Inventory"]:
         base = root / d
         if base.is_dir():
             out.extend(p for p in base.rglob("*") if p.is_file() and (
                 RE_SYNC_CONFLICT.search(p.name) or (RE_NUMBERED_COPY.search(p.name) and "2-data_raw" not in p.parts)))
+    if root.is_dir():  # copies of notebook.md at the top of the folder
+        out.extend(p for p in root.iterdir() if p.is_file() and p.name.lower().startswith("notebook")
+                   and (RE_SYNC_CONFLICT.search(p.name) or RE_NUMBERED_COPY.search(p.name)))
     return sorted(out)
 
 
 def sync_conflict_advice(parts) -> str:
     if "Inventory" in parts:
         return "copy of a generated file, made by a sync service: delete it (the index is rebuilt from the notes)"
-    if "People" in parts:
-        return ("copy made by a sync service: the same person created records on two computers before they synced. "
+    if len(parts) == 1:
+        return ("copy of notebook.md made by a sync service: records were created on two computers before they synced. "
                 "Check for two records with the same ID, then delete this copy")
     return ("copy made by a sync service when the same file changed on two computers: open both, move anything you "
             "need into the original, then delete this copy. If they are two different records that got the same ID, "
@@ -704,7 +713,7 @@ def validate_vault(vault: Vault) -> List[Issue]:
     for folder, msg in vault.folder_issues:
         E(vault.rel(folder), msg)
     for p in sync_conflict_files(vault.root):
-        W(vault.rel(p), sync_conflict_advice(p.parts))
+        W(vault.rel(p), sync_conflict_advice(Path(vault.rel(p)).parts))
 
     known_keys = {kind: set(template_keys(kind)) | {"type"} for kind in KINDS}
     seen_ids: Dict[str, str] = {}
@@ -940,58 +949,85 @@ def next_number(existing: Iterable[str], pattern: re.Pattern, initials: str, let
 
 
 # --------------------------------------------------------------------------
-# People/{INITIALS}.yaml: who the initials are, and the last serial numbers they used
+# notebook.md: one small note at the top of a notebook folder
 # --------------------------------------------------------------------------
 
-PERSON_HEAD = ("# One file per person: who these initials are, and the last serial numbers used.\n"
-               "# The notebook tools update it when a record is created. A number recorded here is not\n"
-               "# given out again, even if the folder it belonged to is deleted. You may add lines of\n"
-               "# your own (orcid, email, role); they are kept.\n")
-PERSON_KEYS = ["initials", "name", "last_experiment"] + [f"last_sample_{letter}" for letter in SAMPLE_LETTERS]
+NOTEBOOK_FILE = "notebook.md"
+NOTEBOOK_BODY = """
+# Lab notebook
+
+This folder is a plain-text lab notebook. Each experiment is a folder in
+`Experiments/` with a Markdown note. Protocols, samples, and projects are
+Markdown notes in their own folders. `Inventory/` is an index made from them.
+
+The lines at the top are kept by the notebook tools. `owner` and `initials`
+say whose notebook this is; correct them if they are wrong. `last_ids` holds
+the last ID given out for each kind of record, so a number is not used twice
+even if a folder is deleted. Do not lower them.
+"""
 
 
-def person_path(root: Path, initials: str) -> Path:
-    return root / "People" / f"{initials}.yaml"
+def notebook_text(owner: str = "", initials: str = "", last_ids: Iterable[str] = ()) -> str:
+    lines = ["type: notebook", f"owner: {quote_if_needed(owner)}", f"initials: {initials}", f"last_ids: {format_value(list(last_ids))}"]
+    return "---\n" + "\n".join(line.rstrip() for line in lines) + "\n---\n" + NOTEBOOK_BODY
 
 
-def read_person(root: Path, initials: str) -> Dict[str, object]:
+def read_notebook(root: Path) -> Dict[str, object]:
+    """The header of notebook.md, or {} when there is none."""
     try:
-        text = person_path(root, initials).read_text(encoding="utf-8")
+        return parse_front_matter((Path(root) / NOTEBOOK_FILE).read_text(encoding="utf-8"))[0]
     except (OSError, UnicodeDecodeError):
         return {}
-    return parse_header_lines((text[1:] if text.startswith("\ufeff") else text).splitlines())[0]
 
 
-def last_serial(root: Path, initials: str, key: str) -> int:
-    value = read_person(root, initials).get(key, "")
-    return int(value) if isinstance(value, str) and value.isdigit() else 0
+def _last_ids(root: Path) -> List[str]:
+    value = read_notebook(root).get("last_ids", [])
+    return [str(x) for x in value] if isinstance(value, list) else []
 
 
-def record_serial(root: Path, initials: str, key: str, number: int, name: str = "") -> Optional[str]:
-    """Write the serial just used into the person's file. Returns a warning when the file says these
-    initials belong to someone with a different name."""
-    person = read_person(root, initials)
-    warning = None
-    known = person.get("name", "")
-    known = known if isinstance(known, str) else ""
-    name = one_line(name).strip()
-    if name and name != initials and known and known != initials and known.lower() != name.lower():
-        warning = (f"the initials {initials} belong to {known} (People/{initials}.yaml), and this record was made as {name}. "
-                   "If you are two people, one of you needs different initials")
-    person["initials"] = initials
-    person["name"] = known if known and known != initials else (name or known or initials)
-    person[key] = str(max(number, last_serial(root, initials, key)))
-    keys = [k for k in PERSON_KEYS if k in person] + [k for k in person if k not in PERSON_KEYS]
-    text = PERSON_HEAD + "".join(f"{k}: {format_value(person[k])}".rstrip() + "\n" for k in keys)
-    path = person_path(root, initials)
-    path.parent.mkdir(parents=True, exist_ok=True)
+def last_issued(root: Path, initials: str, letter: str) -> int:
+    """The highest number notebook.md remembers for these initials and this kind of record."""
+    for known in _last_ids(root):
+        m = re.match(rf"^{re.escape(initials)}{letter}(\d{{4}})$", known)
+        if m:
+            return int(m.group(1))
+    return 0
+
+
+def _update_notebook(root: Path, values: Dict[str, object]) -> None:
+    path = Path(root) / NOTEBOOK_FILE
+    if not path.exists():
+        current = {"owner": "", "initials": "", "last_ids": []}
+        current.update(values)
+        write_text_lf(path, notebook_text(str(current["owner"]), str(current["initials"]), current["last_ids"]))
+        return
     try:
-        old = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        old = None
-    if old != text:
-        write_text_lf(path, text)
-    return warning
+        for key, value in values.items():
+            set_header_field(path, key, value)
+    except (ElnError, OSError, UnicodeDecodeError):
+        pass  # a notebook.md someone broke must not stop a record from being made
+
+
+def record_id(root: Path, new_id: str) -> None:
+    """Remember an ID that was just given out, in notebook.md."""
+    prefix, number = new_id[:-4], int(new_id[-4:])
+    kept = [x for x in _last_ids(root) if x[:-4] != prefix]
+    number = max([number] + [int(x[-4:]) for x in _last_ids(root) if x[:-4] == prefix and x[-4:].isdigit()])
+    ids = sorted(kept + [f"{prefix}{number:04d}"])
+    if ids != _last_ids(root) or not (Path(root) / NOTEBOOK_FILE).exists():
+        _update_notebook(root, {"last_ids": ids})
+
+
+def set_notebook_owner(root: Path, owner: str, initials: str) -> None:
+    """Write whose notebook this is, where notebook.md does not say yet."""
+    known = read_notebook(root)
+    values = {}
+    if owner and not known.get("owner"):
+        values["owner"] = one_line(owner).strip()
+    if initials and not known.get("initials"):
+        values["initials"] = initials
+    if values or not (Path(root) / NOTEBOOK_FILE).exists():
+        _update_notebook(root, values)
 
 
 def next_experiment_id(root: Path, initials: str) -> str:
@@ -1008,7 +1044,7 @@ def next_experiment_id(root: Path, initials: str) -> str:
                     v = fields.get("experiment_id")
                     if isinstance(v, str):
                         seen.append(v)
-    return f"{initials}e{max(next_number(seen, RE_EXP_ID, initials), last_serial(root, initials, 'last_experiment') + 1):04d}"
+    return f"{initials}e{max(next_number(seen, RE_EXP_ID, initials), last_issued(root, initials, 'e') + 1):04d}"
 
 
 def next_sample_id(root: Path, initials: str, letter: str) -> str:
@@ -1021,7 +1057,7 @@ def next_sample_id(root: Path, initials: str, letter: str) -> str:
             v = fields.get("sample_id")
             if isinstance(v, str):
                 seen.append(v)
-    number = max(next_number(seen, RE_SAMPLE_ID, initials, letter), last_serial(root, initials, f"last_sample_{letter}") + 1)
+    number = max(next_number(seen, RE_SAMPLE_ID, initials, letter), last_issued(root, initials, letter) + 1)
     return f"{initials}{letter}{number:04d}"
 
 
@@ -1104,8 +1140,10 @@ class Created:
 
 def create_experiment(root: Path, initials: str, researcher: str, title: str, project: str = "",
                       exp_type: str = "", protocol: str = "", samples: str = "", related: str = "",
-                      notebook: str = "", tags: str = "", raw_data_path: str = "", index: bool = True) -> Created:
-    """The one way an experiment comes into existence. Used by the CLI, the wizard, and the web page."""
+                      notebook: str = "", tags: str = "", raw_data_path: str = "", index: bool = True,
+                      today: Optional[str] = None) -> Created:
+    """The one way an experiment comes into existence. Used by the CLI, the wizard, and the web page.
+    `today` is the start date written into the note (default: today)."""
     title = (title or "").strip()
     if not title:
         raise ElnError("an experiment needs a title")
@@ -1119,7 +1157,7 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
     # a protocol typed without its P_ prefix means the protocol of that name
     protocol = ", ".join(f"P_{x}" if not x.startswith("P_") and not (root / "Protocols" / f"{x}.md").exists()
                          and (root / "Protocols" / f"P_{x}.md").exists() else x for x in csv_items(protocol))
-    today = date.today().isoformat()
+    today = today or date.today().isoformat()
     exp_id = next_experiment_id(root, initials)
     slug = slugify(title)
     folder_name = f"{exp_id}_{slug}" if slug else exp_id
@@ -1144,9 +1182,7 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
         "RELATED": related or "", "TAGS": tags or "",
     }, path=override if override and override.exists() else None))
     result = Created(exp_id, note_path)
-    warning = record_serial(root, initials, "last_experiment", int(exp_id[-4:]), researcher or "")
-    if warning:
-        result.warnings.append(warning)
+    record_id(root, exp_id)
     for p in csv_items(project):
         if not (root / "Projects" / f"{p}.md").exists():
             result.warnings.append(f"project {p} has no page in Projects/ yet (create it with New project)")
@@ -1192,7 +1228,7 @@ def create_sample(root: Path, initials: str, sample_type: str, title: str, sourc
         "SAMPLE_ID": sample_id, "SAMPLE_TYPE": stype, "TITLE": title.strip(), "DATE": date.today().isoformat(),
         "SOURCE": source or "", "STORAGE": storage or "", "TAGS": tags or "",
     }))
-    record_serial(root, initials, f"last_sample_{letter}", int(sample_id[-4:]))
+    record_id(root, sample_id)
     if index:
         write_index(load_vault(root), quiet=True)
     return Created(sample_id, path)
@@ -1591,19 +1627,7 @@ def select_for_export(vault: Vault, project: Optional[str], experiment_ids: List
 def build_export(vault: Vault, experiments: List[Note], related: bool = True,
                  today: Optional[date] = None) -> str:
     today = today or date.today()
-    extras: List[Note] = []
-    if related:
-        seen = {e.id for e in experiments}
-        for e in experiments:
-            for key, kind in REF_FIELDS["experiment"].items():
-                for ref in e.get_list(key):
-                    t = vault.by_id.get(ref)
-                    if t is not None and t.id not in seen:
-                        seen.add(t.id)
-                        extras.append(t)
-    order = {"project": 0, "protocol": 1, "sample": 2, "experiment": 3}
-    extras.sort(key=lambda n: (order[n.kind], n.id))
-
+    extras = related_notes(vault, experiments) if related else []
     primer = EXPORT_PRIMER.replace("@LAB@", load_lab(vault.root)["lab_name"])
     out = [f"# AI_ELN export - {today.isoformat()}", "", primer, "## Inventory of exported experiments", "",
            "| ID | Title | Researcher | Project | Status | Started | Completed |", "|---|---|---|---|---|---|---|"]
@@ -1616,6 +1640,87 @@ def build_export(vault: Vault, experiments: List[Note], related: bool = True,
         out.append(n.path.read_text(encoding="utf-8").rstrip())
         out.append("")
     return "\n".join(out).rstrip() + "\n"
+
+
+def related_notes(vault: Vault, experiments: List[Note]) -> List[Note]:
+    """The projects, protocols, samples, and experiments that the chosen experiments refer to."""
+    seen = {e.id for e in experiments}
+    extras: List[Note] = []
+    for e in experiments:
+        for key in REF_FIELDS["experiment"]:
+            for ref in e.get_list(key):
+                t = vault.by_id.get(ref)
+                if t is not None and t.id not in seen:
+                    seen.add(t.id)
+                    extras.append(t)
+    order = {"project": 0, "protocol": 1, "sample": 2, "experiment": 3}
+    extras.sort(key=lambda n: (order[n.kind], n.id))
+    return extras
+
+
+def export_readme(vault: Vault, experiments: List[Note], extras: List[Note], raw: bool, today: str) -> str:
+    kinds = {n.kind for n in extras}
+    others = [KIND_DIR[k] for k in ("protocol", "sample", "project") if k in kinds]
+    out = [f"# Notebook export - {today}", "",
+           f"{len(experiments)} experiment{'s' if len(experiments) != 1 else ''} from {load_lab(vault.root)['lab_name']}, "
+           "copied out of the lab notebook as ordinary files.",
+           "The notes are Markdown text and the data files are as they were. No special software is needed to read them.",
+           "", "## What is here", "",
+           "- `all-notes.md`: every note in one file, with an explanation of the IDs and sections at the top. "
+           "Paste it into an AI chat, or attach it.",
+           "- `Experiments/`: one folder per experiment, laid out as in the notebook "
+           "(`1-notes`, `2-data_raw`, `3-code`, `4-data_processed`, `5-figures`)."]
+    if others:
+        out.append("- " + ", ".join(f"`{d}/`" for d in others) + ": the records the experiments refer to.")
+    out.append("- `Inventory/`: index tables (CSV) of what is in this folder.")
+    out.append("")
+    if not raw:
+        out += ["Raw data was left out: each `2-data_raw/` holds only its README. "
+                "`raw_data_path` in each note says where the raw data is kept.", ""]
+    out += ["The folder is laid out like a notebook, so the notebook page and tools can open it.", "",
+            "## Experiments", "",
+            "| ID | Title | Researcher | Project | Status | Started | Completed |", "|---|---|---|---|---|---|---|"]
+    for e in experiments:
+        out.append(f"| {e.id} | {e.get('title')} | {e.get('researcher')} | {', '.join(e.get_list('project')) or '-'} | "
+                   f"{e.get('status')} | {e.get('date_started')} | {e.get('date_completed') or '-'} |")
+    return "\n".join(out) + "\n"
+
+
+def export_folder(vault: Vault, experiments: List[Note], dest: Path, related: bool = True, raw: bool = True,
+                  today: Optional[date] = None) -> Dict[str, object]:
+    """Copy the chosen experiments, and the records they refer to, into `dest` as plain files in the
+    notebook's own layout, with a README, one file holding every note, and an index."""
+    today = today or date.today()
+    root = vault.root
+    if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
+        raise ElnError(f"{vault.rel(dest)} already exists. Delete it, or export to another place.")
+    extras = related_notes(vault, experiments) if related else []
+    dest.mkdir(parents=True, exist_ok=True)
+    for d in list(KIND_DIR.values()) + ["Inventory"]:
+        (dest / d).mkdir(exist_ok=True)
+    files = size = 0
+    for n in experiments + extras:
+        if n.kind != "experiment" or n.folder is None:
+            target = dest / n.path.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(n.path, target)
+            files, size = files + 1, size + target.stat().st_size
+            continue
+        for sub in SUBFOLDERS:
+            (dest / n.folder.relative_to(root) / sub).mkdir(parents=True, exist_ok=True)
+        for f in folder_files(n.folder):
+            parts = f.relative_to(n.folder).parts
+            if not raw and parts[0] == "2-data_raw" and parts[1:] != ("README.md",):
+                continue
+            target = dest / f.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, target)
+            files, size = files + 1, size + target.stat().st_size
+    write_text_lf(dest / "all-notes.md", build_export(vault, experiments, related=related, today=today))
+    write_text_lf(dest / "README.md", export_readme(vault, experiments, extras, raw, today.isoformat()))
+    write_index(load_vault(dest), quiet=True)
+    return {"path": dest, "experiments": [e.id for e in experiments], "notes": len(experiments) + len(extras),
+            "files": files, "bytes": size}
 
 
 def cmd_export(args) -> int:
@@ -1645,6 +1750,16 @@ def cmd_export(args) -> int:
         scope = "-".join(args.experiment[:3])
     elif args.status:
         scope = args.status
+    if args.all:
+        scope = "all"
+    if args.format == "folder":
+        dest = Path(args.out).expanduser() if args.out else root / "Exports" / f"export_{scope}_{date.today().strftime('%Y%m%d')}"
+        r = export_folder(vault, experiments, dest, related=not args.no_related, raw=not args.no_raw)
+        print(f"Exported {len(experiments)} experiment(s) as a folder of plain files: {r['files']} files, {r['bytes']:,} bytes -> {dest}")
+        print("Start with README.md in it. all-notes.md is the one file to paste into a chat.")
+        if args.open:
+            open_path(dest)
+        return 0
     if args.format == "eln":
         out = args.out
         if not out:
@@ -2060,6 +2175,182 @@ def complete_experiment(root: Path, exp_id: str, when: Optional[str] = None, for
             "files": len(read_manifest(note.folder, exp_id) or {})}
 
 
+def write_section(text: str, section: str, content: str, mode: str = "replace") -> str:
+    """Replace or extend the text under one '## ' heading. Returns the new note text."""
+    lines = text.splitlines()
+    wanted = section.strip().lower()
+    start = next((i for i, l in enumerate(lines) if l.startswith("## ") and l[3:].strip().lower() == wanted), None)
+    if start is None:
+        raise ElnError(f"the note has no '## {section.strip()}' section")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    fresh = content.strip().splitlines()
+    middle = [""] + fresh + [""]
+    if mode == "append":
+        kept = lines[start + 1:end]
+        while kept and not kept[-1].strip():
+            kept.pop()
+        if "".join(kept).strip():
+            middle = kept + [""] + fresh + [""]
+    return "\n".join(lines[:start + 1] + middle + lines[end:]).rstrip("\n") + "\n"
+
+
+# --------------------------------------------------------------------------
+# Adopting an older folder: it becomes an experiment record and its files move in unchanged
+# --------------------------------------------------------------------------
+
+ADOPTED_TAG = "adopted"
+NOTEBOOK_TOP = set(KIND_DIR.values()) | {"Inventory", "Exports", "templates"}
+RE_DATE_IN_NAME = re.compile(r"(?<!\d)((?:19|20)\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?!\d)")
+
+
+def guess_from_folder_name(name: str) -> Tuple[str, str]:
+    """(title, date or '') read from an old folder's name: '2019-03-04_PRMT5 western' -> ('PRMT5 western', '2019-03-04')."""
+    when = ""
+    m = RE_DATE_IN_NAME.search(name)
+    if m and _valid_date("-".join(m.groups())):
+        when = "-".join(m.groups())
+        name = name[:m.start()] + " " + name[m.end():]
+    return re.sub(r"[\s_]+", " ", name).strip(" -_.,"), when
+
+
+def adoptable_folders(root: Path) -> List[Path]:
+    """Folders in the notebook folder that are not records: anything in Experiments/ without an ID in its
+    name, and other folders at the top (not offered when the notebook folder is the tool's own repository)."""
+    def dirs(parent: Path) -> List[Path]:
+        if not parent.is_dir():
+            return []
+        return sorted((p for p in parent.iterdir() if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.name)
+    out = [p for p in dirs(root / "Experiments") if not RE_EXP_FOLDER.match(p.name)]
+    if not (root / "scripts" / "eln.py").exists():
+        out += [p for p in dirs(root) if p.name not in NOTEBOOK_TOP]
+    return out
+
+
+def _utc_stamp(seconds: float) -> str:
+    t = datetime.fromtimestamp(int(seconds), tz=timezone.utc)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def adopt_folder(root: Path, source: Path, initials: str, researcher: str, title: str = "", when: str = "",
+                 project: str = "", status: str = "complete", copy: bool = False,
+                 today: Optional[str] = None) -> Created:
+    """Make an experiment record out of an older folder. The folder goes, as it is, into the new
+    experiment's 2-data_raw/ (moved, or copied with copy=True); nothing in it is renamed or changed.
+    A CSV in 1-notes/ lists every file with its size and the time it was last modified."""
+    require_folder(root)
+    today = today or date.today().isoformat()
+    if status not in ("complete", "active"):
+        raise ElnError(f"status must be complete or active (got {status!r})")
+    if when and not _valid_date(when):
+        raise ElnError(f"date must be YYYY-MM-DD (got {when!r})")
+    src = Path(source).expanduser().resolve()
+    root_r = root.resolve()
+    if not src.is_dir():
+        raise ElnError(f"there is no folder at {source}")
+    if src == root_r or src in root_r.parents:
+        raise ElnError(f"{src} contains the notebook itself; adopt a folder of one experiment's files")
+    if root_r in src.parents:
+        parts = src.relative_to(root_r).parts
+        if parts[0] in NOTEBOOK_TOP and (parts[0] != "Experiments" or len(parts) < 2):
+            raise ElnError(f"{'/'.join(parts)} is part of the notebook, not an older folder")
+        if parts[0] == "Experiments" and RE_EXP_FOLDER.match(parts[1]):
+            raise ElnError(f"{'/'.join(parts)} is already in an experiment record ({parts[1]})")
+    name = src.name
+    found: List[Tuple[str, int, float]] = []
+    for base, _dirs, names in os.walk(src):
+        for fname in names:
+            f = Path(base) / fname
+            if f.is_symlink() or not f.is_file():
+                continue
+            st = f.stat()
+            found.append((f.relative_to(src).as_posix(), st.st_size, st.st_mtime))
+    if not found:
+        raise ElnError(f"{name} has no files in it; there is nothing to adopt")
+    found.sort(key=lambda r: tuple(r[0].split("/")))
+    guessed_title, name_date = guess_from_folder_name(name)
+    oldest = date.fromtimestamp(min(r[2] for r in found)).isoformat()
+    newest = date.fromtimestamp(max(r[2] for r in found)).isoformat()
+    started = when or name_date or oldest
+    started_from = "the date given" if when else "the date in the folder name" if name_date else "the oldest file date"
+    finished = max(started, newest)
+
+    result = create_experiment(root, initials, researcher, (title or "").strip() or guessed_title or name,
+                               project=project, tags=ADOPTED_TAG, today=started, index=False)
+    exp_id, folder = result.id, result.path.parent.parent
+    listing = folder / "1-notes" / f"{exp_id}_adopted-files.csv"
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(["path", "bytes", "modified"])
+    for rel, size, mtime in found:
+        w.writerow([f"2-data_raw/{name}/{rel}", size, _utc_stamp(mtime)])
+    write_text_lf(listing, buf.getvalue())
+    result.extra.append(listing)
+
+    dest = folder / "2-data_raw" / name
+    try:
+        if copy:
+            shutil.copytree(src, dest, symlinks=True)
+        else:
+            shutil.move(str(src), str(dest))
+    except OSError as e:
+        raise ElnError(f"{exp_id} was created, but the files could not be {'copied' if copy else 'moved'} ({e}). "
+                       f"Put what is left of {src} into {dest} by hand, or delete the folder of {exp_id} and try again.")
+
+    shown = name.replace("`", "'")
+    total = sum(r[1] for r in found)
+    said = (f"Adopted on {today} from an older folder named `{shown}`. The folder was {'copied' if copy else 'moved'}, "
+            f"as it was, into `2-data_raw/{shown}/`: {len(found)} file{'s' if len(found) != 1 else ''}, {total:,} bytes. "
+            f"`1-notes/{exp_id}_adopted-files.csv` lists each file with its size and the time it was last modified "
+            f"before that.\n\n`date_started` is {started_from}"
+            + ("; `date_completed` is the newest file date" if status == "complete" else "")
+            + ". Correct the header if a date or the title is wrong.")
+    text = write_section(result.path.read_text(encoding="utf-8"), "Files", said, mode="append")
+    if status == "complete":
+        text = write_section(text, "Results", "Not written. This record was made by adopting an older folder; see Files.")
+        text = write_section(text, "Interpretation", "Not written.")
+    write_text_lf(result.path, text)
+    if status == "complete":
+        done = complete_experiment(root, exp_id, when=finished)
+        result.extra += [done["snapshot"], done["manifest"]]
+        result.warnings += done["warnings"]
+    else:
+        write_index(load_vault(root), quiet=True)
+    return result
+
+
+def cmd_adopt(args) -> int:
+    config = load_config()
+    root = resolve_root(args.root, config)
+    require_folder(root)
+    if not args.folder:
+        waiting = adoptable_folders(root)
+        if not waiting:
+            print("No folder here is waiting to be adopted. To adopt one from somewhere else: eln.py adopt PATH")
+            return 0
+        print("Folders that are not records yet (adopt one with: eln.py adopt \"PATH\"):")
+        for p in waiting:
+            title, when = guess_from_folder_name(p.name)
+            print(f"  {p.relative_to(root).as_posix()}" + (f"    title: {title}" if title else "") + (f"    date: {when}" if when else ""))
+        return 0
+    if len(args.folder) > 1 and (args.title or args.date):
+        raise ElnError("--title and --date describe one folder; adopt the folders one at a time to use them")
+    initials, researcher = resolve_person(args, config)
+    for given in args.folder:
+        src = Path(given).expanduser()
+        if not src.is_absolute() and not src.is_dir() and (root / given).is_dir():
+            src = root / given  # a path written the way the list above shows it
+        result = adopt_folder(root, src, initials, researcher, title=args.title or "", when=args.date or "",
+                              project=args.project or "", status=args.status, copy=args.copy)
+        print(f"Adopted {Path(given).name} as {result.id}")
+        print(f"  {result.path.relative_to(root).as_posix()}")
+        for p in result.extra:
+            print(f"  {p.relative_to(root).as_posix()}")
+        for w in result.warnings:
+            err(f"  warning: {w}")
+    print("Open the note and write what the experiment was for. The dates and title were guessed; correct them if needed.")
+    return 0
+
+
 def cmd_render(args) -> int:
     root = resolve_root(args.root)
     vault = load_vault(root)
@@ -2239,8 +2530,9 @@ def build_eln(vault: Vault, experiments: List[Note], related: bool = True, today
 POINTER_AGENTS_MD = """\
 # Agent instructions - lab research record (data root)
 
-This folder holds the lab's experiment, protocol, sample, and project notes.
-The tooling, templates, and full rules live in the AI_ELN repository at:
+This folder is a lab notebook: experiment, protocol, sample, and project notes
+as plain files. `notebook.md` says whose it is. The tooling, templates, and
+full rules live in the AI_ELN repository at:
 
     {repo}
 
@@ -2250,7 +2542,9 @@ anything here. Create experiments only with:
     python3 "{repo}/scripts/eln.py" new experiment --root "{root}" --title "..."
 
 Never hand-create an experiment folder; never edit files in `2-data_raw/`;
-cite experiment IDs for any factual claim about a result.
+cite experiment IDs for any factual claim about a result. `Exports/` holds
+copies: do not cite or edit them. Other folders here are not records until
+`eln.py adopt` makes them one.
 """
 
 
@@ -2277,6 +2571,8 @@ def cmd_init(args) -> int:
     p = save_config(data)
     root.mkdir(parents=True, exist_ok=True)  # init is the one command that may create the notebook folder
     ensure_vault_dirs(root)
+    if root != REPO_ROOT:
+        set_notebook_owner(root, researcher, initials)
     if root != REPO_ROOT and not (root / "AGENTS.md").exists():
         write_text_lf((root / "AGENTS.md"), POINTER_AGENTS_MD.format(repo=REPO_ROOT, root=root))
     print(f"Saved {p}")
@@ -2401,6 +2697,19 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--json", action="store_true", help="print full header fields as JSON")
     f.set_defaults(func=cmd_find)
 
+    ad = sub.add_parser("adopt", parents=[common],
+                        help="make an experiment record from an older folder; its files move in unchanged")
+    ad.add_argument("folder", nargs="*", help="the old folder(s). With none, list the folders in the notebook that are not records yet")
+    ad.add_argument("--title", help="title for the record (default: read from the folder name)")
+    ad.add_argument("--date", help="start date, YYYY-MM-DD (default: a date in the folder name, else the oldest file date)")
+    ad.add_argument("--project", help="project ID(s), comma-separated")
+    ad.add_argument("--status", choices=["complete", "active"], default="complete",
+                    help="complete (default) also writes the snapshot and the manifest of file hashes")
+    ad.add_argument("--copy", action="store_true", help="copy the folder and leave the original where it is (default: move it)")
+    ad.add_argument("--initials", help="override the initials from init")
+    ad.add_argument("--researcher", help="override the name from init")
+    ad.set_defaults(func=cmd_adopt)
+
     rn = sub.add_parser("render", parents=[common], help="write one note as a self-contained HTML file (images embedded)")
     rn.add_argument("id", metavar="ID")
     rn.add_argument("--out", help="default: 1-notes/{ID}_snapshot_{date}.html next to the note")
@@ -2432,10 +2741,12 @@ def build_parser() -> argparse.ArgumentParser:
     x.add_argument("--status", help="every experiment with this status")
     x.add_argument("--all", action="store_true", help="every experiment")
     x.add_argument("--no-related", action="store_true", help="do not include referenced protocols/samples/projects")
-    x.add_argument("--format", choices=["md", "eln"], default="md",
-                   help="md: one Markdown file to paste into a chat (default); eln: a .eln archive (RO-Crate) "
-                        "that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import")
-    x.add_argument("--out", help="write to a file instead of stdout")
+    x.add_argument("--format", choices=["md", "folder", "eln"], default="md",
+                   help="md: one Markdown file to paste into a chat (default); folder: a folder of plain files "
+                        "(the notes, their data files, a README, and an index) in Exports/; eln: a .eln archive "
+                        "(RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import")
+    x.add_argument("--no-raw", action="store_true", help="with --format folder: leave out what is in 2-data_raw/")
+    x.add_argument("--out", help="write to this file (or, with --format folder, this folder) instead of the default")
     x.add_argument("-i", "--interactive", action="store_true", help="ask what to export")
     x.add_argument("--open", action="store_true", help="write to Inventory/export_<scope>_<date>.md and open it")
     x.set_defaults(func=cmd_export)
