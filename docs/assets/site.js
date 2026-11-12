@@ -1,6 +1,8 @@
-/* Small behaviours for the site: theme button, the "try it" naming box, Mac/Windows tabs. No dependencies. */
+/* Small behaviours for the site: theme button, the "try it" naming box, Mac/Windows tabs.
+   A module, so the naming box uses the same code as the notebook page (app/lib/names.js). */
+import * as N from '../app/lib/names.js';
+
 (function () {
-  'use strict';
   var $ = function (sel, el) { return (el || document).querySelector(sel); };
 
   /* theme: follows the system until the button is used, then remembers the choice */
@@ -18,8 +20,8 @@
 
   /* "try it": type initials and a title, see exactly what New experiment would create */
   function tryIt() {
-    var N = window.ElnNames, form = $('#try-form');
-    if (!N || !form) return;
+    var form = $('#try-form');
+    if (!form) return;
     var ini = $('#try-initials'), title = $('#try-title'), num = $('#try-number');
     var outId = $('#try-id'), outTree = $('#try-tree'), hint = $('#try-initials-hint'), foot = $('#try-foot');
     function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
@@ -65,5 +67,5 @@
     show(/Win/i.test(navigator.platform || navigator.userAgent || '') ? 'windows' : 'mac');
   }
 
-  document.addEventListener('DOMContentLoaded', function () { theme(); tryIt(); tabs(); });
+  theme(); tryIt(); tabs();
 })();

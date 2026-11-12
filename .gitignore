@@ -6,3 +6,6 @@ Thumbs.db
 # generated snapshots the launchers write into a record
 Inventory/meeting-brief_*.md
 Inventory/export_*.md
+
+# node, only ever used for the optional browser test
+node_modules/

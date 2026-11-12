@@ -96,6 +96,24 @@ the filesystem already have them), electronic signatures and audit trails
 that would need a server to be meaningful, a database, and any feature
 that would make the Markdown file not the whole truth.
 
+## Two implementations, one behaviour
+
+The tools exist twice: `scripts/eln.py` in Python and `docs/app/lib/` in
+JavaScript. The Python one runs from a terminal or a launcher. The
+JavaScript one runs in a browser on a folder the person picks, which
+removes the need to install anything, and in Node, where it backs the MCP
+server. Both read and write the same notebook folders, so they have to
+agree exactly. `tests/test_js_parity.py` runs each operation through both
+and compares the files, the validator messages, the index, the brief, the
+export, the snapshot, and the manifest.
+
+The JavaScript side is split so that later changes stay small: `lib/` has
+the notebook logic with no browser or Node code in it, `store/` has one
+file per place the files can live, and `lib/tools.js` lists every
+operation with a name and an argument schema. The page, the MCP server,
+and the command line are thin layers over that list. A different AI
+interface later is another thin layer.
+
 ## Why flat files and not an app
 
 Friction is the enemy. Every ELN the lab has tried was abandoned not

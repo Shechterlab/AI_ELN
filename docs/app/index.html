@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Lab notebook</title>
+  <meta name="description" content="The plain-text lab notebook, in the browser. Open your notebook folder; this page reads and writes the files in it. Nothing is uploaded.">
+  <link rel="icon" href="../assets/shechterlab-icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="stylesheet" href="app.css">
+  <script>
+    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="top rule">
+    <div class="wrap bar">
+      <a class="brand" href="#/" title="Lab notebook">
+        <img src="../assets/shechterlab-icon.svg" alt="" width="34" height="34">
+        <div><b>Lab notebook</b><small>Runs in this browser. Notes are plain text files in your folder.</small></div>
+      </a>
+      <nav class="site-nav" id="nav" aria-label="Notebook"></nav>
+      <div class="where" id="where"></div>
+      <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch light or dark theme">Theme</button>
+    </div>
+  </header>
+
+  <main class="app" id="main">
+    <noscript><div class="msg warn">This page needs JavaScript. The notebook also runs without a browser: see the guide.</div></noscript>
+  </main>
+
+  <footer class="app" id="foot">
+    <p><a href="../">About this notebook</a> · <a href="../guide.html?d=getting-started">Getting started</a> · <a href="../guide.html?d=CHEATSHEET">Cheat sheet</a> · <a href="../guide.html?d=CONVENTIONS">Conventions</a></p>
+  </footer>
+
+  <script type="module" src="ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "ai-eln",
+  "private": true,
+  "type": "module",
+  "description": "Plain-text lab notebook: core library, browser app, and tool registry. No dependencies, no build step."
+}

@@ -6,12 +6,12 @@
   <meta name="color-scheme" content="light dark">
   <title>Plain-text lab notebook · Shechter Lab</title>
   <meta name="application-name" content="Plain-text lab notebook">
-  <meta name="description" content="A lab notebook kept as plain files in a shared folder. Each experiment has an ID, a folder, and a Markdown note. A local web page creates the files and checks the naming conventions.">
+  <meta name="description" content="A lab notebook kept as plain files in a shared folder. Each experiment has an ID, a folder, and a Markdown note. A page in your browser creates the files in your own folder and checks the naming conventions.">
   <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="assets/site.css?v=20261112b">
+  <link rel="stylesheet" href="assets/site.css?v=20261112c">
   <script>
     try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
   </script>
@@ -31,6 +31,7 @@
           <a href="guide.html?d=getting-started">Get started</a>
           <a href="guide.html?d=CHEATSHEET">Cheat sheet</a>
           <a href="guide.html?d=ai-agents">Using AI</a>
+          <a href="app/">Open notebook</a>
           <a href="https://github.com/Shechterlab/AI_ELN">GitHub</a>
         </nav>
         <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch light or dark theme">Theme</button>
@@ -40,9 +41,10 @@
     <div class="wrap hero-grid">
       <div>
         <h1>A lab notebook kept as plain files in a shared folder</h1>
-        <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You create experiments by filling in a form, and the tool makes the folders and files. It needs no account or server, and the notes open in any text editor.</p>
+        <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You fill in a form in your browser, and the folders and files are created in your own folder. It needs no account, server, or installation, and the notes open in any text editor.</p>
         <div class="cta">
-          <a class="btn" href="guide.html?d=getting-started">Get started</a>
+          <a class="btn" href="app/">Open the notebook</a>
+          <a class="btn ghost" href="guide.html?d=getting-started">Get started</a>
           <a class="btn ghost" href="#how">How it works</a>
         </div>
       </div>
@@ -51,7 +53,7 @@
           <div class="chrome"><i></i><i></i><i></i><span>127.0.0.1 · on your computer</span></div>
           <img src="img/home.png" alt="The notebook's home page: buttons for New experiment, New sample, Check everything, Lab meeting brief and Export, above a list of recent experiments." width="1180" height="1010">
         </div>
-        <figcaption>The notebook page, shown with the fictional sandbox data. It runs on your own computer and reads and writes ordinary files.</figcaption>
+        <figcaption>The notebook page, shown with the fictional sandbox data. It runs in your browser and reads and writes ordinary files in your folder.</figcaption>
       </figure>
     </div>
   </div>
@@ -63,7 +65,7 @@
           <p class="eyebrow">How it works</p>
           <h2>Daily use</h2>
           <ol class="steps">
-            <li><div><h3>Double-click <em>Open ELN</em></h3><p>A page opens in your web browser. It runs on your computer and does not upload anything.</p></div></li>
+            <li><div><h3>Open the notebook page and choose your folder</h3><p>In Chrome or Edge, click <a href="app/">Open the notebook</a> and pick the notebook folder. The page works on the files in that folder and does not upload them. In Safari or Firefox, double-click <em>Open ELN</em> instead.</p></div></li>
             <li><div><h3>Click <em>New experiment</em> and enter a title</h3><p>The tool creates the experiment folder, the note, a dated copy of the protocol, and a row in the lab index.</p></div></li>
             <li><div><h3>Click <em>Edit here</em> and write</h3><p>Write the objective before you start. Add the results, interpretation, and decision when you have them.</p></div></li>
             <li><div><h3>Put your files in the experiment folder</h3><p>Start the names of figures, tables, and scripts with the experiment ID. Put instrument files in <code>2-data_raw</code> without renaming or editing them.</p></div></li>
@@ -255,7 +257,7 @@ has not been blotted directly.</pre>
               <li><b>Interpretation</b><span>What result would contradict this interpretation?</span></li>
               <li><b>Search</b><span>Which experiments used this antibody, and what did each find?</span></li>
             </ul>
-            <p style="margin-top:16px">There are two ways to use it, both described under <em>Ask the AI</em> in the notebook page: copy an export into ChatGPT, or open Codex, Claude Code, or Cowork in the notebook folder. <a href="guide.html?d=ai-agents">Details</a>.</p>
+            <p style="margin-top:16px">There are three ways to use it, described under <em>Ask the AI</em> in the notebook page: copy an export into ChatGPT; open Codex, Claude Code, or Cowork in the notebook folder; or connect a tool that supports MCP to the notebook's own MCP server. <a href="guide.html?d=ai-agents">Details</a>.</p>
             <p class="small muted">Lab rule: the AI reports and cites what the notes say and does not invent results. People draw the conclusions.</p>
           </div>
         </div>
@@ -269,11 +271,12 @@ has not been blotted directly.</pre>
         <div class="faq">
           <details><summary>Do I have to learn Markdown or code?</summary><p>No. You fill in a form and type text into a box. Headings start with <code>##</code> and are already in the note when it is created. No terminal is needed.</p></details>
           <details><summary>Do I need GitHub or git?</summary><p>No. GitHub hosts the tools for download. The notebook is a folder in the lab's Dropbox or OneDrive.</p></details>
-          <details><summary>What do I have to install?</summary><p>Python. On a Mac, macOS offers to install its developer tools the first time, which include Python; click Install. On Windows, install Python once from python.org.</p></details>
+          <details><summary>What do I have to install?</summary><p>Nothing, in Chrome or Edge on a computer: the notebook page works directly on the folder you choose. Safari and Firefox cannot open folders, so there the notebook starts from the <em>Open ELN</em> launcher, which needs Python. macOS offers to install it the first time; on Windows, install it once from python.org.</p></details>
           <details><summary>Can I keep my paper notebook?</summary><p>Yes. Each experiment note has a field for the paper notebook page, for example <code>NB02-153</code>.</p></details>
           <details><summary>Where does large data go?</summary><p>Large data stays on institutional storage and the note records the location. The experiment folder holds notes, small tables, figures, and scripts.</p></details>
+          <details><summary>Does it work with Dropbox and OneDrive?</summary><p>Yes, either one, as long as its desktop app syncs the notebook folder to your computer. The page writes ordinary files into that folder and the sync app does the rest. The Dropbox or OneDrive website alone is not enough.</p></details>
           <details><summary>What if two people edit the same note?</summary><p>The sync service keeps both copies and marks one as a conflict. <em>Check</em> lists conflict copies; open both and keep one. Experiment IDs include your initials, so two people cannot be assigned the same ID.</p></details>
-          <details><summary>Is it private?</summary><p>The page runs on your computer and does not connect to anything else. The notes are as private as the shared folder. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
+          <details><summary>Is it private?</summary><p>The page reads and writes the files in the folder you choose and does not send them anywhere. The notes are as private as the shared folder. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
           <details><summary>What about LabArchives?</summary><p>LabArchives remains the official archive. <em>Mark complete</em> saves a single HTML file with the figures embedded. Print it to PDF and upload it under the same experiment ID.</p></details>
           <details><summary>What if we stop using it?</summary><p>The folder of text files and figures stays usable without the tools. The <code>.eln</code> export can be imported into other notebook systems.</p></details>
         </div>
@@ -285,6 +288,16 @@ has not been blotted directly.</pre>
         <div>
           <p class="eyebrow">Setup</p>
           <h2>Getting started</h2>
+          <h3>In Chrome or Edge: nothing to install</h3>
+          <ol class="plain">
+            <li><b>Find the lab's notebook folder</b> in your Dropbox or OneDrive folder on this computer. To start a new notebook, make an empty folder there.</li>
+            <li><b><a href="app/">Open the notebook page</a></b> and click <em>Open notebook folder</em>.</li>
+            <li><b>Choose the folder</b> and allow the page to edit it. The browser asks once.</li>
+            <li><b>Enter your initials and name</b> under settings. Then click <em>New experiment</em>.</li>
+          </ol>
+          <p style="margin:14px 0 22px"><a class="btn primary" href="app/">Open the notebook</a></p>
+          <h3>In Safari or Firefox, or with the launchers</h3>
+          <p class="small muted" style="margin:0 0 10px">These browsers cannot open folders, so the notebook starts from a launcher in the notebook folder. It needs Python.</p>
           <div class="tabs" role="tablist" aria-label="Your computer">
             <button type="button" role="tab" data-os="mac" aria-selected="true">Mac</button>
             <button type="button" role="tab" data-os="windows" aria-selected="false">Windows</button>
@@ -301,12 +314,12 @@ has not been blotted directly.</pre>
             <li><b>Open the <code>launchers</code> folder</b> and double-click <em>Open ELN</em>.</li>
             <li><b>Enter your initials and name</b> when the page asks. Then click <em>New experiment</em>.</li>
           </ol>
-          <p style="margin-top:18px"><a class="btn primary" href="guide.html?d=getting-started">Full walk-through with screenshots</a></p>
+          <p style="margin-top:18px"><a class="btn" href="guide.html?d=getting-started">Full walk-through with screenshots</a></p>
         </div>
         <div style="display:grid; gap:16px">
-          <div class="callout"><h3>Practice notebook</h3><p><em>Try the Sandbox</em> opens the same page on a fictional notebook with seven experiments, so you can try everything without touching real data.</p></div>
+          <div class="callout"><h3>Practice notebook</h3><p>In the browser, click <em>Open the practice notebook</em> on the first screen. With the launchers, <em>Try the Sandbox</em> opens the same page on a fictional notebook with seven experiments. Neither touches real data.</p></div>
           <div class="callout"><h3>Cheat sheet</h3><p>The <a href="guide.html?d=CHEATSHEET">cheat sheet</a> lists the IDs, the folders, the file-name pattern, and the buttons. It prints on one page.</p></div>
-          <div class="callout"><h3>Command line</h3><p>The same functions are available from one script with no dependencies: <code>python3 scripts/eln.py --help</code>.</p></div>
+          <div class="callout"><h3>Command line and MCP</h3><p>The same functions are available from a Python script (<code>python3 scripts/eln.py --help</code>), a Node command (<code>node mcp/call.mjs --list</code>), and an MCP server (<code>node mcp/server.mjs</code>). None has dependencies.</p></div>
         </div>
       </div>
     </section>
@@ -319,7 +332,6 @@ has not been blotted directly.</pre>
     </div>
   </footer>
 
-  <script src="assets/names.js?v=20261112b"></script>
-  <script src="assets/site.js?v=20261112b" defer></script>
+  <script type="module" src="assets/site.js?v=20261112c"></script>
 </body>
 </html>

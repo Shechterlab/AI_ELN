@@ -1,0 +1,410 @@
+"""
+The JavaScript library (docs/app/lib) must do exactly what scripts/eln.py does.
+
+Both tools read and write the same notebook folders, sometimes on the same day, so every test here
+runs one operation through Python and through Node and compares the results byte for byte: the files
+created, the validator's messages, the index, the brief, the export, the snapshot and the manifest.
+The tests are skipped when Node is not installed.
+"""
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+import zipfile
+import zlib
+from contextlib import redirect_stdout
+from datetime import date as real_date
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SPEC = importlib.util.spec_from_file_location("eln", REPO_ROOT / "scripts" / "eln.py")
+eln = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(eln)
+
+NODE = shutil.which("node")
+TODAY = "2026-10-03"
+
+
+class FixedDate(real_date):
+    @classmethod
+    def today(cls):
+        return cls.fromisoformat(TODAY)
+
+
+def js(name, *cases):
+    """Run a library function on each argument list in `cases`; return the list of results."""
+    out = subprocess.run([NODE, str(REPO_ROOT / "tests" / "js_helper.mjs"), name], input=json.dumps(list(cases)),
+                         capture_output=True, text=True, encoding="utf-8")
+    if out.returncode:
+        raise AssertionError(out.stderr)
+    return json.loads(out.stdout)
+
+
+def tool(root, name, args=None, text=False, initials="", researcher="", ok_codes=(0,)):
+    cmd = [NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(root), "--today", TODAY]
+    if initials:
+        cmd += ["--initials", initials, "--researcher", researcher]
+    if text:
+        cmd.append("--text")
+    cmd += [name, json.dumps(args or {})]
+    out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    if out.returncode not in ok_codes:
+        raise AssertionError(f"{name} exited {out.returncode}: {out.stderr}")
+    return out.stdout if text else json.loads(out.stdout)
+
+
+def tree(root: Path):
+    """{relative path: bytes} for every file under root."""
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def py_validate_text(root: Path, strict=False) -> str:
+    vault = eln.load_vault(root)
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        eln.print_issues(vault, eln.validate_vault(vault), strict)
+    return buf.getvalue()
+
+
+@unittest.skipIf(NODE is None, "node not available")
+class ParityCase(unittest.TestCase):
+    maxDiff = None
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self._date = eln.date
+        eln.date = FixedDate
+        self.addCleanup(self._tmp.cleanup)
+        self.addCleanup(lambda: setattr(eln, "date", self._date))
+
+    def sandbox_copy(self, name: str) -> Path:
+        dst = self.tmp / name
+        shutil.copytree(REPO_ROOT / "sandbox", dst, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
+        for extra in ("README.md", "PILOT.md"):
+            (dst / extra).unlink()
+        return dst
+
+    def assertSameTree(self, a: Path, b: Path):
+        ta, tb = tree(a), tree(b)
+        self.assertEqual(sorted(ta), sorted(tb))
+        for rel in ta:
+            if ta[rel] != tb[rel]:
+                self.assertEqual(ta[rel].decode("utf-8", "replace"), tb[rel].decode("utf-8", "replace"), rel)
+
+
+class TestPureFunctions(ParityCase):
+    def test_built_in_templates_are_current(self):
+        out = subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "build_js_templates.py"), "--check"],
+                             capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout)
+
+    def test_slugify(self):
+        titles = ["SNRPB chromatin retention after PRMT5 inhibition", "a: b, c", "  --weird__chars!!  ", "word " * 30,
+                  "a" * 80, "FLAG-SNRPB R107K/R111K chromatin retention, n=3 with K107R/K111R revertant", "",
+                  "été α-tubulin 37°C", "x" * 60 + "-tail", "-".join(["ab"] * 40)]
+        self.assertEqual(js("slugify", *[[t] for t in titles]), [eln.slugify(t) for t in titles])
+        self.assertEqual(js("subfolders", [])[0], eln.SUBFOLDERS)
+
+    def test_front_matter_parsing(self):
+        cases = [
+            "---\ntype: experiment\ntitle: A: B\ntags: [a, \"b, c\", 'd']\nempty:\n---\n\n# Body\n\ntext\n",
+            "---\ntitle: \"quoted \\\"inner\\\" \\\\ slash\"\nstatus: active   # active | complete\nurl: http://x/#frag\n---\nbody",
+            "no header at all\n",
+            "---\nunterminated: yes\n",
+            "---\n  indented: x\n- block\nnot key value\nBadKey: 1\ndup: 1\ndup: 2\n# comment\n\nok_key: [ ]\n---\n",
+            "---\r\ntitle: crlf\r\nlist: [x,y , z]\r\n---\r\nbody\r\nmore\r\n",
+            "---\nsingle: 'it''s'\nhash: a #not comment\nhash2: a # comment\ncolon: a:b\nlead:  spaced  \n---",
+            "---\ntitle: café α µM\nlist: [é, \"ü, x\"]\n---\n line sep",
+            "",
+            "---\n---\n",
+            "﻿---\ntitle: bom\n---\n",
+        ]
+        got = js("parseFrontMatter", *[[c.replace("\r\n", "\n")] for c in cases])
+        for case, g in zip(cases, got):
+            fields, body, problems = eln.parse_front_matter(case.replace("\r\n", "\n"))
+            self.assertEqual(g, {"fields": fields, "body": body, "problems": problems}, repr(case))
+
+    def test_value_formatting(self):
+        values = ["", "plain", "a: b", "a #b", "a,b", "[x", "'q", '"q', " lead", "trail ", "ends:", "back\\slash", 'has "q", comma',
+                  "#hash", "&amp", "*star", "!bang", "|pipe", ">gt", "%pct", "@at", "`tick", "{brace", "café"]
+        self.assertEqual(js("quoteIfNeeded", *[[v] for v in values]), [eln.quote_if_needed(v) for v in values])
+        lists = [[], ["a"], ["a", "b, c", " ", ""], ['q"x', "y: z"]]
+        self.assertEqual(js("formatValue", *[[v] for v in lists]), [eln.format_value(v) for v in lists])
+        texts = ["", "a, b,c", " a ,, b ", "one"]
+        self.assertEqual(js("csvItems", *[[t] for t in texts]), [eln.csv_items(t) for t in texts])
+
+    def test_set_header_field(self):
+        text = "---\ntype: experiment\nstatus: active            # active | complete | paused | abandoned\ntags: []          # add meeting\ndate_completed:\n---\n\n# T\n\nbody\n"
+        for key, value in [("status", "complete"), ("date_completed", "2026-09-01"), ("tags", ["meeting", "a, b"]),
+                           ("new_key", "added: value"), ("tags", [])]:
+            p = self.tmp / "n.md"
+            eln.write_text_lf(p, text)
+            eln.set_header_field(p, key, value)
+            self.assertEqual(js("setHeaderField", [text, key, value])[0], p.read_text(encoding="utf-8"), key)
+
+    def test_templates_render_the_same(self):
+        values = {"EXPERIMENT_ID": "JSRe0001", "TITLE": 'Tricky: title, with "quotes" #1', "RESEARCHER": "Jacob Roth",
+                  "PROJECT": "A, B", "DATE": TODAY, "EXPERIMENT_TYPE": "", "PROTOCOL": "P_X", "SAMPLES": "",
+                  "NOTEBOOK_REF": "", "RAW_DATA_PATH": "Experiments/x/2-data_raw", "RELATED": "", "TAGS": "meeting"}
+        for path in sorted((REPO_ROOT / "templates").glob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(js("renderTemplateText", [text, values])[0], eln.render_template("experiment", values, path=path), path.name)
+
+    def test_markdown(self):
+        doc = (REPO_ROOT / "tests" / "data_markdown_cases.md").read_text(encoding="utf-8")
+        blocks = doc.split("\n=====\n")
+        self.assertGreater(len(blocks), 20)
+        for base in ("", "Experiments/JSRe0001_x/1-notes"):
+            for link_ids in (True, False):
+                got = js("mdToHtml", *[[b, base, link_ids] for b in blocks])
+                for block, g in zip(blocks, got):
+                    want = eln.md_to_html(block, img_base=base, link_ids=link_ids, img_src=lambda rel: "/file?p=" + rel)
+                    self.assertEqual(g, want, block)
+        notes = [p.read_text(encoding="utf-8") for p in sorted((REPO_ROOT / "sandbox").rglob("*.md"))]
+        got = js("mdToHtml", *[[n, "x/y", True] for n in notes])
+        for note, g in zip(notes, got):
+            self.assertEqual(g, eln.md_to_html(note, img_base="x/y", link_ids=True, img_src=lambda rel: "/file?p=" + rel))
+
+    def test_sections(self):
+        bodies = ["# T\n\n## A\ntext\n\n## B \n\n<!-- hint -->\n\n## C\n- [ ]\n-\n### sub\n", "no sections", "## Only\n", ""]
+        self.assertEqual(js("sections", *[[b] for b in bodies]), [[list(kv) for kv in eln.sections(b).items()] for b in bodies])
+        texts = ["", "<!-- c -->", "- [ ]\n- \n* ", "### sub\n", "real text", "<!-- a -->\nx", "- item", "#notheader"]
+        self.assertEqual(js("sectionIsEmpty", *[[t] for t in texts]), [eln.section_is_empty(t) for t in texts])
+
+    def test_small_text_helpers(self):
+        strings = ["plain", "it's", 'say "hi"', "both ' and \"", "tab\there", "nl\nx", "back\\slash", "café", " nbsp", "\x1b"]
+        self.assertEqual(js("pyRepr", *[[s] for s in strings]), [repr(s) for s in strings])
+        texts = ["", "a", "a\n", "a\n\nb", "\n", "a\r\nb\rc", "a\x0bb\x0cc", "a b c\x85d", "a\x1cb\x1dc\x1ed"]
+        self.assertEqual(js("splitlines", *[[t] for t in texts]), [t.splitlines() for t in texts])
+        paths = ["", "a/b", "a/./b", "a/../b", "../a", "a/b/../../..", "a//b/", "./x", "a/../../b"]
+        self.assertEqual(js("normpath", *[[p] for p in paths]), [os.path.normpath(p).replace("\\", "/") for p in paths])
+        dates = ["2026-02-29", "2024-02-29", "2026-13-01", "2026-00-10", "2026-04-31", "0000-01-01", "2026-1-1", "", "2026-12-31"]
+        self.assertEqual(js("validDate", *[[d] for d in dates]), [eln._valid_date(d) for d in dates])
+        self.assertEqual(js("daysBefore", ["2026-03-01", 30], ["2024-03-01", 1], ["2026-01-01", 1])[0:3],
+                         ["2026-01-30", "2024-02-29", "2025-12-31"])
+
+    def test_hashes(self):
+        blobs = [b"", b"abc", b"a" * 55, b"a" * 56, b"a" * 63, b"a" * 64, b"a" * 65, bytes(range(256)) * 9, os.urandom(1000)]
+        for chunk in (1, 7, 64, 100000):
+            got = js("sha256", *[[b.hex(), chunk] for b in blobs])
+            self.assertEqual(got, [hashlib.sha256(b).hexdigest() for b in blobs], chunk)
+        self.assertEqual(js("crc32", *[[b.hex()] for b in blobs]), [zlib.crc32(b) for b in blobs])
+        import base64
+        for b, (encoded, back) in zip(blobs, js("base64", *[[b.hex()] for b in blobs])):
+            self.assertEqual(encoded, base64.b64encode(b).decode())
+            self.assertEqual(back, b.hex())
+
+    def test_csv(self):
+        import csv
+        cols = ["a", "b", "c"]
+        rows = [{"a": "plain", "b": "with, comma", "c": 'with "quote"'}, {"a": "", "b": " spaced ", "c": "semi;colon"},
+                {"a": "line\nbreak", "b": "café", "c": ""}]
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols, lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+        self.assertEqual(js("toCsv", [cols, rows])[0], buf.getvalue())
+
+
+class TestOperations(ParityCase):
+    def build_python(self, root: Path):
+        root.mkdir()
+        eln.create_project(root, "PRMT5-ChromatinRelease", title="PRMT5: chromatin release", lead="Jacob Roth")
+        eln.create_project(root, "Second", tags="a, b")
+        eln.create_protocol(root, "WesternBlot", title="Western blot (wet transfer, PVDF)")
+        eln.create_protocol(root, "Cellular-Fractionation")
+        eln.create_sample(root, "JSR", "plasmid", "pcDNA3-FLAG-SNRPB", source="Addgene #12345, lot 7", storage="Freezer B, box 3, A7")
+        eln.create_sample(root, "JSR", "a", "anti-SNRPB (Y12)", source="in-house")
+        eln.create_sample(root, "ABCD", "cell-line", "A549")
+        eln.create_sample(root, "JSR", "plasmid", "second plasmid")
+        eln.create_experiment(root, "JSR", "Jacob Roth", 'SNRPB chromatin retention: KCl titration, "pilot" #1',
+                              project="PRMT5-ChromatinRelease", exp_type="WesternBlot, Fractionation",
+                              protocol="P_WesternBlot, P_Cellular-Fractionation, P_Missing", samples="JSRp0001, JSRa0001",
+                              notebook="NB02-153", tags="meeting")
+        eln.create_experiment(root, "JSR", "Jacob Roth", "A plain second experiment with a title that is long enough to be cut on a word boundary somewhere")
+        eln.create_experiment(root, "ABCD", "", "!!!", related="JSRe0001", raw_data_path="smb://server/share/run 7")
+        eln.create_experiment(root, "JSR", "Jacob Roth", "Third", exp_type="qPCR", project="Second, PRMT5-ChromatinRelease")
+
+    def build_js(self, root: Path):
+        root.mkdir()
+        who = {"initials": "JSR", "researcher": "Jacob Roth"}
+        tool(root, "create_project", {"project_id": "PRMT5-ChromatinRelease", "title": "PRMT5: chromatin release", "lead": "Jacob Roth"})
+        tool(root, "create_project", {"project_id": "Second", "tags": "a, b"})
+        tool(root, "create_protocol", {"name": "WesternBlot", "title": "Western blot (wet transfer, PVDF)"})
+        tool(root, "create_protocol", {"name": "Cellular-Fractionation"})
+        tool(root, "create_sample", {"sample_type": "plasmid", "title": "pcDNA3-FLAG-SNRPB", "source": "Addgene #12345, lot 7",
+                                     "storage": "Freezer B, box 3, A7", **who})
+        tool(root, "create_sample", {"sample_type": "antibody", "title": "anti-SNRPB (Y12)", "source": "in-house", **who})
+        tool(root, "create_sample", {"sample_type": "cell-line", "title": "A549", "initials": "ABCD"})
+        tool(root, "create_sample", {"sample_type": "plasmid", "title": "second plasmid", **who})
+        r = tool(root, "create_experiment", {
+            "title": 'SNRPB chromatin retention: KCl titration, "pilot" #1', "project": "PRMT5-ChromatinRelease",
+            "exp_type": "WesternBlot, Fractionation", "protocol": "P_WesternBlot, P_Cellular-Fractionation, P_Missing",
+            "samples": "JSRp0001, JSRa0001", "notebook": "NB02-153", "tags": "meeting", **who})
+        self.assertEqual(r["id"], "JSRe0001")
+        self.assertEqual(len(r["extra"]), 2)
+        self.assertEqual(len(r["warnings"]), 1)
+        tool(root, "create_experiment", {"title": "A plain second experiment with a title that is long enough to be cut on a word boundary somewhere", **who})
+        tool(root, "create_experiment", {"title": "!!!", "related": "JSRe0001", "raw_data_path": "smb://server/share/run 7", "initials": "ABCD"})
+        tool(root, "create_experiment", {"title": "Third", "exp_type": "qPCR", "project": "Second, PRMT5-ChromatinRelease", **who})
+
+    def test_creating_records_writes_identical_folders(self):
+        py, node = self.tmp / "py", self.tmp / "js"
+        self.build_python(py)
+        self.build_js(node)
+        self.assertSameTree(py, node)
+        self.assertEqual(py_validate_text(py), tool(node, "check_notebook", text=True, ok_codes=(0, 2)))
+
+    def test_each_tool_can_continue_the_other_tools_notebook(self):
+        py = self.tmp / "py"
+        self.build_python(py)
+        r = tool(py, "create_experiment", {"title": "Made by the page", "initials": "JSR"})
+        self.assertEqual(r["id"], "JSRe0004")
+        self.assertEqual(eln.create_experiment(py, "JSR", "Jacob Roth", "Made by python again").id, "JSRe0005")
+        self.assertEqual(tool(py, "create_sample", {"sample_type": "plasmid", "title": "x", "initials": "JSR"})["id"], "JSRp0003")
+        self.assertEqual(py_validate_text(py), tool(py, "check_notebook", text=True, ok_codes=(0, 2)))
+
+    def test_check_on_the_sandbox(self):
+        self.assertEqual(py_validate_text(REPO_ROOT / "sandbox"), tool(REPO_ROOT / "sandbox", "check_notebook", text=True))
+
+    def test_check_reports_the_same_problems(self):
+        root = self.sandbox_copy("broken")
+        exps = root / "Experiments"
+        folders = sorted(p for p in exps.iterdir() if p.is_dir())
+        a, b, c, d = folders[0], folders[1], folders[2], folders[3]
+        (a / "5-figures" / "misnamed figure.png").write_bytes(b"x")
+        (a / "3-code" / ".hidden").write_bytes(b"x")
+        (a / "1-notes" / f"{a.name.split('_')[0]} (Alex's conflicted copy 2026-09-01).md").write_text("x", encoding="utf-8")
+        shutil.rmtree(b / "4-data_processed")
+        note_b = b / "1-notes" / f"{b.name.split('_')[0]}.md"
+        text = note_b.read_text(encoding="utf-8")
+        text = text.replace("status: complete", "status: finished").replace("date_started: 2026", "date_started: 26")
+        text = text.replace("## Results", "## Findings").replace("tags: [", "tagz: [x], tags: [", 1)
+        eln.write_text_lf(note_b, text.replace("\n---\n", "\nmystery_key: 1\n  indented: bad\nprotocols: [P_Nope, ALXp0001]\n---\n", 1))
+        c.rename(exps / "not an experiment folder")
+        note_d = d / "1-notes" / f"{d.name.split('_')[0]}.md"
+        note_d.rename(d / "1-notes" / "wrong-name.md")
+        (exps / "ZZZe0001_empty").mkdir()
+        (exps / "ZZZe0002_binary" / "1-notes").mkdir(parents=True)
+        (exps / "ZZZe0002_binary" / "1-notes" / "ZZZe0002.md").write_bytes(b"\xff\xfe not utf8")
+        samples = sorted((root / "Samples").glob("*.md"))
+        s = samples[0].read_text(encoding="utf-8")
+        eln.write_text_lf(samples[0], s.replace("sample_type: ", "sample_type: gel #", 1).replace("storage_location:", "storage_location:  # none", 1))
+        shutil.copy(samples[1], root / "Samples" / "Copy-of-sample.md")
+        eln.write_text_lf(samples[2], "no header here\n")
+        eln.write_text_lf(samples[3], samples[3].read_text(encoding="utf-8").replace("sample_type: ", "sample_type: unicorn-", 1))
+        (root / "Inventory" / "experiments (conflicted copy).csv").write_text("x", encoding="utf-8")
+        proto = sorted((root / "Protocols").glob("*.md"))[0]
+        eln.write_text_lf(proto, proto.read_text(encoding="utf-8").replace("type: protocol", "type: sample").replace("version: 2026", "version: 2026-99", 1))
+        proj = sorted((root / "Projects").glob("*.md"))[0]
+        proj.rename(root / "Projects" / "Renamed.md")
+        want = py_validate_text(root, strict=True)
+        self.assertIn("ERROR", want)
+        self.assertGreater(want.count("\n"), 30)
+        self.assertEqual(tool(root, "check_notebook", {"strict": True}, text=True, ok_codes=(2,)), want)
+
+    def test_index_brief_and_export(self):
+        root = self.sandbox_copy("s")
+        before = tree(root / "Inventory")
+        shutil.rmtree(root / "Inventory")
+        result = tool(root, "rebuild_index")
+        self.assertTrue(all(f["written"] for f in result["files"]))
+        self.assertEqual(tree(root / "Inventory"), before)
+        self.assertFalse(any(f["written"] for f in tool(root, "rebuild_index")["files"]))
+
+        vault = eln.load_vault(root)
+        for days in (30, 400):
+            self.assertEqual(tool(root, "meeting_brief", {"days": days})["markdown"], eln.build_report(vault, days=days))
+        for choice, args in [({"all": True}, (None, [], None, True)),
+                             ({"status": "active"}, (None, [], "active", False)),
+                             ({"project": "prmt5-chromatinrelease", "related": False}, ("prmt5-chromatinrelease", [], None, False)),
+                             ({"experiment_ids": ["JORe0002", "ALXe0002"]}, (None, ["JORe0002", "ALXe0002"], None, False))]:
+            exps = eln.select_for_export(vault, *args)
+            want = eln.build_export(vault, exps, related=choice.get("related", True))
+            got = tool(root, "export_notes", choice)
+            self.assertEqual(got["markdown"], want, choice)
+            self.assertEqual(got["experiments"], [e.id for e in exps])
+        found = tool(root, "find_notes", {"status": "COMPLETE", "researcher": "alex", "text": "chromatin"})
+        self.assertEqual([n["id"] for n in found["notes"]],
+                         [n.id for n in eln.find_notes(vault, "experiment", status="COMPLETE", researcher="alex", text="chromatin")])
+        self.assertEqual([n["id"] for n in tool(root, "find_notes", {"kind": "sample"})["notes"]],
+                         [n.id for n in eln.find_notes(vault, "sample")])
+
+    def test_complete_verify_and_snapshot(self):
+        py, node = self.sandbox_copy("py"), self.sandbox_copy("js")
+        self.assertEqual(eln.verify_manifest(py / next(p for p in tree(py) if p.endswith("ALXe0002.md")).split("/1-notes")[0], "ALXe0002"), ([], [], []))
+        self.assertTrue(tool(node, "verify_files", {"id": "ALXe0002"})["ok"], "the manifest python wrote verifies in javascript")
+
+        with self.assertRaises(eln.ElnError):
+            eln.complete_experiment(py, "ALXe0004")
+        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "complete_experiment", '{"id": "ALXe0004"}'],
+                                 capture_output=True, text=True)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("still empty", refused.stderr)
+
+        for exp, force in (("ALXe0004", True), ("ALXe0001", False), ("ALXe0002", False)):
+            r_py = eln.complete_experiment(py, exp, when="2026-09-30", force=force)
+            r_js = tool(node, "complete_experiment", {"id": exp, "date": "2026-09-30", "force": force})
+            self.assertEqual(r_js["snapshot"], r_py["snapshot"].relative_to(py).as_posix())
+            self.assertEqual(r_js["manifest"], r_py["manifest"].relative_to(py).as_posix())
+            self.assertEqual(r_js["files"], r_py["files"])
+        self.assertSameTree(py, node)
+
+        for root in (py, node):
+            folder = next(p for p in (root / "Experiments").iterdir() if p.name.startswith("ALXe0002"))
+            (folder / "4-data_processed" / "ALXe0002_chromatin-fraction.csv").write_text("changed\n", encoding="utf-8")
+            (folder / "5-figures" / "ALXe0002_extra.txt").write_text("new\n", encoding="utf-8")
+            (folder / "3-code" / "README.md").unlink()
+        folder = next(p for p in (py / "Experiments").iterdir() if p.name.startswith("ALXe0002"))
+        missing, modified, added = eln.verify_manifest(folder, "ALXe0002")
+        r = tool(node, "verify_files", {"id": "ALXe0002"}, ok_codes=(2,))["results"][0]
+        self.assertEqual((r["missing"], r["modified"], r["added"]), (missing, modified, added))
+        self.assertEqual(len(modified) + len(missing) + len(added), 3)
+        everything = tool(node, "verify_files", {}, ok_codes=(2,))
+        self.assertEqual(everything["drift"], 1)
+        self.assertEqual(len(everything["results"]), 3)
+
+        vault = eln.load_vault(py)
+        for nid in ("ALXa0001", "P_WesternBlot", "JORe0001"):
+            note = vault.by_id[nid]
+            want = eln.render_snapshot_html(vault, note, generated=TODAY)
+            path = tool(node, "render_snapshot", {"id": nid})["path"]
+            self.assertEqual((node / path).read_text(encoding="utf-8"), want, nid)
+
+    def test_eln_archive(self):
+        root = self.sandbox_copy("s")
+        vault = eln.load_vault(root)
+        exps = eln.select_for_export(vault, None, ["ALXe0002", "JORe0001"], None, False)
+        py_bytes = eln.build_eln(vault, exps, root_name=f"export_ALXe0002-JORe0001_{TODAY.replace('-', '')}")
+        r = tool(root, "export_notes", {"experiment_ids": ["ALXe0002", "JORe0001"], "format": "eln"})
+        self.assertEqual(r["path"], f"Inventory/export_ALXe0002-JORe0001_{TODAY.replace('-', '')}.eln")
+        with zipfile.ZipFile(io.BytesIO(py_bytes)) as zp, zipfile.ZipFile(root / r["path"]) as zj:
+            self.assertIsNone(zj.testzip())
+            self.assertEqual(sorted(zp.namelist()), sorted(zj.namelist()))
+            meta_name = next(n for n in zj.namelist() if n.endswith("ro-crate-metadata.json"))
+            for name in zp.namelist():
+                if name != meta_name:
+                    self.assertEqual(zp.read(name), zj.read(name), name)
+            mp, mj = json.loads(zp.read(meta_name)), json.loads(zj.read(meta_name))
+
+            def without_media_type(crate):
+                # Python asks the operating system for media types, so they differ between machines
+                return [{k: v for k, v in node.items() if k != "encodingFormat"} for node in crate["@graph"]]
+            self.assertEqual(without_media_type(mj), without_media_type(mp))
+            self.assertEqual(mj["@context"], mp["@context"])
+            formats = {n["name"].rsplit(".", 1)[-1]: n["encodingFormat"] for n in mj["@graph"] if n.get("@type") == "File"}
+            self.assertEqual(formats["md"], "text/markdown")
+            self.assertEqual(formats["png"], "image/png")
+            self.assertEqual(formats["csv"], "text/csv")
+            self.assertEqual(formats["sha256"], "application/octet-stream")
+
+
+if __name__ == "__main__":
+    unittest.main()

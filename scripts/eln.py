@@ -1669,7 +1669,7 @@ def render_snapshot_html(vault: Vault, note: Note, generated: Optional[str] = No
             f"<table class=meta>{meta}</table>"
             f"{md_to_html(body_md, img_base='', link_ids=False, img_src=img_src)}"
             f"{files_html}"
-            f"<div class=foot>Snapshot of <code>{esc(vault.rel(note.path))}</code> generated {esc(generated)} by eln.py. "
+            f"<div class=foot>Snapshot of <code>{esc(vault.rel(note.path))}</code> generated {esc(generated)} by AI_ELN. "
             f"The Markdown file is the record; this rendering is for reading, printing, and archiving.</div>"
             f"</body></html>")
 

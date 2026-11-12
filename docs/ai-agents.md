@@ -104,6 +104,27 @@ which points at `AGENTS.md`, and pick up the skills in `.agents/skills/`.
 Same conversations as Path B. Gemini CLI reads
 [`GEMINI.md`](../GEMINI.md) the same way.
 
+## Path D — MCP
+
+The notebook's own operations are also available as tools over the
+[Model Context Protocol](https://modelcontextprotocol.io): create an
+experiment, find and read notes, write a section, check the conventions,
+mark complete, export. Start the server with `node mcp/server.mjs` (Node 18
+or later, no other dependency). It runs on your computer, opens no network
+port, and works only inside the notebook folder.
+
+Claude Code and Cowork find it through `.mcp.json` when opened in this
+folder and ask before using it. Codex, Claude Desktop, and other clients
+need one entry in their configuration; the lines are in
+[`mcp/README.md`](../mcp/README.md). `--read-only` offers only the tools
+that change nothing.
+
+This is useful when the assistant should create or update records, since
+the tools apply the naming rules themselves. It is not required: an agent
+opened in the folder (Paths B and C) can already read the notes and run
+`scripts/eln.py`. ChatGPT on the web cannot reach a server on your
+computer, so Path A stays copy and paste.
+
 ## The skills
 
 A skill is a folder with a `SKILL.md`: instructions an agent reads when a

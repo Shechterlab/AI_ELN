@@ -4,7 +4,8 @@
 
 ## Start
 
-Double-click **`launchers/Open ELN`** → a page opens in your browser → **New experiment** → title → **Create**.
+Chrome or Edge: **shechterlab.github.io/AI_ELN/app** → **Open notebook folder**. Otherwise double-click **`launchers/Open ELN`**.
+Then **New experiment** → title → **Create**.
 Write with **Edit here**. Practice first on **`launchers/Try the Sandbox`**.
 
 ## IDs

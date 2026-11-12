@@ -25,8 +25,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Unit tests (standard library only)
+      - name: Unit tests (standard library only; the JavaScript tests use the runner's Node)
         run: python -m unittest discover -s tests -v
+      - name: Built-in templates in the JavaScript library are current
+        run: python scripts/build_js_templates.py --check
       - name: The repo's own example vault follows its own conventions
         run: python scripts/eln.py validate --strict
       - name: The sandbox follows the conventions and matches its generator
@@ -40,3 +42,21 @@ jobs:
         run: |
           python scripts/eln.py index --quiet
           git diff --exit-code -- Inventory/ || { echo "Inventory/*.csv is stale: run 'python scripts/eln.py index' and commit."; exit 1; }
+
+  browser:
+    name: notebook page in headless Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Create a notebook through the page, then check it with scripts/eln.py
+        run: python -m unittest tests.test_app_e2e -v

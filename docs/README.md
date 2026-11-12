@@ -16,7 +16,8 @@ from this folder.
 | `index.html` | the landing page |
 | `guide.html` | displays a guide; it fetches the `.md` file and renders it in the browser, so there is no second copy |
 | `assets/site.css` | styles, matching the lab's other sites (shechterlab.org and the tool pages) |
-| `assets/site.js`, `assets/names.js` | theme button and the "Name an experiment" box; `names.js` mirrors the naming rules in `scripts/eln.py`, and a test checks that they agree |
+| `app/` | the notebook itself, running in the browser on a folder you choose; see [`app/README.md`](app/README.md) |
+| `assets/site.js` | theme button and the "Name an experiment" box, which uses the notebook's own naming code (`app/lib/names.js`) |
 | `assets/guide.js` | the list of guides and link rewriting |
 | `assets/marked.min.js` | Markdown renderer ([marked](https://github.com/markedjs/marked) 12.0.2, MIT), vendored |
 | `img/` | screenshots of the notebook page, taken from the sandbox |
@@ -40,6 +41,6 @@ address above. There is no build step.
   (`python3 scripts/eln_web.py --root sandbox`) and capture `/`,
   `/new/experiment`, and `/note/ALXe0002`.
 
-`tests/test_site.py` checks that every link on the two pages points at a
-file that exists, that the guide list matches the `.md` files here, and
-that the naming box gives the same names as the real tool.
+`tests/test_site.py` checks that every link on the pages points at a file
+that exists, that the guide list matches the `.md` files here, and that
+the list of files kept for offline use is complete.

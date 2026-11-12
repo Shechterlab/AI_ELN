@@ -1,0 +1,10 @@
+{
+  "name": "Lab notebook",
+  "short_name": "Notebook",
+  "description": "Plain-text lab notebook: plain files in your own folder.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f9fa",
+  "theme_color": "#155e75",
+  "icons": [{ "src": "../assets/shechterlab-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -6,16 +6,20 @@ header. Because the structure never varies, a person can find anything in
 seconds, a spreadsheet can index it, and an AI assistant can read it and
 cite the exact experiment a claim came from.
 
-It needs no accounts, plugins, database, or API keys. The only requirement
-is Python (macOS installs it on request; Windows needs it installed once).
-Daily use is a form and a text box in a page that runs on your own computer.
+It needs no accounts, plugins, database, or API keys. In Chrome or Edge it
+needs no installation: a page in the browser works directly on the folder.
+The same tools also exist as Python scripts with double-click launchers,
+and as an MCP server for AI clients.
 
 Website: <https://shechterlab.github.io/AI_ELN/> (served from [`docs/`](docs/README.md)).
 
 ## Daily use
 
-1. **Double-click `launchers/Open ELN`.** A page opens in your browser
-   (it runs on your own computer; nothing is uploaded anywhere).
+1. **Open the notebook.** In Chrome or Edge, go to
+   <https://shechterlab.github.io/AI_ELN/app/>, click **Open notebook
+   folder**, and choose the folder. Nothing is installed and nothing is
+   uploaded. In Safari or Firefox, double-click `launchers/Open ELN`
+   instead (needs Python).
 2. **Click New experiment, type a title, click Create.** The folder, the
    note, the protocol snapshot, and the inventory row are made for you.
 3. **Click Edit here and write.** Objective before you start; Results,
@@ -33,8 +37,10 @@ meeting from whatever you flagged. Practice first on fictional data with
 
 ![The home page](docs/img/home.png)
 
-The page is one dependency-free Python file reading and writing the same
-plain files as everything else. Terminal-window launchers (`New
+There are two versions of the page, and they do the same things to the
+same files: one runs in the browser ([`docs/app/`](docs/app/README.md),
+JavaScript), one is started by a launcher (`scripts/eln_web.py`, Python).
+Tests compare their output byte for byte. Terminal-window launchers (`New
 Experiment`, `Check Everything`, ...) and a command line do the same
 things for people who prefer them. Mac users right-click → Open a launcher
 the first time; Windows needs Python installed once. See
@@ -119,6 +125,10 @@ subscription. Nothing needs an API key.
   *draft a results paragraph for JSRe0002*; *which experiments used
   JSRa0003?* Once, paste [`docs/ai-briefing.md`](docs/ai-briefing.md) as
   the instructions of a ChatGPT Project so every chat already knows the rules.
+- **MCP.** `node mcp/server.mjs` offers the notebook's operations (create,
+  find, read, check, complete, export) as tools to any MCP client. Claude
+  Code and Cowork pick it up from `.mcp.json` when opened in this folder.
+  See [`mcp/README.md`](mcp/README.md).
 - **Codex, Claude Code, Cowork, Gemini CLI.** Open the tool inside this
   folder. It reads [`AGENTS.md`](AGENTS.md) (the lab's rules: cite IDs,
   never invent a result, create experiments only through the tool) and the
@@ -165,9 +175,11 @@ python3 scripts/eln.py verify                               # anything changed s
 python3 scripts/eln_web.py                                   # the page, by hand
 ```
 
+The same operations from Node, as JSON: `node mcp/call.mjs --list`.
+
 `--help` on any command. The record is the folder the tools sit in;
 `init --root` is only for the unusual case of keeping notes elsewhere.
-Tests: `python3 -m unittest discover -s tests`.
+Tests: `python3 -m unittest discover -s tests` (the JavaScript tests run when Node is installed).
 
 ## Read more
 

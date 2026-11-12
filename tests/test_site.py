@@ -57,7 +57,7 @@ class TestSite(unittest.TestCase):
                     continue
                 path, _, query = ref.partition("?")
                 path = path.split("#")[0]
-                target = DOCS / ("index.html" if path in ("./", "") else path)
+                target = DOCS / (path + "index.html" if path.endswith("/") or path == "" else path)
                 self.assertTrue(target.is_file(), f"{page}: {ref} -> {target} does not exist")
                 m = re.match(r"d=([A-Za-z0-9_-]+)", query)
                 if path == "guide.html" and m:
@@ -89,34 +89,72 @@ class TestSite(unittest.TestCase):
             self.assertTrue((DOCS / image).exists(), image)
         self.assertNotIn("—", text, "house style: no em dashes on the landing page")
 
+    def test_naming_box_uses_the_notebook_library(self):
+        # the box cannot drift from the tool: it imports the library the notebook page runs on,
+        # and tests/test_js_parity.py checks that library against scripts/eln.py
+        site_js = (DOCS / "assets" / "site.js").read_text(encoding="utf-8")
+        self.assertIn("from '../app/lib/names.js'", site_js)
+        self.assertFalse((DOCS / "assets" / "names.js").exists())
+        for page in ("index.html", "guide.html"):
+            self.assertRegex((DOCS / page).read_text(encoding="utf-8"), r'<script type="module" src="assets/site\.js')
+
+
+class TestApp(unittest.TestCase):
+    """docs/app/: the notebook page that runs in the browser."""
+
+    APP = DOCS / "app"
+
+    def modules(self):
+        return sorted(p.relative_to(self.APP).as_posix() for d in ("lib", "store") for p in (self.APP / d).glob("*.js"))
+
+    def test_every_import_points_at_a_real_file(self):
+        sources = [self.APP / "ui.js", self.APP / "sw.js", DOCS / "assets" / "site.js",
+                   REPO_ROOT / "mcp" / "server.mjs", REPO_ROOT / "mcp" / "call.mjs", REPO_ROOT / "mcp" / "config.mjs",
+                   REPO_ROOT / "tests" / "js_helper.mjs"] + [self.APP / m for m in self.modules()]
+        for src in sources:
+            for target in re.findall(r"""(?:from|import)\s*\(?\s*['"](\.{1,2}/[^'"]+)['"]""", src.read_text(encoding="utf-8")):
+                self.assertTrue((src.parent / target).resolve().is_file(), f"{src.relative_to(REPO_ROOT)} imports {target}")
+
+    def test_browser_code_does_not_load_node_modules(self):
+        # anything the page can reach must run in a browser: no node: imports outside store/node.js
+        for m in self.modules() + ["ui.js"]:
+            if m != "store/node.js":
+                self.assertNotIn("node:", (self.APP / m).read_text(encoding="utf-8"), m)
+
+    def test_offline_list_matches_the_files(self):
+        sw = (self.APP / "sw.js").read_text(encoding="utf-8")
+        listed = json.loads(re.search(r"const FILES = (\[.*?\]);", sw, re.S).group(1))
+        expected = ["./", "app.css", "ui.js", "manifest.webmanifest", "../assets/site.css", "../assets/shechterlab-icon.svg"]
+        expected += [m for m in self.modules() if m != "store/node.js"]
+        self.assertEqual(sorted(listed), sorted(expected), "update FILES in docs/app/sw.js")
+        for rel in listed:
+            self.assertTrue((self.APP / rel).resolve().exists(), rel)
+
+    def test_page_links_and_manifest(self):
+        parser = Links()
+        parser.feed((self.APP / "index.html").read_text(encoding="utf-8"))
+        for ref in parser.refs:
+            if re.match(r"^(https?:|#|data:)", ref):
+                continue
+            path = ref.split("?")[0].split("#")[0]
+            target = (self.APP / path).resolve()
+            self.assertTrue(target.is_file() or (target.is_dir() and (target / "index.html").is_file()), ref)
+        manifest = json.loads((self.APP / "manifest.webmanifest").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["start_url"], "./")
+        self.assertTrue((self.APP / manifest["icons"][0]["src"]).resolve().is_file())
+        self.assertEqual(json.loads((self.APP / "package.json").read_text(encoding="utf-8"))["type"], "module")
+
+    def test_no_stray_line_separators(self):
+        # U+2028/U+2029 inside a regex or string literal break the script in some engines
+        for m in self.modules() + ["ui.js", "sw.js"]:
+            text = (self.APP / m).read_text(encoding="utf-8")
+            self.assertFalse(any(ch in text for ch in "\u2028\u2029\x85\x0b\x0c"), m)
+
     @unittest.skipIf(shutil.which("node") is None, "node not available")
-    def test_naming_box_agrees_with_the_tool(self):
-        titles = [
-            "SNRPB chromatin retention after PRMT5 inhibition",
-            "SNRPB chromatin retention after PRMT5 inhibition: KCl titration",
-            "  --weird__chars!!  ",
-            "word " * 30,
-            "a" * 80,
-            "FLAG-SNRPB R107K/R111K chromatin retention, n=3 with K107R/K111R revertant",
-            "",
-            "été α-tubulin 37°C",
-        ]
-        script = (
-            "const N = require(process.argv[1]); const t = JSON.parse(process.argv[2]);"
-            "console.log(JSON.stringify({slugs: t.map(x => N.slugify(x)), folders: t.map(x => N.folderName('JSRe0002', x)),"
-            "ids: [N.experimentId('JSR', 2), N.experimentId('AB', '17'), N.experimentId('ABCD', 9999)],"
-            "initials: ['jsr', ' ab ', 'toolong', 'j', 'J2'].map(N.cleanInitials), subfolders: N.SUBFOLDERS}))"
-        )
-        out = subprocess.run(["node", "-e", script, str(DOCS / "assets" / "names.js"), json.dumps(titles)],
-                             capture_output=True, text=True, check=True).stdout
-        got = json.loads(out)
-        self.assertEqual(got["slugs"], [eln.slugify(t) for t in titles])
-        self.assertEqual(got["folders"], [f"JSRe0002_{eln.slugify(t)}" if eln.slugify(t) else "JSRe0002" for t in titles])
-        self.assertEqual(got["ids"], ["JSRe0002", "ABe0017", "ABCDe9999"])
-        for experiment_id in got["ids"]:
-            self.assertTrue(eln.RE_EXP_ID.match(experiment_id))
-        self.assertEqual(got["initials"], ["JSR", "AB", "", "", ""])
-        self.assertEqual(got["subfolders"], eln.SUBFOLDERS)
+    def test_every_script_parses(self):
+        for m in self.modules() + ["ui.js", "sw.js"]:
+            out = subprocess.run(["node", "--check", str(self.APP / m)], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
 
 
 if __name__ == "__main__":

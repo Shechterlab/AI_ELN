@@ -27,7 +27,18 @@ to your computer (it will be in your Dropbox or OneDrive), and go to §1.
 After that, do not move or rename things inside the folder by hand. Use
 the page or the launchers.
 
-## 1. One-time setup for your computer
+## 1. Open the notebook
+
+**In Chrome or Edge (nothing to install).** Go to
+<https://shechterlab.github.io/AI_ELN/app/>, click **Open notebook folder**,
+choose the lab's notebook folder, and allow the page to edit it. The page
+works on the files in that folder and does not upload them. Next time, click
+**Reopen**. If you choose an empty folder, the page offers to set up a new
+notebook in it. Then skip to §3.
+
+**In Safari or Firefox, or if you prefer the launchers.** These browsers
+cannot open folders, so the notebook starts from a launcher and needs
+Python. Set that up once:
 
 **Mac.** Python is already there. The first time you double-click a
 launcher, macOS will say it's from an unidentified developer: right-click
@@ -44,7 +55,7 @@ The launchers then work by double-click.
 
 **Linux.** Python 3 is already there; run `python3 scripts/eln_web.py`.
 
-## 2. Open the page
+## 2. Open the page with the launcher
 
 Double-click **`launchers/Open ELN`**. A small window appears and your
 browser opens a page like this:
@@ -59,7 +70,8 @@ the page. The first time, it asks for your initials and name under
 
 To practice without touching the lab's record, double-click
 **`launchers/Try the Sandbox`**. It opens the same page on fictional data
-that can be reset.
+that can be reset. In the browser version, click **Open the practice
+notebook** on the first screen.
 
 ## 3. Create your first experiment
 
@@ -88,7 +100,9 @@ you have them. Leave a section as "None" rather than deleting it.
 
 ## 5. Put files where they belong, named with the ID
 
-**Show folder** on the note's page opens the experiment folder.
+**Show folder** on the note's page opens the experiment folder. In the
+browser version, use **Add files** on the note's page instead: choose or
+drop the files, pick the subfolder, and they are named for you.
 
 ```
 2-data_raw/         instrument output. Original filenames. Never edit, never rename.
