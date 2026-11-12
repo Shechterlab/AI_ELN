@@ -1,4 +1,4 @@
-# AI_ELN — the Shechter Lab research record
+# AI_ELN: the Shechter Lab research record
 
 A lab notebook made of plain files in plain folders. Every experiment gets a
 stable ID, the same five subfolders, and one Markdown note with a short
@@ -6,11 +6,13 @@ header. Because the structure never varies, a person can find anything in
 seconds, a spreadsheet can index it, and an AI assistant can read it and
 cite the exact experiment a claim came from.
 
-No accounts, no plugins, no database, no API keys, nothing to install
-beyond Python (already on every Mac). If you can fill in a form and type
-in a text box, you can use this.
+It needs no accounts, plugins, database, or API keys. The only requirement
+is Python (macOS installs it on request; Windows needs it installed once).
+Daily use is a form and a text box in a page that runs on your own computer.
 
-## What you actually do
+Website: <https://shechterlab.github.io/AI_ELN/> (served from [`docs/`](docs/README.md)).
+
+## Daily use
 
 1. **Double-click `launchers/Open ELN`.** A page opens in your browser
    (it runs on your own computer; nothing is uploaded anywhere).
@@ -22,7 +24,7 @@ in a text box, you can use this.
    front: `JSRe0002_R_blot-quantification.png` into `5-figures/`. Raw
    instrument files go into `2-data_raw/` untouched. **Show folder** opens it.
 
-That is the whole habit. When the experiment is done, **Mark complete**
+When the experiment is done, **Mark complete**
 checks it is written up, dates it, and drops a one-file HTML snapshot and
 a checksum list next to the note. **Check** tells you if anything is
 misnamed or missing; **Meeting brief** writes the summary for the next lab
@@ -46,20 +48,18 @@ folder in the lab's Dropbox or OneDrive and everyone who syncs it has the
 record and the tools. There is no server, no database, no git, and no
 central copy; the synced folder *is* the record, and every file in it is
 plain text (Markdown with a small header, CSV, JSON) or a standard image.
-If every script here vanished tomorrow, the notes would still be complete
-and readable in any editor.
+The notes are complete and readable in any editor without the scripts.
 
-Sync conflicts are two readable copies, never a corrupted database, and
-**Check** points them out. This GitHub repository is only where the tools
+A sync conflict produces two readable copies, and **Check** lists them. This GitHub repository is only where the tools
 are developed; nobody in the lab needs it day to day.
 
-And if the lab ever moves to a hosted ELN: **Export → Save as .eln
+If the lab moves to a hosted ELN, **Export → Save as .eln
 archive** produces the standard [`.eln`](https://github.com/TheELNConsortium/TheELNFileFormat)
 exchange file (an RO-Crate ZIP) that eLabFTW, RSpace, Kadi4Mat, PASTA,
 SampleDB, OpenSemanticLab, and SciLog import, files and checksums
-included. Nothing here is a dead end.
+included.
 
-## The whole system on one screen
+## Layout
 
 ```
 Experiments/
@@ -135,7 +135,7 @@ subscription. Nothing needs an API key.
 when run against the fictional sandbox. Details and reasoning:
 [`docs/ai-agents.md`](docs/ai-agents.md).
 
-## Keeping it honest
+## Checking the record
 
 **Check** (or `python3 scripts/eln.py validate`) reads every note and
 folder and reports what breaks the conventions: a misnamed folder, a
@@ -146,7 +146,7 @@ before lab meeting and before handing a folder to anyone. Every change to
 the tools is tested on macOS, Windows, and Linux, including a strict check
 of the sandbox record.
 
-## For people who like a terminal
+## Command line
 
 Everything the page does is one script with no dependencies:
 
@@ -171,19 +171,19 @@ Tests: `python3 -m unittest discover -s tests`.
 
 ## Read more
 
-- [`docs/getting-started.md`](docs/getting-started.md) — first day, step by step, with pictures
-- [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) — one printable page
-- [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — the rules, precisely
-- [`docs/SOP.md`](docs/SOP.md) — what's required, what's flexible, what happens when an experiment is done
-- [`docs/ai-agents.md`](docs/ai-agents.md) / [`docs/ai-briefing.md`](docs/ai-briefing.md) — AI without API keys
-- [`sandbox/`](sandbox/README.md) — fictional record to practice on; [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
-- [`docs/design-notes.md`](docs/design-notes.md) — why it's shaped this way; where LabArchives fits
-- [`reference/jacob-original-system/`](reference/jacob-original-system/) — the spreadsheet-and-folders system by Jacob Roth that this is a direct translation of
+- [`docs/getting-started.md`](docs/getting-started.md): setup and first experiment, with screenshots
+- [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md): one printable page
+- [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md): the rules, precisely
+- [`docs/SOP.md`](docs/SOP.md): what's required, what's flexible, what happens when an experiment is done
+- [`docs/ai-agents.md`](docs/ai-agents.md) / [`docs/ai-briefing.md`](docs/ai-briefing.md): AI without API keys
+- [`sandbox/`](sandbox/README.md): fictional record to practice on; [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
+- [`docs/design-notes.md`](docs/design-notes.md): why it's shaped this way; where LabArchives fits
+- [`reference/jacob-original-system/`](reference/jacob-original-system/): the spreadsheet-and-folders system by Jacob Roth that this is a direct translation of
 
 ## Credits
 
-The information architecture — one ID per experiment, five fixed
+The information architecture (one ID per experiment, five fixed
 subfolders, IDs for every gel and plasmid, a results file you can find in
-one search — is Jacob Roth's. This repo turns it into plain Markdown with a
+one search) is Jacob Roth's. This repo turns it into plain Markdown with a
 header, adds a tool that enforces the conventions and a page that makes it
 point-and-click, and makes the whole thing readable by AI.

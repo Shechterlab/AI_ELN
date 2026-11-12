@@ -1,14 +1,14 @@
 # Getting started
 
-Ten minutes, once. After that, creating an experiment is one double-click
-and one form.
+Setup is done once per computer. After that, you create an experiment by
+double-clicking a launcher and filling in a form.
 
 ## 0. Where the record lives
 
 The record is one folder: these tools plus `Experiments/`, `Protocols/`,
 `Samples/`, `Projects/`. It lives in the lab's Dropbox or OneDrive. There
-is no server, no account, no git, and no central copy; the synced folder
-is the record, and every file in it is plain text.
+is no server, account, or central copy. The synced folder is the record,
+and the files in it are plain text.
 
 **If someone has already set it up:** make sure the lab's folder is synced
 to your computer (it will be in your Dropbox or OneDrive), and go to §1.
@@ -21,11 +21,11 @@ to your computer (it will be in your Dropbox or OneDrive), and go to §1.
 2. Rename the folder if you like (`ShechterLab-ELN`) and move it into the
    lab's shared Dropbox or OneDrive.
 3. Double-click `launchers/Open ELN` once to see the page come up. The
-   record starts empty. `sandbox/`, `tests/`, and `.github/` are harmless
-   and can stay or go; `reference/` is Jacob's original materials.
+   record starts empty. `sandbox/`, `tests/`, and `.github/` are not needed
+   for daily use and can be deleted. `reference/` holds Jacob's original materials.
 
-Don't move things around inside the folder by hand after that; the page
-and the launchers do it.
+After that, do not move or rename things inside the folder by hand. Use
+the page or the launchers.
 
 ## 1. One-time setup for your computer
 
@@ -40,7 +40,7 @@ takes a few minutes.
 
 **Windows.** Install Python once from <https://www.python.org/downloads/>
 and tick **Add python.exe to PATH** on the first screen of the installer.
-Then the launchers just work.
+The launchers then work by double-click.
 
 **Linux.** Python 3 is already there; run `python3 scripts/eln_web.py`.
 
@@ -52,19 +52,19 @@ browser opens a page like this:
 ![The home page: seven buttons and the recent experiments](img/home.png)
 
 The page runs on your own computer (the address starts with `127.0.0.1`);
-nothing leaves it. Leave the small window alone; closing it closes the
-page. The first time, it asks for your initials and name under
+and does not upload anything. Keep the small window open; closing it stops
+the page. The first time, it asks for your initials and name under
 **settings**. Your initials become your ID prefix (`JSRe0001`, `JSRe0002`,
-…), so nobody's numbering collides with anyone else's.
+…), so two people cannot get the same ID.
 
-Want to click around first without touching the lab's real record?
-Double-click **`launchers/Try the Sandbox`** instead: same page, fictional
-data, resettable.
+To practice without touching the lab's record, double-click
+**`launchers/Try the Sandbox`**. It opens the same page on fictional data
+that can be reset.
 
 ## 3. Create your first experiment
 
-Click **New experiment**. The title is the only thing you must fill in;
-everything else can be added later.
+Click **New experiment**. Only the title is required. The other
+fields can be added later.
 
 ![The new-experiment form](img/new-experiment.png)
 
@@ -75,15 +75,14 @@ stood today, and a row in the inventory. The page shows the new note.
 ## 4. Write in the note
 
 Click **Edit here** on the note's page, write under the section titles,
-click **Save**. That is the whole editing workflow if you never want to
-see a text editor. (The note is a plain text file, so any editor works
-too: **Open in your editor** hands it to whatever your computer uses for
-`.md` files.)
+and click **Save**. The note is a plain text file, so you can also edit it
+in any text editor: **Open in your editor** opens it in whatever your
+computer uses for `.md` files.
 
 ![A filled-in note as the page shows it](img/note.png)
 
-Keep the `##` section titles so every experiment in the lab reads the
-same way; between them, write however you like. Fill in **Objective**
+Keep the `##` section titles so that every experiment has the same
+structure. Write freely under them. Fill in **Objective**
 before you start; **Results**, **Interpretation**, and **Decision** when
 you have them. Leave a section as "None" rather than deleting it.
 
@@ -99,8 +98,7 @@ you have them. Leave a section as "None" rather than deleting it.
 ```
 
 Start every file you make with the experiment ID; join words with hyphens.
-That single habit is what makes "find me the blot from that experiment" a
-one-second search forever. Each subfolder has a short README saying what
+This makes every file findable by searching for the experiment ID. Each subfolder has a short README saying what
 goes in it. Full grammar: [`CONVENTIONS.md`](CONVENTIONS.md) §3.
 
 If the raw data is too large to keep here (microscopy, sequencing), leave
@@ -113,27 +111,27 @@ Results section shows up on the note's page.
 | Button | What it does |
 |---|---|
 | **New sample** | A record for a plasmid, oligo, antibody, cell line, mouse line, peptide, protein prep, slide, or gel. Gets an ID like `JSRp0001`. Tick it in the experiment form from then on. |
-| **New protocol** | One living file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
-| **New project** | The rolled-up state of a research thread; conclusions cite experiment IDs. |
+| **New protocol** | One file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
+| **New project** | A summary of a research project. Conclusions cite experiment IDs. |
 | **Check** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
 | **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. One click saves it as a file. |
 | **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
 | **Experiments / Samples / Protocols / Projects** | Browse and filter. Every ID on every page is a link. |
-| **Ask the AI** | What to ask an AI assistant about the record, and which of the two no-cost paths each ask works on. Start with "do the numbers in my Results match the data file?" |
+| **Ask the AI** | Example questions for an AI assistant, and which of the two methods (pasting an export into ChatGPT, or an agent opened in the folder) each one works with. |
 
 ## 7. When an experiment is finished
 
 Click **Mark complete** on the note's page. It checks that Results and
 Interpretation are written (and says so if not), sets the status and date,
-and drops two files next to the note: a one-file HTML snapshot of the
+and writes two files next to the note: a one-file HTML snapshot of the
 whole experiment (figures included; print it to PDF for LabArchives) and a
 checksum list of every file in the folder, so **Verify files** can later
-show whether anything changed. Nothing is locked; if you come back to the
-experiment, edit away and click **Refresh snapshot & manifest**.
+show whether anything changed. The note is not locked. If you edit the
+experiment later, click **Refresh snapshot & manifest**.
 
-## 8. The same thing without a browser
+## 8. Command line
 
-Every launcher and every button runs one script. If you prefer a terminal:
+Every launcher and every button runs the same script:
 
 ```bash
 python3 scripts/eln.py init                                # initials, name, where files live
@@ -148,12 +146,12 @@ python3 scripts/eln_web.py                                 # the page, by hand
 ```
 
 The terminal-window launchers (`New Experiment`, `Check Everything`, and
-so on) are the same commands with questions instead of flags.
+so on) run the same commands and prompt for the values.
 
 ## 9. Keeping the notes somewhere other than the tools (unusual)
 
-Normally the notes sit next to the tools in the one synced folder and
-nothing needs configuring. If the lab keeps notes somewhere else (a server
+Normally the notes sit next to the tools in the synced folder and no
+configuration is needed. If the lab keeps notes somewhere else (a server
 mount, a different shared folder), tell the tool once:
 
 ```bash
@@ -166,19 +164,19 @@ command overrides it for one shell or one call.
 
 ## If something doesn't work
 
-- **Mac: "cannot be opened because it is from an unidentified developer"** —
+- **Mac: "cannot be opened because it is from an unidentified developer"**:
   right-click → Open (once per launcher), or Privacy & Security → Open Anyway.
 - **Mac: double-clicking opens the file in a text editor instead of running
-  it** — the executable bit was lost in a download or sync. In Terminal:
+  it**: the executable bit was lost in a download or sync. In Terminal:
   `chmod +x` followed by a space, then drag the `launchers` folder into the
   window, add `/*.command`, press Enter. Or run
   `python3 scripts/eln_web.py` directly.
-- **Windows: a window flashes and closes, or "python is not recognized"** —
+- **Windows: a window flashes and closes, or "python is not recognized"**:
   install Python (§1) with *Add to PATH* ticked, then try again.
-- **The page says "First time here"** — click *settings* and enter your
+- **The page says "First time here"**: click *settings* and enter your
   initials and name.
-- **"could not open a port"** — another copy of the page is already
+- **"could not open a port"**: another copy of the page is already
   running; find its window, or close it and try again.
-- **Check says a folder "does not match {ID}_{slug}"** — someone made or
+- **Check says a folder "does not match {ID}_{slug}"**: someone made or
   renamed an experiment folder by hand. Rename it to
   `{ID}_{words-with-hyphens}` or recreate it with New experiment.

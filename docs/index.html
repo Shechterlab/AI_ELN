@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Plain-text lab notebook · Shechter Lab</title>
+  <meta name="application-name" content="Plain-text lab notebook">
+  <meta name="description" content="A lab notebook kept as plain files in a shared folder. Each experiment has an ID, a folder, and a Markdown note. A local web page creates the files and checks the naming conventions.">
+  <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="assets/site.css?v=20261112b">
+  <script>
+    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#how">Skip to content</a>
+
+  <div class="hero">
+    <header class="top">
+      <div class="wrap bar">
+        <a class="brand" href="./" title="Plain-text lab notebook">
+          <img src="assets/shechterlab-icon.svg" alt="" width="34" height="34">
+          <div><b>Plain-text lab notebook</b><small>Shechter Lab</small></div>
+        </a>
+        <nav class="site-nav" aria-label="Pages">
+          <a href="./" aria-current="page">Overview</a>
+          <a href="guide.html?d=getting-started">Get started</a>
+          <a href="guide.html?d=CHEATSHEET">Cheat sheet</a>
+          <a href="guide.html?d=ai-agents">Using AI</a>
+          <a href="https://github.com/Shechterlab/AI_ELN">GitHub</a>
+        </nav>
+        <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch light or dark theme">Theme</button>
+      </div>
+    </header>
+
+    <div class="wrap hero-grid">
+      <div>
+        <h1>A lab notebook kept as plain files in a shared folder</h1>
+        <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You create experiments by filling in a form, and the tool makes the folders and files. It needs no account or server, and the notes open in any text editor.</p>
+        <div class="cta">
+          <a class="btn" href="guide.html?d=getting-started">Get started</a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+      </div>
+      <figure>
+        <div class="frame">
+          <div class="chrome"><i></i><i></i><i></i><span>127.0.0.1 · on your computer</span></div>
+          <img src="img/home.png" alt="The notebook's home page: buttons for New experiment, New sample, Check everything, Lab meeting brief and Export, above a list of recent experiments." width="1180" height="1010">
+        </div>
+        <figcaption>The notebook page, shown with the fictional sandbox data. It runs on your own computer and reads and writes ordinary files.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <main>
+    <section id="how">
+      <div class="wrap split wide-right">
+        <div>
+          <p class="eyebrow">How it works</p>
+          <h2>Daily use</h2>
+          <ol class="steps">
+            <li><div><h3>Double-click <em>Open ELN</em></h3><p>A page opens in your web browser. It runs on your computer and does not upload anything.</p></div></li>
+            <li><div><h3>Click <em>New experiment</em> and enter a title</h3><p>The tool creates the experiment folder, the note, a dated copy of the protocol, and a row in the lab index.</p></div></li>
+            <li><div><h3>Click <em>Edit here</em> and write</h3><p>Write the objective before you start. Add the results, interpretation, and decision when you have them.</p></div></li>
+            <li><div><h3>Put your files in the experiment folder</h3><p>Start the names of figures, tables, and scripts with the experiment ID. Put instrument files in <code>2-data_raw</code> without renaming or editing them.</p></div></li>
+          </ol>
+          <p class="after">When an experiment is finished, <b>Mark complete</b> checks that the note is filled in, records the completion date, and saves a single-file HTML copy that can be printed or uploaded to LabArchives. <b>Meeting brief</b> compiles a summary of the experiments you flagged for lab meeting.</p>
+        </div>
+        <figure>
+          <div class="frame">
+            <div class="chrome"><i></i><i></i><i></i><span>New experiment</span></div>
+            <img src="img/new-experiment.png" alt="The New experiment form: a title box, then optional project, type, protocol, notebook page, and a checklist of samples." width="1180" height="800" loading="lazy">
+          </div>
+          <figcaption>The New experiment form. Only the title is required. Projects, protocols, and samples are chosen from lists of what already exists.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="plain" class="alt">
+      <div class="wrap">
+        <p class="eyebrow">File format</p>
+        <h2>Each note is a Markdown text file</h2>
+        <p class="intro">The left panel shows a note in the notebook page. The right panel shows the file that is saved. There is no database. The text file is the record, and any text editor can open it.</p>
+        <div class="split">
+          <div class="pane">
+            <header>What you see <span>in the notebook page</span></header>
+            <div class="body rendered">
+              <h4>SNRPB chromatin retention after PRMT5 inhibition</h4>
+              <p class="by"><span class="cite">JSRe0002</span> · Jacob Roth · started 1 Sept 2026</p>
+              <div class="tags"><span class="tag ok">active</span><span class="tag">PRMT5-ChromatinRelease</span><span class="tag">P_WesternBlot</span><span class="tag">for lab meeting</span></div>
+              <h5>Objective</h5>
+              <p>Does PRMT5 inhibition increase the chromatin-bound fraction of SNRPB?</p>
+              <h5>Results</h5>
+              <p>The chromatin fraction rose from 0.31 to 0.58 across three replicates. Loading controls were even.</p>
+              <h5>Interpretation</h5>
+              <p>Consistent with the hypothesis. Preliminary: methylation has not been blotted directly.</p>
+            </div>
+          </div>
+          <div class="pane">
+            <header>What is saved <span>JSRe0002.md, a text file</span></header>
+<pre><span class="c">---</span>
+<span class="k">experiment_id:</span> JSRe0002
+<span class="k">title:</span> SNRPB chromatin retention after PRMT5 inhibition
+<span class="k">researcher:</span> Jacob Roth
+<span class="k">project:</span> [PRMT5-ChromatinRelease]
+<span class="k">date_started:</span> 2026-09-01
+<span class="k">status:</span> active
+<span class="k">protocols:</span> [P_WesternBlot]
+<span class="k">tags:</span> [meeting]
+<span class="c">---</span>
+
+<span class="h">## Objective</span>
+Does PRMT5 inhibition increase the chromatin-bound
+fraction of SNRPB?
+
+<span class="h">## Results</span>
+The chromatin fraction rose from 0.31 to 0.58 across
+three replicates. Loading controls were even.
+
+<span class="h">## Interpretation</span>
+Consistent with the hypothesis. Preliminary: methylation
+has not been blotted directly.</pre>
+          </div>
+        </div>
+        <ul class="notes">
+          <li><b>The form fills in the header.</b><span>The lines between the dashes are metadata: project, researcher, status, protocols. They are used for searching, and AI tools read them first.</span></li>
+          <li><b><code>##</code> marks a heading.</b><span>The headings are added when the note is created. You write normal text under them.</span></li>
+          <li><b>No other program is required.</b><span>You can edit in the notebook page with <em>Edit here</em>, or open the file in TextEdit, Notepad, Word, or VS Code.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="try">
+      <div class="wrap">
+        <p class="eyebrow">Try it</p>
+        <h2>Name an experiment</h2>
+        <p class="intro">Enter initials and a title to see the ID and folder that <em>New experiment</em> would create. This runs in your browser and nothing is sent.</p>
+        <div class="try">
+          <form class="card fields" id="try-form" autocomplete="off">
+            <div class="row-2">
+              <div class="field">
+                <label for="try-initials">Initials</label>
+                <input id="try-initials" type="text" value="JSR" maxlength="4" spellcheck="false">
+              </div>
+              <div class="field">
+                <label for="try-number">Experiment number</label>
+                <input id="try-number" type="number" value="2" min="1" max="9999" inputmode="numeric">
+              </div>
+            </div>
+            <div class="hint" id="try-initials-hint"></div>
+            <div class="field">
+              <label for="try-title">Title</label>
+              <input id="try-title" type="text" value="SNRPB chromatin retention after PRMT5 inhibition" spellcheck="false">
+              <div class="hint">In the tool, the number is assigned automatically as your next one.</div>
+            </div>
+          </form>
+          <div class="card result" aria-live="polite">
+            <div class="id" id="try-id"></div>
+            <pre id="try-tree" aria-label="The folder that would be created"></pre>
+            <p class="foot" id="try-foot"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="names" class="alt">
+      <div class="wrap">
+        <p class="eyebrow">File names</p>
+        <h2>How files are named</h2>
+        <div class="split">
+          <div>
+            <div class="anatomy" aria-label="JSRe0002_R_fractionation-KCl_20260904.png">
+              <span class="seg-a">JSRe0002</span><span class="sep">_</span><span class="seg-b">R</span><span class="sep">_</span><span class="seg-c">fractionation-KCl</span><span class="sep">_</span><span class="seg-d">20260904</span><span class="sep">.png</span>
+            </div>
+            <ul class="legend">
+              <li><i class="seg-a"></i><span><b>Experiment ID.</b> Initials, <code>e</code> for experiment, and a four-digit number. Every file from the experiment starts with it.</span></li>
+              <li><i class="seg-b"></i><span><b>R marks a result.</b> Use it for the final figures you would show at lab meeting. Optional.</span></li>
+              <li><i class="seg-c"></i><span><b>Description.</b> A few words joined with hyphens.</span></li>
+              <li><i class="seg-d"></i><span><b>Date as YYYYMMDD.</b> Optional.</span></li>
+            </ul>
+            <p class="small muted" style="margin-top:14px">Exception: files in <code>2-data_raw</code> keep the names the instrument gave them and are never edited.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Thing</th><th>Its ID looks like</th><th>Lives in</th></tr></thead>
+              <tbody>
+                <tr><td>An experiment</td><td><code>JSRe0002</code></td><td>its own folder under <code>Experiments/</code></td></tr>
+                <tr><td>A plasmid, antibody, cell line, gel…</td><td><code>JSRp0001</code> <span class="muted small">(p plasmid, a antibody, c cell line, g gel…)</span></td><td>one note in <code>Samples/</code></td></tr>
+                <tr><td>A protocol</td><td><code>P_WesternBlot</code></td><td>one note in <code>Protocols/</code></td></tr>
+                <tr><td>A project</td><td><code>PRMT5-ChromatinRelease</code></td><td>one note in <code>Projects/</code></td></tr>
+              </tbody>
+            </table>
+            <p class="small muted">An ID written in a note is shown as a link in the notebook page, and <em>Check</em> reports IDs that do not match anything. Full rules: <a href="guide.html?d=CONVENTIONS">conventions</a>. Short version: <a href="guide.html?d=CHEATSHEET">cheat sheet</a>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="why">
+      <div class="wrap">
+        <p class="eyebrow">Comparison</p>
+        <h2>Why plain files in a folder</h2>
+        <p class="intro">The record is a folder of text files, so there is no software to maintain and no dependence on a vendor. A small tool creates the files and checks that they follow the conventions.</p>
+        <div class="grid-3">
+          <div class="card"><h3>No accounts</h3><p>The folder lives in the lab's Dropbox or OneDrive. Anyone with access to the folder has the notebook and the tools.</p></div>
+          <div class="card"><h3>No database</h3><p>If two people edit the same note while offline, the sync service keeps both copies and <em>Check</em> lists them.</p></div>
+          <div class="card"><h3>Search by ID</h3><p>Every file name starts with its experiment ID. A Finder or Explorer search for the ID finds the note, the data, and the figures.</p></div>
+          <div class="card"><h3>Convention check</h3><p><em>Check</em> reads every folder and note and lists misnamed files, missing fields, and IDs that do not match anything.</p></div>
+          <div class="card"><h3>Lab meeting brief</h3><p>Flag an experiment for lab meeting. <em>Meeting brief</em> collects the objective, results, and decision from each flagged experiment.</p></div>
+          <div class="card"><h3>Standard export</h3><p><em>Export</em> saves a <code>.eln</code> archive, the exchange format read by eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog.</p></div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:28px">
+          <table class="compare">
+            <thead><tr><th></th><th>This folder</th><th>A hosted notebook app</th><th>Folders with no rules</th></tr></thead>
+            <tbody>
+              <tr><td>Readable without the software</td><td class="yes">Yes</td><td class="no">After export</td><td class="yes">Yes</td></tr>
+              <tr><td>Works offline</td><td class="yes">Yes</td><td class="no">Depends on the product</td><td class="yes">Yes</td></tr>
+              <tr><td>Cost</td><td class="yes">None beyond the shared drive</td><td class="no">License or a server</td><td class="yes">None</td></tr>
+              <tr><td>Same structure for every experiment</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
+              <tr><td>Checks naming and missing fields</td><td class="yes">Yes</td><td class="no">Depends on the product</td><td class="no">No</td></tr>
+              <tr><td>AI tools can read notes and cite experiment IDs</td><td class="yes">Yes</td><td class="no">Depends on the vendor</td><td class="no">No consistent structure</td></tr>
+              <tr><td>Signatures and audit trail</td><td class="no">No. LabArchives remains the official archive.</td><td class="yes">Yes</td><td class="no">No</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="ai" class="alt">
+      <div class="wrap">
+        <p class="eyebrow">AI</p>
+        <h2>Using AI with the notebook</h2>
+        <p class="intro">Every note has the same header fields and headings, so an AI assistant can find the relevant experiments and cite them by ID. This works with the ChatGPT site license or a Claude subscription and does not need an API key.</p>
+        <div class="split">
+          <div class="chat" aria-label="An example question and answer">
+            <div class="bubble q">What do we know about SNRPB chromatin retention after PRMT5 inhibition?</div>
+            <div class="bubble a">
+              <p><b>Supported.</b> Inhibition roughly doubles the chromatin-bound fraction in A549, 0.31 to 0.58, three replicates <span class="cite">ALXe0002</span>. Same direction in HeLa, smaller, two replicates <span class="cite">ALXe0003</span>.</p>
+              <p><b>Preliminary.</b> A methyl-site mutant is more chromatin-bound, but that is a single replicate <span class="cite">JORe0001</span>.</p>
+              <p><b>Conflicting.</b> Imaging shows no redistribution <span class="cite">JORe0002</span>.</p>
+              <p><b>Not in the record.</b> Nobody has measured total SNRPB protein levels.</p>
+            </div>
+            <p class="small muted">Shortened from the <a href="https://github.com/Shechterlab/AI_ELN/blob/main/sandbox/PILOT.md">test run</a> on the fictional sandbox notebook. The IDs are sandbox IDs, not lab data.</p>
+          </div>
+          <div>
+            <h3 style="margin-top:0">Example questions</h3>
+            <ul class="asks">
+              <li><b>Check a write-up</b><span>Do the numbers in my Results section match the data file?</span></li>
+              <li><b>Statistics</b><span>Which test fits this design? Write the sentence with the effect size.</span></li>
+              <li><b>Interpretation</b><span>What result would contradict this interpretation?</span></li>
+              <li><b>Search</b><span>Which experiments used this antibody, and what did each find?</span></li>
+            </ul>
+            <p style="margin-top:16px">There are two ways to use it, both described under <em>Ask the AI</em> in the notebook page: copy an export into ChatGPT, or open Codex, Claude Code, or Cowork in the notebook folder. <a href="guide.html?d=ai-agents">Details</a>.</p>
+            <p class="small muted">Lab rule: the AI reports and cites what the notes say and does not invent results. People draw the conclusions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <p class="eyebrow">FAQ</p>
+        <h2>Questions</h2>
+        <div class="faq">
+          <details><summary>Do I have to learn Markdown or code?</summary><p>No. You fill in a form and type text into a box. Headings start with <code>##</code> and are already in the note when it is created. No terminal is needed.</p></details>
+          <details><summary>Do I need GitHub or git?</summary><p>No. GitHub hosts the tools for download. The notebook is a folder in the lab's Dropbox or OneDrive.</p></details>
+          <details><summary>What do I have to install?</summary><p>Python. On a Mac, macOS offers to install its developer tools the first time, which include Python; click Install. On Windows, install Python once from python.org.</p></details>
+          <details><summary>Can I keep my paper notebook?</summary><p>Yes. Each experiment note has a field for the paper notebook page, for example <code>NB02-153</code>.</p></details>
+          <details><summary>Where does large data go?</summary><p>Large data stays on institutional storage and the note records the location. The experiment folder holds notes, small tables, figures, and scripts.</p></details>
+          <details><summary>What if two people edit the same note?</summary><p>The sync service keeps both copies and marks one as a conflict. <em>Check</em> lists conflict copies; open both and keep one. Experiment IDs include your initials, so two people cannot be assigned the same ID.</p></details>
+          <details><summary>Is it private?</summary><p>The page runs on your computer and does not connect to anything else. The notes are as private as the shared folder. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
+          <details><summary>What about LabArchives?</summary><p>LabArchives remains the official archive. <em>Mark complete</em> saves a single HTML file with the figures embedded. Print it to PDF and upload it under the same experiment ID.</p></details>
+          <details><summary>What if we stop using it?</summary><p>The folder of text files and figures stays usable without the tools. The <code>.eln</code> export can be imported into other notebook systems.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section id="start" class="alt">
+      <div class="wrap split">
+        <div>
+          <p class="eyebrow">Setup</p>
+          <h2>Getting started</h2>
+          <div class="tabs" role="tablist" aria-label="Your computer">
+            <button type="button" role="tab" data-os="mac" aria-selected="true">Mac</button>
+            <button type="button" role="tab" data-os="windows" aria-selected="false">Windows</button>
+          </div>
+          <ol class="plain" data-os-panel="mac">
+            <li><b>Open the lab's notebook folder</b> in your Dropbox or OneDrive. (Setting it up for the lab? <a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a>, unzip it, and move it into the shared drive.)</li>
+            <li><b>Open the <code>launchers</code> folder</b> and right-click <em>Open ELN</em>, then choose Open. macOS asks once whether you trust it.</li>
+            <li><b>If macOS offers to install developer tools</b>, click Install and wait a few minutes. This installs Python.</li>
+            <li><b>Enter your initials and name</b> when the page asks. Then click <em>New experiment</em>.</li>
+          </ol>
+          <ol class="plain" data-os-panel="windows" hidden>
+            <li><b>Install Python</b> from <a href="https://www.python.org/downloads/">python.org</a>, once. Tick <em>Add python.exe to PATH</em> on the first screen.</li>
+            <li><b>Open the lab's notebook folder</b> in your Dropbox or OneDrive. (Setting it up for the lab? <a href="https://github.com/Shechterlab/AI_ELN/archive/refs/heads/main.zip">Download the folder</a>, unzip it, and move it into the shared drive.)</li>
+            <li><b>Open the <code>launchers</code> folder</b> and double-click <em>Open ELN</em>.</li>
+            <li><b>Enter your initials and name</b> when the page asks. Then click <em>New experiment</em>.</li>
+          </ol>
+          <p style="margin-top:18px"><a class="btn primary" href="guide.html?d=getting-started">Full walk-through with screenshots</a></p>
+        </div>
+        <div style="display:grid; gap:16px">
+          <div class="callout"><h3>Practice notebook</h3><p><em>Try the Sandbox</em> opens the same page on a fictional notebook with seven experiments, so you can try everything without touching real data.</p></div>
+          <div class="callout"><h3>Cheat sheet</h3><p>The <a href="guide.html?d=CHEATSHEET">cheat sheet</a> lists the IDs, the folders, the file-name pattern, and the buttons. It prints on one page.</p></div>
+          <div class="callout"><h3>Command line</h3><p>The same functions are available from one script with no dependencies: <code>python3 scripts/eln.py --help</code>.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p><a href="https://www.shechterlab.org/">Shechter Lab</a>, Department of Biochemistry, Albert Einstein College of Medicine. The experiment IDs, the five subfolders, and the result-file naming come from Jacob Roth's system. This project implements it as Markdown notes with a tool that creates and checks them.</p>
+      <p>Guides: <a href="guide.html?d=getting-started">Getting started</a> · <a href="guide.html?d=CHEATSHEET">Cheat sheet</a> · <a href="guide.html?d=CONVENTIONS">The rules</a> · <a href="guide.html?d=SOP">Lab data SOP</a> · <a href="guide.html?d=ai-agents">Using AI</a> · <a href="guide.html?d=design-notes">Why it is built this way</a> · <a href="https://github.com/Shechterlab/AI_ELN">Source on GitHub</a></p>
+    </div>
+  </footer>
+
+  <script src="assets/names.js?v=20261112b"></script>
+  <script src="assets/site.js?v=20261112b" defer></script>
+</body>
+</html>

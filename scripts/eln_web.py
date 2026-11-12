@@ -37,35 +37,43 @@ MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif"
         ".svg": "image/svg+xml", ".webp": "image/webp", ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff"}
 
 CSS = """
-:root{--ink:#1f2933;--muted:#5f6b7a;--line:#e3e8ee;--bg:#f7f9fb;--card:#fff;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--err:#cf222e}
-*{box-sizing:border-box}body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-header{background:#fff;border-bottom:1px solid var(--line)}header .in{max-width:1040px;margin:0 auto;padding:10px 20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
-header .brand{font-weight:700;font-size:17px;margin-right:auto}header nav a{padding:6px 10px;border-radius:6px;color:var(--ink)}header nav a.active,header nav a:hover{background:var(--bg);text-decoration:none}
-main{max-width:1040px;margin:0 auto;padding:22px 20px 60px}
-h1{font-size:24px;margin:0 0 14px}h2{font-size:18px;margin:26px 0 10px}h3{font-size:16px;margin:18px 0 6px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:0 0 16px}
+:root{--teal:#155e75;--teal-600:#0e7490;--teal-wash:#ecf7f9;--accent:#c2410c;--accent-dark:#9a3412;--ink:#111827;--ink-2:#374151;--muted:#5f6f78;
+--line:#e0e8eb;--line-strong:#c7d4d9;--bg:#f6f9fa;--card:#fff;--ok:#1a7f37;--warn:#9a6700;--err:#b42318;--code-bg:#eef5f7;
+--font-body:'Inter',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;--font-display:'IBM Plex Serif',Georgia,'Times New Roman',serif;
+--font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--shadow:0 4px 12px rgba(0,0,0,.06)}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 var(--font-body);color:var(--ink);background:var(--bg)}
+a{color:var(--accent);text-decoration:none;text-underline-offset:2px}a:hover{color:var(--accent-dark);text-decoration:underline}
+header{background:var(--teal);color:#fff;border-bottom:4px solid var(--accent)}header .in{max-width:1080px;margin:0 auto;padding:12px 20px;display:flex;gap:10px 22px;align-items:center;flex-wrap:wrap}
+header .brand{font-family:var(--font-display);font-weight:500;font-size:1.35rem;margin-right:auto;color:#fff}header .brand small{display:block;font:400 .76rem var(--font-body);opacity:.85}
+header nav{display:flex;flex-wrap:wrap;gap:4px}header nav a{padding:4px 12px;border-radius:999px;color:#fff;font-size:.9rem;font-weight:500;border:1px solid transparent}
+header nav a:hover{background:rgba(255,255,255,.14);color:#fff;text-decoration:none}header nav a.active{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.55)}
+main{max-width:1080px;margin:0 auto;padding:24px 20px 60px}
+h1,h2,h3{font-family:var(--font-display);font-weight:500;line-height:1.2;letter-spacing:-.01em}
+h1{font-size:1.75rem;margin:0 0 14px}h2{font-size:1.25rem;margin:28px 0 10px}h3{font-size:1.05rem;margin:18px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:18px 22px;margin:0 0 16px;box-shadow:var(--shadow)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-.tile{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;color:var(--ink);text-decoration:none}
-.tile:hover{border-color:var(--accent);text-decoration:none}.tile b{display:block;font-size:17px;margin-bottom:4px}.tile span{color:var(--muted);font-size:14px}
-.btn{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
-.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn:hover{filter:brightness(.95)}
-form.stack label{display:block;margin:12px 0 4px;font-weight:600}form.stack input[type=text],form.stack textarea,form.stack select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font:inherit}
-form.stack .hint{color:var(--muted);font-size:13px;margin-top:3px}form.stack .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;margin-top:6px}.checks label{font-weight:400;margin:0;display:flex;gap:8px;align-items:baseline}
-table{border-collapse:collapse;width:100%;margin:8px 0 14px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:13px;color:var(--muted);font-weight:600}
-.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#eef2f6;color:var(--muted)}
-.pill.active{background:#dcfce7;color:var(--ok)}.pill.complete{background:#dbeafe;color:#1e40af}.pill.paused,.pill.abandoned{background:#fef3c7;color:var(--warn)}
-.msg{padding:12px 14px;border-radius:8px;margin:0 0 16px}.msg.ok{background:#dcfce7;color:var(--ok)}.msg.err{background:#ffe1e3;color:var(--err)}.msg.warn{background:#fef3c7;color:var(--warn)}
-.issue{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;margin:2px 0}.issue .lvl{display:inline-block;width:56px;font-weight:700}.lvl.ERROR{color:var(--err)}.lvl.WARN{color:var(--warn)}
-.note img{max-width:100%;border:1px solid var(--line);border-radius:6px}.note pre{background:#f1f5f9;padding:10px;border-radius:6px;overflow-x:auto}.note code{background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:13px}
-.note h1{font-size:22px}.note h2{border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:24px}
+.tile{display:block;background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:18px;color:var(--ink);text-decoration:none;box-shadow:var(--shadow)}
+.tile:hover{border-color:var(--teal);background:var(--teal-wash);text-decoration:none;color:var(--ink)}.tile b{display:block;font:500 1.1rem var(--font-display);margin-bottom:4px;color:var(--teal)}.tile span{color:var(--muted);font-size:14px}
+.btn{display:inline-block;background:var(--teal);color:#fff;border:1px solid var(--teal);border-radius:999px;padding:7px 16px;font:inherit;font-size:.92rem;font-weight:500;cursor:pointer}
+.btn:hover{background:var(--teal-600);color:#fff;text-decoration:none}.btn.secondary{background:#fff;color:var(--teal)}.btn.secondary:hover{background:var(--teal-wash);color:var(--teal)}.btn[disabled]{opacity:.5;cursor:default}
+form.stack label{display:block;margin:12px 0 4px;font-weight:500}form.stack input[type=text],form.stack textarea,form.stack select{width:100%;padding:8px 10px;border:1px solid var(--line-strong);border-radius:.375rem;font:inherit;background:#fff;color:var(--ink)}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--teal-600);outline-offset:2px}
+input[type=checkbox],input[type=radio]{accent-color:var(--teal)}
+form.stack .hint,.hint{color:var(--muted);font-size:13px;margin-top:3px}form.stack .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:4px 16px;margin-top:6px}.checks label{font-weight:400;margin:0;display:flex;gap:8px;align-items:baseline}
+table{border-collapse:collapse;width:100%;margin:8px 0 14px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#eef2f6;color:var(--muted)}
+.pill.active{background:#dcfce7;color:var(--ok)}.pill.complete{background:var(--teal-wash);color:var(--teal)}.pill.paused,.pill.abandoned{background:#fef3c7;color:var(--warn)}
+.msg{padding:12px 14px;border-radius:.5rem;margin:0 0 16px}.msg.ok{background:#dcfce7;color:#14532d}.msg.err{background:#fee4e2;color:var(--err)}.msg.warn{background:#fef3c7;color:#713f12}
+.issue{font-family:var(--font-mono);font-size:13px;margin:2px 0}.issue .lvl{display:inline-block;width:56px;font-weight:700}.lvl.ERROR{color:var(--err)}.lvl.WARN{color:var(--warn)}
+.note img{max-width:100%;border:1px solid var(--line);border-radius:6px}.note pre{background:var(--code-bg);padding:10px;border-radius:6px;overflow-x:auto}code{font-family:var(--font-mono);font-size:.9em}.note code,p code,td code,.hint code{background:var(--code-bg);padding:1px 5px;border-radius:4px}
+.note h1{font-size:1.5rem}.note h2{border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:24px}
 .meta{display:grid;grid-template-columns:max-content 1fr;gap:3px 14px;font-size:14px}.meta div:nth-child(odd){color:var(--muted)}
-.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--muted);word-break:break-all}
-textarea.export{width:100%;height:420px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+.path{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);word-break:break-all}
+textarea.export{width:100%;height:420px;font:12px/1.45 var(--font-mono);border:1px solid var(--line-strong);border-radius:.375rem;padding:10px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
-.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.filters label{font-size:13px;color:var(--muted);display:block}.filters input,.filters select{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit}
-footer{max-width:1040px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:13px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:8px}.filters label{font-size:13px;color:var(--muted);display:block}.filters input,.filters select{padding:7px 9px;border:1px solid var(--line-strong);border-radius:.375rem;font:inherit}
+footer{max-width:1080px;margin:0 auto;padding:14px 20px 30px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
 """
 
 NAV = [("/", "Home"), ("/experiments", "Experiments"), ("/samples", "Samples"), ("/protocols", "Protocols"),
@@ -104,7 +112,7 @@ def page(title: str, body: str, active: str = "", root: Optional[Path] = None) -
     nav = "".join(f'<a href="{h}" class="{"active" if h == active else ""}">{esc(t)}</a>' for h, t in NAV)
     return (f"<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{esc(title)} - AI_ELN</title><style>{CSS}</style></head><body>"
-            f"<header><div class=in><span class=brand>AI_ELN</span><nav>{nav}</nav></div></header>"
+            f"<header><div class=in><a class=brand href='/' style='text-decoration:none'>Lab notebook<small>Runs on this computer. Notes are plain text files.</small></a><nav>{nav}</nav></div></header>"
             f"<main>{body}</main><footer>Files live in <span class=path>{esc(root)}</span>. "
             f"Everything here is a plain file you can open in any editor. Close the window that started this page to stop it.</footer>"
             f"<script>function cp(id){{var t=document.getElementById(id);t.select();document.execCommand('copy');"
@@ -148,7 +156,7 @@ class App:
         initials, _ = self.person()
         if initials:
             return None
-        return ("<div class='msg warn'>First time here: tell the record who you are, once. "
+        return ("<div class='msg warn'>First time here: enter your initials and name. "
                 "<a href='/setup'>Set up initials and name</a>.</div>")
 
     # -- pages ------------------------------------------------------------
@@ -161,13 +169,13 @@ class App:
         initials, researcher = self.person()
         who = f"{esc(researcher)} ({esc(initials)})" if initials else "not set up yet"
         tiles = [
-            ("/new/experiment", "New experiment", "One form. Creates the folder, the note, the protocol snapshot."),
+            ("/new/experiment", "New experiment", "Creates the folder, the note, and the protocol copy."),
             ("/new/sample", "New sample", "Plasmid, oligo, antibody, cell line, gel..."),
-            ("/new/protocol", "New protocol", "One living file per protocol."),
-            ("/new/project", "New project", "The rolled-up state of a research thread."),
-            ("/validate", "Check everything", "What breaks the conventions, if anything."),
-            ("/report", "Lab meeting brief", "From everything flagged for the meeting."),
-            ("/export", "Export for ChatGPT", "One file to paste into a chat."),
+            ("/new/protocol", "New protocol", "A reusable procedure, one file each."),
+            ("/new/project", "New project", "A summary page for a research project."),
+            ("/validate", "Check everything", "Lists naming and metadata problems."),
+            ("/report", "Lab meeting brief", "Summary of experiments flagged for the meeting."),
+            ("/export", "Export for ChatGPT", "A single file to paste into a chat."),
         ]
         body = [self.need_setup() or "", "<h1>Shechter Lab research record</h1>",
                 f"<p>You are <b>{who}</b> &middot; {len(exps)} experiments, {len(active)} active, "
@@ -279,7 +287,7 @@ class App:
             text = n.path.read_text(encoding="utf-8", errors="replace")
         body = f"""
         <h1>Edit {esc(n.id)}</h1>{f"<div class='msg err'>{esc(err)}</div>" if err else ''}
-        <p class=hint>This is the whole file. Keep the header between the <code>---</code> lines and the <code>##</code> section titles;
+        <p class=hint>This box shows the whole file. Keep the header between the <code>---</code> lines and the <code>##</code> section titles;
         write anything you like under them. Saving re-checks the header and re-indexes.</p>
         <form method=post class=stack>
           <textarea name=text class=export style='height:70vh;font-size:13px' spellcheck=true>{esc(text)}</textarea>
@@ -369,7 +377,7 @@ class App:
         <h1>New protocol</h1>{f"<div class='msg err'>{esc(err)}</div>" if err else ''}
         <form class=stack method=post>
           <label>Short name</label><input type=text name=name required autofocus value='{esc(vals.get('name'))}' placeholder='WesternBlot'>
-          <div class=hint>Letters, digits, hyphens. Becomes <b>P_Name</b>. One living file per protocol; bump its version when the procedure changes.</div>
+          <div class=hint>Letters, digits, hyphens. Becomes <b>P_Name</b>. One file per protocol; update its version date when the procedure changes.</div>
           <label>Full title</label><input type=text name=title value='{esc(vals.get('title'))}' placeholder='Western blot (wet transfer, PVDF)'>
           <div class=actions style='margin-top:18px'><button class=btn>Create protocol</button><a href='/protocols' class='btn secondary'>Cancel</a></div>
         </form>"""
@@ -412,7 +420,7 @@ class App:
           (once, paste <code>docs/ai-briefing.md</code> as the chat's instructions). It can reason about the notes but cannot see
           data files or run anything. <b>Codex, Claude Code, Cowork:</b> open the tool in this folder; it reads the lab's rules
           and skills itself, and can read files and run analyses.</p>
-          <p>You never name a skill. Ask for the task; the assistant picks the method. Every factual claim it makes should carry
+          <p>You do not need to name a skill. Describe the task and the assistant chooses the method. Every factual claim it makes should carry
           an experiment ID; if it does not, ask for one.</p>
         </div>
         <table><tr><th>You want</th><th>Say something like</th><th>Works in</th></tr>{rows}</table>

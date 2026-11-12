@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Guides · Plain-text lab notebook</title>
+  <meta name="description" content="Guides for the Shechter Lab plain-text lab notebook: getting started, the cheat sheet, the naming rules, and using AI with it.">
+  <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="assets/site.css?v=20261112b">
+  <script>
+    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#doc">Skip to content</a>
+  <header class="top rule">
+    <div class="wrap bar">
+      <a class="brand" href="./" title="Plain-text lab notebook">
+        <img src="assets/shechterlab-icon.svg" alt="" width="34" height="34">
+        <div><b>Plain-text lab notebook</b><small>Shechter Lab</small></div>
+      </a>
+      <nav class="site-nav" aria-label="Pages">
+        <a href="./">Overview</a>
+        <a href="guide.html?d=getting-started">Get started</a>
+        <a href="guide.html?d=CHEATSHEET">Cheat sheet</a>
+        <a href="guide.html?d=ai-agents">Using AI</a>
+        <a href="https://github.com/Shechterlab/AI_ELN">GitHub</a>
+      </nav>
+      <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch light or dark theme">Theme</button>
+    </div>
+  </header>
+
+  <div class="wrap guide">
+    <nav class="guide-nav" id="guide-nav" aria-label="Guides"></nav>
+    <main class="doc">
+      <div class="doc-tools">
+        <button type="button" id="doc-print">Print this page</button>
+        <a id="doc-source" href="https://github.com/Shechterlab/AI_ELN/tree/main/docs">View the Markdown source</a>
+      </div>
+      <article class="prose" id="doc"><p class="muted">Loading…</p></article>
+      <noscript><p>These guides are plain text files. <a href="https://github.com/Shechterlab/AI_ELN/tree/main/docs">Read them on GitHub</a>.</p></noscript>
+    </main>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <p><a href="https://www.shechterlab.org/">Shechter Lab</a>, Department of Biochemistry, Albert Einstein College of Medicine. Every guide on this site is a plain text file in the <a href="https://github.com/Shechterlab/AI_ELN/tree/main/docs">same folder</a>, shown here as a page.</p>
+    </div>
+  </footer>
+
+  <script src="assets/marked.min.js?v=12.0.2"></script>
+  <script src="assets/site.js?v=20261112b" defer></script>
+  <script src="assets/guide.js?v=20261112b" defer></script>
+</body>
+</html>

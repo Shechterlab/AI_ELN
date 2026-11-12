@@ -1,0 +1,45 @@
+# docs/: guides and website
+
+This folder holds the guides and the website.
+
+**Guides** (Markdown, readable on GitHub or in any editor): [getting started](getting-started.md), the
+[cheat sheet](CHEATSHEET.md), [the rules](CONVENTIONS.md), the
+[lab data SOP](SOP.md), [using AI](ai-agents.md) and the
+[ChatGPT briefing](ai-briefing.md), [why it is built this way](design-notes.md),
+and the [overview and specification](AI_ELN_overview_and_spec.md).
+
+**Website**: <https://shechterlab.github.io/AI_ELN/>, served by GitHub Pages
+from this folder.
+
+| file | what it is |
+|---|---|
+| `index.html` | the landing page |
+| `guide.html` | displays a guide; it fetches the `.md` file and renders it in the browser, so there is no second copy |
+| `assets/site.css` | styles, matching the lab's other sites (shechterlab.org and the tool pages) |
+| `assets/site.js`, `assets/names.js` | theme button and the "Name an experiment" box; `names.js` mirrors the naming rules in `scripts/eln.py`, and a test checks that they agree |
+| `assets/guide.js` | the list of guides and link rewriting |
+| `assets/marked.min.js` | Markdown renderer ([marked](https://github.com/markedjs/marked) 12.0.2, MIT), vendored |
+| `img/` | screenshots of the notebook page, taken from the sandbox |
+| `.nojekyll` | tells GitHub Pages to serve the files without a build |
+
+## Enabling the site
+
+Repository **Settings → Pages → Build and deployment → Deploy from a
+branch**, branch `main`, folder `/docs`, Save. The site is published at the
+address above. There is no build step.
+
+## Editing
+
+- **A guide:** edit the `.md` file. The site shows the new text once it
+  is on `main`.
+- **A new guide:** add the `.md` file and one line to the `DOCS` list in
+  `assets/guide.js`.
+- **The landing page:** edit `index.html`. To preview:
+  `cd docs && python3 -m http.server`, then open <http://127.0.0.1:8000/>.
+- **Screenshots:** run the page on the sandbox
+  (`python3 scripts/eln_web.py --root sandbox`) and capture `/`,
+  `/new/experiment`, and `/note/ALXe0002`.
+
+`tests/test_site.py` checks that every link on the two pages points at a
+file that exists, that the guide list matches the `.md` files here, and
+that the naming box gives the same names as the real tool.
