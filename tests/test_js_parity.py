@@ -539,7 +539,8 @@ class TestOperations(ParityCase):
             (old / ".DS_Store").write_bytes(b"x")
             (root / "blot run").mkdir()
             (root / "blot run" / "a.csv").write_text("a,b\n", encoding="utf-8")
-            for i, f in enumerate(sorted(p for p in root.rglob("*") if p.is_file())):
+            # sorted by parts: the same order on Windows, where pathlib ignores case when comparing
+            for i, f in enumerate(sorted((p for p in root.rglob("*") if p.is_file()), key=lambda p: p.parts)):
                 os.utime(f, (noon + i * 86400, noon + i * 86400))
         waiting = [p.relative_to(py).as_posix() for p in eln.adoptable_folders(py)]
         self.assertEqual(waiting, ["Experiments/2019-03-04_PRMT5 western", "blot run"])

@@ -131,6 +131,12 @@ class ElnError(Exception):
     """A user-facing error. main() prints it and exits 1."""
 
 
+def by_parts(p: Path) -> Tuple[str, ...]:
+    """Sort key for paths. pathlib compares without regard to case on Windows; this gives the same
+    order on every system, and the order the JavaScript tools use."""
+    return p.parts
+
+
 def write_text_lf(path: Path, text: str) -> None:
     """Write UTF-8 with LF line endings on every platform, so a note's bytes (and therefore its
     checksum in a manifest) do not depend on which computer created it."""
@@ -568,7 +574,7 @@ def load_vault(root: Path) -> Vault:
     vault = Vault(root)
     exp_dir = root / KIND_DIR["experiment"]
     if exp_dir.is_dir():
-        for folder in sorted(p for p in exp_dir.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        for folder in sorted((p for p in exp_dir.iterdir() if p.is_dir() and not p.name.startswith(".")), key=by_parts):
             m = RE_EXP_FOLDER.match(folder.name)
             folder_id = m.group(1) if m else None
             if not m:
@@ -577,7 +583,7 @@ def load_vault(root: Path) -> Vault:
             note_path = notes_dir / f"{folder_id}.md" if folder_id else None
             if note_path is None or not note_path.exists():
                 # Fall back to any note in 1-notes so its problems are still reported.
-                candidates = sorted(p for p in notes_dir.glob("*.md") if _is_note_file(p)) if notes_dir.is_dir() else []
+                candidates = sorted((p for p in notes_dir.glob("*.md") if _is_note_file(p)), key=by_parts) if notes_dir.is_dir() else []
                 if note_path is not None and not candidates:
                     vault.folder_issues.append((folder, f"no note at 1-notes/{folder_id}.md (if this folder was just made on "
                                                         "another computer, wait for the sync to finish and check again)"))
@@ -592,7 +598,7 @@ def load_vault(root: Path) -> Vault:
     for kind in ("protocol", "sample", "project"):
         d = root / KIND_DIR[kind]
         if d.is_dir():
-            for p in sorted(x for x in d.iterdir() if _is_note_file(x)):
+            for p in sorted((x for x in d.iterdir() if _is_note_file(x)), key=by_parts):
                 vault.notes[kind].append(read_note(kind, p))
     for note in vault.all_notes():
         if note.id and note.id not in vault.by_id:
@@ -691,7 +697,7 @@ def sync_conflict_files(root: Path) -> List[Path]:
     if root.is_dir():  # copies of notebook.md at the top of the folder
         out.extend(p for p in root.iterdir() if p.is_file() and p.name.lower().startswith("notebook")
                    and (RE_SYNC_CONFLICT.search(p.name) or RE_NUMBERED_COPY.search(p.name)))
-    return sorted(out)
+    return sorted(out, key=by_parts)
 
 
 def sync_conflict_advice(parts) -> str:
@@ -806,7 +812,7 @@ def _validate_experiment(vault: Vault, note: Note, secs: Dict[str, str], E, W) -
                 d = folder / sub
                 if not d.is_dir():
                     continue
-                for f in sorted(d.iterdir()):
+                for f in sorted(d.iterdir(), key=by_parts):
                     name = f.name
                     if not f.is_file() or name.startswith((".", "~$")) or name.lower() in EXEMPT_FILENAMES:
                         continue
@@ -2012,7 +2018,7 @@ def _data_uri(path: Path, limit: int = 8_000_000) -> Optional[str]:
 def folder_files(folder: Path) -> List[Path]:
     """Every regular file under an experiment folder, sorted, skipping OS litter."""
     out = []
-    for p in sorted(folder.rglob("*")):
+    for p in sorted(folder.rglob("*"), key=by_parts):
         if p.is_file() and p.name.lower() not in SKIP_NAMES and not p.name.startswith((".", "~$")) \
                 and not p.name.endswith(".crswap") and "__pycache__" not in p.parts:
             out.append(p)
