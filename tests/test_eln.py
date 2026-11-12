@@ -837,7 +837,7 @@ class TestNotebookAdoptExport(TempVault):
         old = self.tmp / "old work" / "KCl titration 2021.06.30"
         (old / "raw").mkdir(parents=True)
         (old / "raw" / "plate.xlsx").write_bytes(b"cells")
-        (old / "summary.txt").write_text("worked\n", encoding="utf-8")
+        (old / "summary.txt").write_bytes(b"worked\n")  # bytes, so the size is the same on Windows
         stamp = 1625140800  # 2021-07-01 12:00 UTC
         for f in old.rglob("*"):
             if f.is_file():

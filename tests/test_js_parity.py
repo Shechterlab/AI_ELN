@@ -534,11 +534,11 @@ class TestOperations(ParityCase):
             old = root / "Experiments" / "2019-03-04_PRMT5 western"
             (old / "scans" / "empty").mkdir(parents=True)
             (old / "scans" / "gel 1.tif").write_bytes(b"\x00\x01gel")
-            (old / "notes, final.txt").write_text("ran it\n", encoding="utf-8")
-            (old / "README.md").write_text("old readme\n", encoding="utf-8")
+            (old / "notes, final.txt").write_bytes(b"ran it\n")  # bytes, so the size is the same on Windows
+            (old / "README.md").write_bytes(b"old readme\n")
             (old / ".DS_Store").write_bytes(b"x")
             (root / "blot run").mkdir()
-            (root / "blot run" / "a.csv").write_text("a,b\n", encoding="utf-8")
+            (root / "blot run" / "a.csv").write_bytes(b"a,b\n")
             # sorted by parts: the same order on Windows, where pathlib ignores case when comparing
             for i, f in enumerate(sorted((p for p in root.rglob("*") if p.is_file()), key=lambda p: p.parts)):
                 os.utime(f, (noon + i * 86400, noon + i * 86400))
