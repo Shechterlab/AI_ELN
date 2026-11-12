@@ -22,7 +22,7 @@ folder.
 - Read: `get_conventions`, `notebook_overview`, `find_notes`, `read_note`,
   `read_file`, `check_notebook`, `verify_files`
 - Create: `create_experiment`, `create_sample`, `create_protocol`, `create_project`
-- Edit: `write_section`, `set_field`, `update_note`, `add_file`
+- Edit: `write_section`, `set_field` (with `mode` add or remove for one tag), `update_note`, `add_file`
 - Finish and export: `complete_experiment`, `render_snapshot`,
   `meeting_brief`, `export_notes`, `rebuild_index`
 
@@ -35,7 +35,7 @@ The server takes `--root DIR` (default: the folder this repository is in),
 `--initials` and `--researcher` (default: what `python3 scripts/eln.py init`
 saved, or the environment variables `AI_ELN_INITIALS` and
 `AI_ELN_RESEARCHER`), and `--read-only` (offer only the tools that change
-nothing).
+nothing; the brief and the export are included and refuse to save).
 
 **Claude Code and Cowork.** The repository includes `.mcp.json`, so opening
 the tool in the notebook folder offers the `ai-eln` server and asks whether
@@ -66,6 +66,20 @@ transport stdio.
 the internet. This one runs on your computer, so for ChatGPT use
 **Export** and paste, as described in
 [`docs/ai-agents.md`](../docs/ai-agents.md).
+
+## What the server will not do
+
+- Read or write outside the notebook folder, including through a symbolic
+  link that points outside it.
+- Overwrite a file with `add_file`, or accept a file name that carries a
+  path.
+- Save a note whose header is broken, whose ID or type changed, or whose
+  status or dates are not valid.
+- Put a line break into a header value. It becomes a space.
+
+Two servers started on the same folder at the same moment can give two new
+experiments the same ID. Check reports that as an error. Run one server per
+notebook folder.
 
 ## Without MCP
 

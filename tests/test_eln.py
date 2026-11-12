@@ -307,12 +307,18 @@ class TestNew(TempVault):
         self.assertTrue((other / "Experiments").is_dir())
         # --root before the command works too, and is not clobbered by the per-command default
         before = self.tmp / "before"
+        # a folder that is not there is refused: a mistyped path must not start a second notebook
+        _, _, stderr = run("--root", str(before), "new", "experiment", "--title", "root first")
+        self.assertIn("there is no folder at", stderr)
+        self.assertFalse(before.exists())
+        before.mkdir()
         self.ok("--root", str(before), "new", "experiment", "--title", "root first")
         self.assertTrue((before / "Experiments").is_dir())
         out, _ = self.ok("--root", str(before), "find", "--ids")
         self.assertEqual(out.split(), ["TSTe0001"])
         del os.environ["AI_ELN_ROOT"]
         cfg_root = self.tmp / "cfg"
+        cfg_root.mkdir()
         self.config.write_text(json.dumps({"root": str(cfg_root)}), encoding="utf-8")
         self.ok("new", "experiment", "--title", "config root")
         self.assertTrue((cfg_root / "Experiments").is_dir())

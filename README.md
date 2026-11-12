@@ -32,7 +32,10 @@ When the experiment is done, **Mark complete**
 checks it is written up, dates it, and drops a one-file HTML snapshot and
 a checksum list next to the note. **Check** tells you if anything is
 misnamed or missing; **Meeting brief** writes the summary for the next lab
-meeting from whatever you flagged. Practice first on fictional data with
+meeting from whatever you flagged. **Print / save as PDF** prints a note
+with page numbers and signature lines, **Repeat this experiment** starts the
+next run from the last one, and **View a notebook** opens someone's notebook
+without being able to change it. Practice first on fictional data with
 `launchers/Try the Sandbox`.
 
 ![The home page](docs/img/home.png)
@@ -45,6 +48,15 @@ Experiment`, `Check Everything`, ...) and a command line do the same
 things for people who prefer them. Mac users right-click → Open a launcher
 the first time; Windows needs Python installed once. See
 [`docs/getting-started.md`](docs/getting-started.md).
+
+## Using it in another lab
+
+Edit [`docs/lab.yaml`](docs/lab.yaml): lab name, institution, links,
+colours, fonts, and whether printouts carry signature lines. Replace the
+logo in `docs/assets/`. The website, the notebook page, snapshots,
+printouts, and exports all read that file; nothing else needs editing. A
+notebook folder can carry its own `lab.yaml`, which wins over this one.
+The layering follows `configs/lab.yaml` in the lab's pipelines repository.
 
 ## Where it lives
 
@@ -79,6 +91,7 @@ Protocols/    P_WesternBlot.md          one living file per protocol
 Samples/      JSRp0001.md               plasmids, oligos, antibodies, cell lines, gels...
 Projects/     PRMT5-ChromatinRelease.md rolled-up state of a research thread, citing experiment IDs
 Inventory/    *.csv                     generated index of all of the above; open in Excel
+People/       JSR.yaml                  one small file per person: name, and the last serial numbers used
 ```
 
 | Thing | ID looks like | Made by |

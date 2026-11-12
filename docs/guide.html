@@ -4,15 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Guides · Plain-text lab notebook</title>
+  <title data-lab="Guides · {product_name}">Guides · Plain-text lab notebook</title>
   <meta name="description" content="Guides for the Shechter Lab plain-text lab notebook: getting started, the cheat sheet, the naming rules, and using AI with it.">
   <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" data-lab-fonts href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="assets/site.css?v=20261112b">
   <script>
-    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+    /* theme and lab colours are applied before the first paint; assets/brand.js then applies lab.yaml */
+    try {
+      var d = document.documentElement, t = localStorage.getItem('ai-eln-theme'), c = localStorage.getItem('ai-eln-lab-css');
+      if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+      if (c) { var s = document.createElement('style'); s.id = 'lab-style'; s.textContent = c; document.head.appendChild(s); }
+      if (localStorage.getItem('ai-eln-lab-name') !== 'Shechter Lab') { d.classList.add('lab-pending'); setTimeout(function () { d.classList.remove('lab-pending'); }, 900); }
+    } catch (e) {}
   </script>
 </head>
 <body>
@@ -20,8 +26,8 @@
   <header class="top rule">
     <div class="wrap bar">
       <a class="brand" href="./" title="Plain-text lab notebook">
-        <img src="assets/shechterlab-icon.svg" alt="" width="34" height="34">
-        <div><b>Plain-text lab notebook</b><small>Shechter Lab</small></div>
+        <img src="assets/shechterlab-icon.svg" data-lab-src="logo" alt="" width="34" height="34">
+        <div><b data-lab="product_name">Plain-text lab notebook</b><small data-lab="lab_name">Shechter Lab</small></div>
       </a>
       <nav class="site-nav" aria-label="Pages">
         <a href="./">Overview</a>
@@ -54,7 +60,8 @@
   </footer>
 
   <script src="assets/marked.min.js?v=12.0.2"></script>
-  <script type="module" src="assets/site.js?v=20261112c"></script>
-  <script src="assets/guide.js?v=20261112b" defer></script>
+  <script type="module" src="assets/brand.js?v=20261112d"></script>
+  <script type="module" src="assets/site.js?v=20261112d"></script>
+  <script type="module" src="assets/guide.js?v=20261112d"></script>
 </body>
 </html>

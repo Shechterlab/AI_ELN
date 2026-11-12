@@ -8,29 +8,39 @@
 
    Each tool has a JSON Schema for its arguments, so any client can validate or describe it. */
 
-import { ElnError, KINDS, ID_FIELD, SUBFOLDERS, STATUS, SAMPLE_TYPES, MEETING_TAG } from './schema.js';
+import { ElnError, KINDS, ID_FIELD, SUBFOLDERS, STATUS, SAMPLE_TYPES, MEETING_TAG, REQUIRED, DATE_FIELDS } from './schema.js';
 import { parseFrontMatter, setHeaderField, csvItems } from './frontmatter.js';
-import { loadVault, ciIn, sortedById } from './vault.js';
+import { loadVault, ciIn, sortedById, sections } from './vault.js';
+import { templateKeys } from './templates.js';
 import { validateVault, formatIssues, countIssues } from './validate.js';
 import { writeIndex, formatIndexResult } from './inventory.js';
-import { createExperiment, createSample, createProtocol, createProject, addFile } from './create.js';
+import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder } from './create.js';
 import { findNotes, buildReport, buildExport, selectForExport, exportScope } from './query.js';
 import { completeExperiment, verifyExperiments, formatVerify, renderSnapshot } from './closeout.js';
 import { buildEln } from './elnfile.js';
 import { CONVENTIONS_SUMMARY } from './conventions.js';
+import { loadLab } from './lab.js';
 import { cleanInitials } from './names.js';
-import { isoDate, splitlines, strip, normpath, decodeText, fromBase64, toBase64, utf8, cmp } from './text.js';
+import { isoDate, splitlines, strip, normpath, decodeText, fromBase64, toBase64, utf8, cmp, validDate, pyRepr } from './text.js';
 import { writeText } from '../store/base.js';
 
 const str = (description, extra = {}) => ({ type: 'string', description, ...extra });
+/** one line of text for a header field */
+const line = (description, extra = {}) => ({ type: 'string', description, maxLength: 500, ...extra });
 const bool = (description) => ({ type: 'boolean', description });
 const list = (description) => ({ type: 'array', items: { type: 'string' }, description });
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
 function person(ctx, args) {
-  const initials = cleanInitials(args.initials || (ctx.person && ctx.person.initials) || '');
-  if (!initials) throw new ElnError('initials are needed (2 to 4 letters, e.g. JSR): set them in Settings or pass "initials"', 'no_initials');
-  return { initials, researcher: args.researcher || (ctx.person && ctx.person.researcher) || initials };
+  const own = (ctx.person && cleanInitials(ctx.person.initials || '')) || '';
+  if (args.initials && !cleanInitials(args.initials)) {
+    throw new ElnError(`initials must be 2 to 4 letters, e.g. JSR (got ${pyRepr(args.initials)})`, 'bad_initials');
+  }
+  const initials = cleanInitials(args.initials || '') || own;
+  if (!initials) throw new ElnError('initials are needed (2 to 4 letters, e.g. JSR): pass "initials", or set them in the notebook settings', 'no_initials');
+  /* someone else's initials do not get the configured person's name */
+  const researcher = args.researcher || (initials === own ? ctx.person.researcher : '') || initials;
+  return { initials, researcher };
 }
 
 function insidePath(path) {
@@ -67,13 +77,36 @@ export async function experimentFiles(store, note) {
   return out;
 }
 
+export const MAX_NOTE = 2000000;
+
+/** What must be right in a header before an edited note is saved: its type, the required fields, the
+    status, the dates. The full check (references, sections, file names) is Check. Same as note_save_errors
+    in scripts/eln.py. */
+export function noteSaveErrors(kind, fields) {
+  const textOf = (key) => (Array.isArray(fields[key]) ? fields[key].join(', ') : typeof fields[key] === 'string' ? fields[key] : '');
+  const out = [];
+  if (textOf('type') !== kind) out.push(`'type' must stay ${kind}`);
+  for (const key of REQUIRED[kind]) {
+    if (!strip(textOf(key))) out.push(`'${key}' is missing or empty`);
+  }
+  const status = textOf('status');
+  if (status && !STATUS[kind].includes(status)) out.push(`status ${pyRepr(status)} is not one of ${STATUS[kind].join(' | ')}`);
+  for (const key of DATE_FIELDS[kind]) {
+    if (textOf(key) && !validDate(textOf(key))) out.push(`'${key}' must be a date written YYYY-MM-DD (got ${pyRepr(textOf(key))})`);
+  }
+  return out;
+}
+
 /** Save the whole text of a note after checking the header still parses and the ID did not change. */
 export async function saveNoteText(store, vault, id, input) {
   const note = noteOrThrow(vault, id);
   const text = String(input).replace(/\r\n?/g, '\n');
+  if (text.length > MAX_NOTE) throw new ElnError(`a note can be at most ${MAX_NOTE.toLocaleString('en-US')} characters; put large tables in a file in the experiment folder`, 'too_large');
   const { fields, problems } = parseFrontMatter(text);
   if (problems.length) throw new ElnError('Header problem: ' + problems.join('; '), 'bad_header');
   if (fields[ID_FIELD[note.kind]] !== id) throw new ElnError(`The header's ${ID_FIELD[note.kind]} must stay ${id}.`, 'id_changed');
+  const errors = noteSaveErrors(note.kind, fields);
+  if (errors.length) throw new ElnError('Not saved. In the header: ' + errors.join('; ') + '.', 'bad_header');
   await writeText(store, note.path, text.endsWith('\n') ? text : text + '\n');
   await writeIndex(store, await loadVault(store));
   return note.path;
@@ -82,8 +115,14 @@ export async function saveNoteText(store, vault, id, input) {
 /** Replace or extend the text under one '## ' heading. Returns the new note text. */
 export function writeSection(text, section, content, mode = 'replace') {
   const lines = splitlines(text);
-  const start = lines.findIndex((l) => l.startsWith('## ') && strip(l.slice(3)) === section);
-  if (start < 0) throw new ElnError(`the note has no '## ${section}' section`, 'no_section');
+  const wanted = strip(String(section)).toLowerCase();
+  const start = lines.findIndex((l) => l.startsWith('## ') && strip(l.slice(3)).toLowerCase() === wanted);
+  if (start < 0) {
+    throw new ElnError(`the note has no '## ${strip(String(section))}' section. Its sections are: ${[...sections(text).keys()].join(', ')}`, 'no_section');
+  }
+  if (splitlines(String(content)).some((l) => /^#{1,2}\s/.test(l))) {
+    throw new ElnError("the text contains a line starting with '# ' or '## ', which would start a new section. Use '### ' for a sub-heading", 'bad_content');
+  }
   let end = lines.findIndex((l, i) => i > start && l.startsWith('## '));
   if (end < 0) end = lines.length;
   const fresh = splitlines(strip(String(content)));
@@ -123,12 +162,13 @@ export const TOOLS = [
       const byStatus = {};
       for (const e of exps) byStatus[e.get('status') || '(none)'] = (byStatus[e.get('status') || '(none)'] || 0) + 1;
       return {
-        folder: ctx.store.label || '',
         person: ctx.person || null,
         counts: Object.fromEntries(KINDS.map((k) => [k + 's', v.notes[k].filter((n) => n.id).length])),
         experiments_by_status: byStatus,
         projects: sortedById(v.notes.project).map((n) => ({ id: n.id, title: n.get('title'), status: n.get('status') })),
         protocols: sortedById(v.notes.protocol).map((n) => ({ id: n.id, title: n.get('title'), version: n.get('version') })),
+        samples: sortedById(v.notes.sample).map((n) => ({ id: n.id, sample_type: n.get('sample_type'), title: n.get('title') })),
+        notes_with_problems: v.allNotes().filter((n) => n.problems.length).map((n) => n.path),
         researchers: [...new Set(exps.map((e) => e.get('researcher')).filter(Boolean))].sort(cmp),
         flagged_for_meeting: exps.filter((e) => ciIn(MEETING_TAG, e.getList('tags'))).map((e) => e.id),
       };
@@ -148,11 +188,13 @@ export const TOOLS = [
       sample: str('A sample ID the experiment used.'),
       protocol: str('A protocol ID the experiment followed.'),
       exp_type: str('An experiment type, e.g. WesternBlot.'),
-      text: str('Words to look for in the title or body.'),
+      sample_type: str('With kind "sample": the type, e.g. antibody.', { enum: Object.keys(SAMPLE_TYPES) }),
+      text: str('Words to look for in the ID, title, or body. Every word must appear; order does not matter.'),
     }),
     handler: async (ctx, a) => {
       const v = await loadVault(ctx.store);
-      const hits = findNotes(v, a.kind || 'experiment', a);
+      let hits = findNotes(v, a.kind || 'experiment', a);
+      if (a.sample_type) hits = hits.filter((n) => n.get('sample_type') === a.sample_type);
       return { count: hits.length, notes: hits.map(brief) };
     },
   },
@@ -194,15 +236,15 @@ export const TOOLS = [
     title: 'New experiment',
     description: 'Create an experiment: assigns the next ID for the researcher, makes the folder with its five subfolders and the note, copies each named protocol next to the note, and updates the index. Only the title is required.',
     inputSchema: obj({
-      title: str('What the experiment is, in a phrase. Becomes the folder name.'),
-      project: str('Project ID(s), comma-separated.'),
-      exp_type: str('Experiment type(s), comma-separated, e.g. WesternBlot, Fractionation.'),
-      protocol: str('Protocol ID(s), comma-separated, e.g. P_WesternBlot.'),
-      samples: str('Sample ID(s), comma-separated.'),
-      related: str('Related experiment ID(s), comma-separated.'),
-      notebook: str('Paper notebook page, e.g. NB02-153.'),
-      tags: str('Tags, comma-separated. "meeting" flags it for the next lab meeting.'),
-      raw_data_path: str('Where the raw data is, if not in 2-data_raw.'),
+      title: line('What the experiment is, in a phrase. Becomes the folder name.'),
+      project: line('Project ID(s), comma-separated.'),
+      exp_type: line('Experiment type(s), comma-separated, e.g. WesternBlot, Fractionation.'),
+      protocol: line('Protocol ID(s), comma-separated, e.g. P_WesternBlot.'),
+      samples: line('Sample ID(s), comma-separated.'),
+      related: line('Related experiment ID(s), comma-separated.'),
+      notebook: line('Paper notebook page, e.g. NB02-153.'),
+      tags: line('Tags, comma-separated. "meeting" flags it for the next lab meeting.'),
+      raw_data_path: line('Where the raw data is, if not in 2-data_raw.'),
       ...CREATE_COMMON,
     }, ['title']),
     handler: async (ctx, a) => createExperiment(ctx.store, { ...a, ...person(ctx, a), today: ctx.today || isoDate() }),
@@ -213,9 +255,9 @@ export const TOOLS = [
     description: 'Create a sample record (plasmid, oligo, antibody, cell-line, mouse-line, peptide, protein-prep, slide, gel) with the next ID for the researcher.',
     inputSchema: obj({
       sample_type: str('The kind of sample.', { enum: Object.keys(SAMPLE_TYPES) }),
-      title: str('Name of the sample, e.g. pcDNA3-FLAG-SNRPB.'),
-      source: str('Vendor and catalog number, the experiment that made it, or who gave it.'),
-      storage: str('Where it is kept, e.g. Freezer B, box 3, A7.'),
+      title: line('Name of the sample, e.g. pcDNA3-FLAG-SNRPB.'),
+      source: line('Vendor and catalog number, the experiment that made it, or who gave it.'),
+      storage: line('Where it is kept, e.g. Freezer B, box 3, A7.'),
       tags: str('Tags, comma-separated.'),
       ...CREATE_COMMON,
     }, ['sample_type', 'title']),
@@ -226,7 +268,7 @@ export const TOOLS = [
     title: 'New protocol',
     description: 'Create Protocols/P_{name}.md from the protocol template.',
     inputSchema: obj({
-      name: str('Short name: letters, digits, hyphens, e.g. WesternBlot.'),
+      name: line('Short name: letters, digits, hyphens, e.g. WesternBlot.'),
       title: str('Full title.'),
       tags: str('Tags, comma-separated.'),
     }, ['name']),
@@ -237,9 +279,9 @@ export const TOOLS = [
     title: 'New project',
     description: 'Create Projects/{project_id}.md from the project template.',
     inputSchema: obj({
-      project_id: str('Short ID: starts with a letter; letters, digits, hyphens, e.g. PRMT5-ChromatinRelease.'),
+      project_id: line('Short ID: starts with a letter; letters, digits, hyphens, e.g. PRMT5-ChromatinRelease.'),
       title: str('Full title.'),
-      lead: str('Who leads it. Defaults to the configured person.'),
+      lead: line('Who leads it. Defaults to the configured person.'),
       tags: str('Tags, comma-separated.'),
     }, ['project_id']),
     handler: async (ctx, a) => createProject(ctx.store, {
@@ -272,11 +314,12 @@ export const TOOLS = [
   {
     name: 'set_field',
     title: 'Set a header field',
-    description: 'Set one header field of a note, for example status, tags, notebook_reference, or storage_location. Other lines are untouched.',
+    description: 'Set one header field of a note, for example status, tags, notebook_reference, or storage_location. Other lines are untouched. For a list field such as tags, mode "add" or "remove" changes single items and keeps the rest. An empty text clears a field.',
     inputSchema: obj({
       id: str('The note\'s ID.'),
-      field: str('Header key in snake_case.'),
+      field: str('Header key in snake_case. It must be one of the keys the note kind has.'),
       value: { description: 'The new value: text, or a list of texts for list fields such as tags.', anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+      mode: str('set replaces the value; add and remove change items of a list field.', { enum: ['set', 'add', 'remove'], default: 'set' }),
     }, ['id', 'field', 'value']),
     handler: async (ctx, a) => {
       const v = await loadVault(ctx.store);
@@ -286,8 +329,25 @@ export const TOOLS = [
       if (a.field === 'status' && !STATUS[n.kind].includes(a.value)) {
         throw new ElnError(`status must be one of ${STATUS[n.kind].join(' | ')}`, 'bad_status');
       }
+      if (!(typeof a.value === 'string' || (Array.isArray(a.value) && a.value.every((x) => typeof x === 'string')))) {
+        throw new ElnError('set_field: "value" must be text or a list of texts', 'bad_arguments');
+      }
+      if (!(await templateKeys(ctx.store, n.kind)).includes(a.field)) {
+        throw new ElnError(`${a.field} is not a header field of a ${n.kind}. The fields are: ${(await templateKeys(ctx.store, n.kind)).join(', ')}`, 'bad_field');
+      }
+      if (DATE_FIELDS[n.kind].includes(a.field) && a.value !== '' && !validDate(a.value)) {
+        throw new ElnError(`${a.field} must be a date written YYYY-MM-DD`, 'bad_date');
+      }
       const wasList = Array.isArray(n.fields[a.field]);
-      const value = wasList && !Array.isArray(a.value) ? csvItems(a.value) : a.value;
+      /* a list may be given as a list, as "a, b", or as "[a, b]" */
+      const asList = (x) => [...new Set(Array.isArray(x) ? x.map(strip).filter(Boolean) : csvItems(String(x).replace(/^\s*\[|\]\s*$/g, '')))];
+      let value = wasList ? asList(a.value) : Array.isArray(a.value) ? a.value.join(', ') : a.value;
+      if ((a.mode || 'set') !== 'set') {
+        if (!wasList) throw new ElnError(`${a.field} holds one value, not a list: use mode "set"`, 'bad_arguments');
+        const current = n.getList(a.field);
+        const lower = value.map((x) => x.toLowerCase());
+        value = a.mode === 'add' ? [...current, ...value.filter((x) => !ciIn(x, current))] : current.filter((x) => !lower.includes(x.toLowerCase()));
+      }
       return { id: a.id, field: a.field, path: await saveNoteText(ctx.store, v, a.id, setHeaderField(n.text, a.field, value, n.path)) };
     },
   },
@@ -307,6 +367,9 @@ export const TOOLS = [
     }, ['id', 'subfolder', 'original_name']),
     handler: async (ctx, a) => {
       if ((a.text === undefined) === (a.base64 === undefined)) throw new ElnError('give the content as "text" or as "base64" (one of them)', 'bad_content');
+      if (a.base64 !== undefined && !/^[A-Za-z0-9+/\s]*={0,2}\s*$/.test(a.base64)) {
+        throw new ElnError('"base64" is not base64 text (send only the encoded content, without a "data:" prefix)', 'bad_content');
+      }
       const bytes = a.text !== undefined ? utf8(a.text) : fromBase64(a.base64);
       return addFile(ctx.store, await loadVault(ctx.store), { ...a, bytes });
     },
@@ -318,6 +381,7 @@ export const TOOLS = [
     readOnly: true,
     inputSchema: obj({ strict: bool('Count warnings as failures.') }),
     handler: async (ctx, a) => {
+      await requireFolder(ctx.store);
       const v = await loadVault(ctx.store);
       const issues = await validateVault(ctx.store, v);
       const { text, ok } = formatIssues(v, issues, !!a.strict);
@@ -330,12 +394,16 @@ export const TOOLS = [
     description: 'Regenerate Inventory/*.csv from the note headers. Files are rewritten only when their content changed.',
     inputSchema: obj({}),
     handler: async (ctx) => {
-      const files = await writeIndex(ctx.store, await loadVault(ctx.store));
-      return { files, text: formatIndexResult(files) };
+      await requireFolder(ctx.store);
+      const v = await loadVault(ctx.store);
+      const files = await writeIndex(ctx.store, v);
+      const skipped = v.allNotes().filter((n) => !n.id).map((n) => n.path);
+      return { files, skipped, text: formatIndexResult(files) + (skipped.length ? `${skipped.length} note(s) left out because their header cannot be read; run check_notebook\n` : '') };
     },
   },
   {
     name: 'meeting_brief',
+    readOnlyWhen: (a) => !a.save,
     title: 'Lab meeting brief',
     description: 'The lab-meeting brief as Markdown: experiments tagged "meeting" with their Objective, Results, Interpretation, and Decision; active experiments by project; recent completions.',
     inputSchema: obj({
@@ -355,6 +423,7 @@ export const TOOLS = [
   },
   {
     name: 'export_notes',
+    readOnlyWhen: (a) => !a.save && ((a.format || 'md') !== 'eln' || !!a.return_bytes),
     title: 'Export',
     description: 'Bundle experiments and the notes they refer to. format "md" gives one Markdown document to paste into a chat. format "eln" writes a .eln archive (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import. Choose what to export with project, experiment_ids, status, or all.',
     inputSchema: obj({
@@ -378,7 +447,9 @@ export const TOOLS = [
       date: str('Completion date, YYYY-MM-DD. Default today.'),
       force: bool('Complete even if Results or Interpretation is empty.'),
     }, ['id']),
-    handler: async (ctx, a) => completeExperiment(ctx.store, a.id, { when: a.date || '', force: !!a.force, today: ctx.today || isoDate() }),
+    handler: async (ctx, a) => completeExperiment(ctx.store, a.id, {
+      when: a.date || '', force: !!a.force, today: ctx.today || isoDate(), lab: await loadLab(ctx.store, ctx.labText),
+    }),
   },
   {
     name: 'verify_files',
@@ -397,7 +468,8 @@ export const TOOLS = [
     description: 'Write a self-contained HTML rendering of a note next to it (images embedded). Open it in a browser and print to PDF.',
     inputSchema: obj({ id: str('The note\'s ID.') }, ['id']),
     handler: async (ctx, a) => ({
-      id: a.id, path: await renderSnapshot(ctx.store, await loadVault(ctx.store), a.id, { when: ctx.today || isoDate() }),
+      id: a.id,
+      path: await renderSnapshot(ctx.store, await loadVault(ctx.store), a.id, { when: ctx.today || isoDate(), lab: await loadLab(ctx.store, ctx.labText) }),
     }),
   },
 ];
@@ -412,16 +484,17 @@ async function runExport(ctx, a) {
   const experiments = selectForExport(v, choice);
   if (!experiments.length) throw new ElnError('nothing matched', 'empty');
   const related = a.related !== false;
+  const lab = await loadLab(ctx.store, ctx.labText);
   const stem = `export_${exportScope(choice)}_${today.replaceAll('-', '')}`;
   const ids = experiments.map((e) => e.id);
   if ((a.format || 'md') === 'eln') {
-    const { bytes, files } = await buildEln(ctx.store, v, experiments, { related, today, rootName: stem });
+    const { bytes, files } = await buildEln(ctx.store, v, experiments, { related, today, rootName: stem, lab });
     if (a.return_bytes) return { experiments: ids, files, bytes, name: `${stem}.eln` };
     const path = `Inventory/${stem}.eln`;
     await ctx.store.writeBytes(path, bytes);
     return { experiments: ids, files, size: bytes.length, path };
   }
-  const markdown = buildExport(v, experiments, { related, today });
+  const markdown = buildExport(v, experiments, { related, today, labName: lab.lab_name });
   const out = { experiments: ids, characters: markdown.length, markdown };
   if (a.save) {
     out.path = `Inventory/${stem}.md`;
@@ -435,7 +508,8 @@ const BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 function checkArgs(tool, args) {
   const schema = tool.inputSchema;
   for (const key of schema.required) {
-    if (args[key] === undefined || args[key] === null || args[key] === '') throw new ElnError(`${tool.name}: "${key}" is required`, 'bad_arguments');
+    const missing = args[key] === undefined || args[key] === null || (typeof args[key] === 'string' && !strip(args[key]) && !schema.properties[key].anyOf);
+    if (missing) throw new ElnError(`"${key}" is required`, 'bad_arguments');
   }
   for (const [key, value] of Object.entries(args)) {
     const spec = schema.properties[key];
@@ -448,10 +522,18 @@ function checkArgs(tool, args) {
       || (spec.type === 'array' && Array.isArray(value) && value.every((x) => typeof x === 'string'));
     if (!ok) throw new ElnError(`${tool.name}: "${key}" must be ${spec.type === 'array' ? 'a list of strings' : 'a ' + spec.type}`, 'bad_arguments');
     if (spec.enum && !spec.enum.includes(value)) throw new ElnError(`${tool.name}: "${key}" must be one of ${spec.enum.join(', ')}`, 'bad_arguments');
+    if (spec.type === 'integer' && spec.minimum !== undefined && value < spec.minimum) throw new ElnError(`${tool.name}: "${key}" must be at least ${spec.minimum}`, 'bad_arguments');
+    if (spec.type === 'string' && spec.maxLength && value.length > spec.maxLength) throw new ElnError(`${tool.name}: "${key}" is too long (${spec.maxLength} characters at most)`, 'bad_arguments');
   }
 }
 
 export const getTool = (name) => BY_NAME.get(name) || null;
+
+/** True when this call cannot change a file: a read-only tool, or a tool asked not to save. */
+export function isReadOnlyCall(name, args = {}) {
+  const tool = BY_NAME.get(name);
+  return !!tool && (!!tool.readOnly || (typeof tool.readOnlyWhen === 'function' && tool.readOnlyWhen(args || {})));
+}
 
 /** Run one tool. Throws ElnError for anything the caller got wrong. */
 export async function callTool(ctx, name, args = {}) {
@@ -467,6 +549,7 @@ export function mcpTools() {
   return TOOLS.map((t) => ({
     name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
     annotations: { readOnlyHint: !!t.readOnly, destructiveHint: false, openWorldHint: false },
+    canBeReadOnly: !!t.readOnly || typeof t.readOnlyWhen === 'function',
   }));
 }
 

@@ -1,10 +1,12 @@
 /* guide.html: show one of the Markdown guides in this folder as a page.
    The guides stay plain .md files (the same ones GitHub shows); this fetches one and renders it with
    marked (assets/marked.min.js, MIT). Nothing is generated or copied, so the page cannot drift from the file. */
+import { labReady } from './brand.js';
+
 (function () {
-  'use strict';
-  var REPO = 'https://github.com/Shechterlab/AI_ELN';
+  var REPO = 'https://github.com/Shechterlab/AI_ELN'; // replaced by repository_url from lab.yaml
   var BRANCH = 'main';
+  var PRODUCT = 'Plain-text lab notebook';
 
   /* id = file name without .md. Order here is the order in the side menu. */
   var DOCS = [
@@ -100,7 +102,7 @@
       fixLinks(out);
       mermaid(out);
       var h1 = out.querySelector('h1');
-      document.title = (h1 ? h1.textContent : doc.title) + ' · Plain-text lab notebook';
+      document.title = (h1 ? h1.textContent : doc.title) + ' · ' + PRODUCT;
       if (location.hash) {
         var target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
         if (target) target.scrollIntoView();
@@ -111,11 +113,11 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var p = $('#doc-print');
-    if (p) p.addEventListener('click', function () { window.print(); });
+  var p = $('#doc-print');
+  if (p) p.addEventListener('click', function () { window.print(); });
+  labReady.then(function (r) {
+    if (r.lab.repository_url) REPO = r.lab.repository_url;
+    PRODUCT = r.lab.product_name || PRODUCT;
     show(current());
   });
-
-  if (typeof module === 'object' && module.exports) module.exports = { DOCS: DOCS };
 })();

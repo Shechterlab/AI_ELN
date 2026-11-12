@@ -1,17 +1,19 @@
 /* The notebook page. Everything it does goes through the tools in lib/tools.js, the same list the
    MCP server exposes; this file is only screens and buttons. No framework, no build step. */
 
-import { TOOLS, callTool, experimentFiles, openAiTools, mcpTools } from './lib/tools.js';
+import { TOOLS, callTool, experimentFiles, isReadOnlyCall, openAiTools, mcpTools } from './lib/tools.js';
 import { loadVault, ciIn, sortedById } from './lib/vault.js';
 import { findNotes } from './lib/query.js';
 import { mdToHtml } from './lib/markdown.js';
 import { splitFrontMatter, csvItems } from './lib/frontmatter.js';
 import { ensureVaultDirs, addFile } from './lib/create.js';
-import { manifestPath } from './lib/closeout.js';
+import { manifestPath, renderSnapshotHtml } from './lib/closeout.js';
+import { loadLab, recordTitle } from './lib/lab.js';
+import { labReady } from '../assets/brand.js';
 import { cleanInitials } from './lib/names.js';
 import { guessMime } from './lib/mime.js';
 import { AGENTS_MD } from './lib/conventions.js';
-import { KIND_DIR, SUBFOLDERS, STATUS, SAMPLE_LETTERS, EXPERIMENT_TYPES, MEETING_TAG } from './lib/schema.js';
+import { ElnError, KIND_DIR, SUBFOLDERS, STATUS, SAMPLE_LETTERS, EXPERIMENT_TYPES, MEETING_TAG } from './lib/schema.js';
 import { esc, cmp, dirname, isoDate } from './lib/text.js';
 import { exists, isDir, writeText } from './store/base.js';
 import { MemoryStore } from './store/memory.js';
@@ -19,7 +21,10 @@ import { FsAccessStore, canPickFolders, pickFolder, allowed, rememberFolder, rec
 
 const $ = (sel) => document.querySelector(sel);
 const main = $('#main');
-const state = { store: null, kind: '', pending: null, vault: null, person: readPerson(), flash: '', draft: null, urls: [], drawn: null };
+const state = {
+  store: null, kind: '', readOnly: false, pending: null, vault: null, person: readPerson(), flash: '', draft: null, urls: [], drawn: null,
+  labText: null, lab: null, dirty: false,
+};
 
 const NAV = [['#/', 'Home'], ['#/experiments', 'Experiments'], ['#/samples', 'Samples'], ['#/protocols', 'Protocols'],
   ['#/projects', 'Projects'], ['#/check', 'Check'], ['#/brief', 'Meeting brief'], ['#/export', 'Export'], ['#/ai', 'Ask the AI']];
@@ -47,8 +52,12 @@ function readPerson() {
   }
 }
 
-const ctx = () => ({ store: state.store, person: state.person });
-const run = (name, args = {}) => callTool(ctx(), name, args);
+const ctx = () => ({ store: state.store, person: state.person, labText: state.labText });
+function run(name, args = {}) {
+  if (state.readOnly && !isReadOnlyCall(name, args)) throw new ElnError('This notebook is open for viewing only. Nothing was changed.', 'read_only');
+  return callTool(ctx(), name, args);
+}
+const canWrite = () => !state.readOnly;
 const msg = (kind, html) => `<div class="msg ${kind}" role="status">${html}</div>`;
 const pill = (s) => `<span class="pill ${esc(s)}">${esc(s || '-')}</span>`;
 const noteLink = (id) => `<a href="#/note/${encodeURIComponent(id)}">${esc(id)}</a>`;
@@ -125,17 +134,25 @@ async function looksLikeNotebook(store) {
   return false;
 }
 
-async function attach(store, kind, handle = null) {
+async function attach(store, kind, { handle = null, readOnly = false, keepScreen = false } = {}) {
   state.store = store;
   state.kind = kind;
+  state.readOnly = readOnly;
   state.pending = null;
-  if (handle) await rememberFolder(handle);
-  await go('#/');
+  if (handle) {
+    await rememberFolder(handle);
+    try { localStorage.setItem('ai-eln-view-only', readOnly ? '1' : ''); } catch (e) { /* private mode */ }
+  }
+  await go(keepScreen && location.hash.length > 2 ? location.hash : '#/');
 }
 
-async function openHandle(handle, kind = 'folder') {
+async function openHandle(handle, kind = 'folder', { readOnly = false, keepScreen = false } = {}) {
   const store = new FsAccessStore(handle);
-  if (await looksLikeNotebook(store)) return attach(store, kind, kind === 'folder' ? handle : null);
+  if (await looksLikeNotebook(store)) return attach(store, kind, { handle: kind === 'folder' ? handle : null, readOnly, keepScreen });
+  if (readOnly) {
+    state.flash = msg('warn', `“${esc(store.label)}” is not a notebook folder: it has no Experiments, Protocols, Samples, or Projects folder. Choose the folder that contains them.`);
+    return render();
+  }
   state.pending = { store, kind, handle, names: ((await store.list('')) || []).map((e) => e.name).sort(cmp) };
   return render();
 }
@@ -171,8 +188,10 @@ async function viewConnect() {
     <p>The notebook is a folder on this computer, usually inside the lab's Dropbox or OneDrive. This page reads and writes the files in that folder. Nothing is uploaded.</p>
     ${can ? `<div class="actions">
         ${remembered ? `<button class="btn primary" data-act="reopen">Reopen “${esc(remembered.name)}”</button>` : ''}
-        <button class="btn${remembered ? '' : ' primary'}" data-act="pick">${remembered ? 'Open a different folder' : 'Open notebook folder'}</button></div>
-      <p class="hint">The browser asks once whether this page may view and edit the folder. Choose the notebook folder itself (the one that contains <code>Experiments</code>), or an empty folder to start a new notebook.</p>`
+        <button class="btn${remembered ? '' : ' primary'}" data-act="pick">${remembered ? 'Open a different folder' : 'Open notebook folder'}</button>
+        <button class="btn" data-act="pick-view">View a notebook (read-only)</button></div>
+      <p class="hint">The browser asks once whether this page may view and edit the folder. Choose the notebook folder itself (the one that contains <code>Experiments</code>), or an empty folder to start a new notebook.
+        <b>View</b> opens someone's notebook for reading: the page asks only for permission to view, and every button that changes something is hidden.</p>`
     : msg('warn', 'This browser cannot open folders. Use Chrome or Edge on a computer. In Safari or Firefox, start the notebook with the <b>Open ELN</b> launcher instead (<a href="../guide.html?d=getting-started">how</a>).')}
     <div class="card"><h2>Practice first</h2>
       <p>A practice notebook with two example experiments. It is kept in this tab's memory and is gone when you close the tab.</p>
@@ -203,25 +222,25 @@ function viewHome() {
   const flagged = exps.filter((e) => ciIn(MEETING_TAG, e.getList('tags')));
   const who = state.person.initials ? `${esc(state.person.researcher)} (${esc(state.person.initials)})` : 'not set up yet';
   const tiles = [
-    ['#/new/experiment', 'New experiment', 'Creates the folder, the note, and the protocol copy.'],
-    ['#/new/sample', 'New sample', 'Plasmid, oligo, antibody, cell line, gel...'],
-    ['#/new/protocol', 'New protocol', 'A reusable procedure, one file each.'],
-    ['#/new/project', 'New project', 'A summary page for a research project.'],
+    ...(canWrite() ? [['#/new/experiment', 'New experiment', 'Creates the folder, the note, and the protocol copy.'],
+      ['#/new/sample', 'New sample', 'Plasmid, oligo, antibody, cell line, gel...'],
+      ['#/new/protocol', 'New protocol', 'A reusable procedure, one file each.'],
+      ['#/new/project', 'New project', 'A summary page for a research project.']] : []),
     ['#/check', 'Check everything', 'Lists naming and metadata problems.'],
     ['#/brief', 'Lab meeting brief', 'Summary of experiments flagged for the meeting.'],
     ['#/export', 'Export for ChatGPT', 'A single file to paste into a chat.'],
   ];
-  return `${needSetup()}<h1>Research record</h1>
-    <p>You are <b>${who}</b> · ${exps.length} experiments, ${active.length} active, ${flagged.length} flagged for lab meeting · <a href="#/settings">settings</a></p>
+  return `${canWrite() ? needSetup() : msg('warn', 'This notebook is open for viewing only. Nothing here can change it.')}<h1>${esc(recordTitle(state.lab))}</h1>
+    <p>${canWrite() ? `You are <b>${who}</b> · ` : ''}${exps.length} experiments, ${active.length} active, ${flagged.length} flagged for lab meeting · <a href="#/settings">settings</a></p>
     <div class="grid">${tiles.map(([h, t, d]) => `<a class="tile" href="${h}"><b>${esc(t)}</b><span>${esc(d)}</span></a>`).join('')}</div>
     ${flagged.length ? `<h2>Flagged for lab meeting</h2>${expTable(flagged)}` : ''}
-    <h2>Recent experiments</h2>${exps.length ? expTable(exps.slice(0, 12)) : '<p class="hint">None yet. Start with <a href="#/new/experiment">New experiment</a>.</p>'}`;
+    <h2>Recent experiments</h2>${exps.length ? expTable(exps.slice(0, 12)) : `<p class="hint">None yet.${canWrite() ? ' Start with <a href="#/new/experiment">New experiment</a>.' : ''}</p>`}`;
 }
 
 function viewExperiments(q) {
   const v = state.vault;
   const f = Object.fromEntries(['q', 'project', 'status', 'researcher', 'tag'].map((k) => [k, q.get(k) || '']));
-  const hits = findNotes(v, 'experiment', { project: f.project, status: f.status, researcher: f.researcher, text: f.q, tag: f.tag });
+  const hits = findNotes(v, 'experiment', { project: f.project, status: f.status, researcher: f.researcher, text: f.q, tag: f.tag }).reverse(); // newest first, as on Home
   const projects = [...new Set(v.notes.experiment.flatMap((e) => e.getList('project')))].sort(cmp);
   return `<h1>Experiments</h1>
     <form class="filters" data-form="filter">
@@ -231,7 +250,7 @@ function viewExperiments(q) {
       <div><label for="f-r">Researcher</label><input id="f-r" name="researcher" value="${esc(f.researcher)}"></div>
       <div><label for="f-t">Tag</label><input id="f-t" name="tag" value="${esc(f.tag)}" placeholder="meeting"></div>
       <div><button class="btn small">Filter</button></div></form>
-    <div class="actions"><a class="btn primary" href="#/new/experiment">New experiment</a><span class="hint">${hits.length} shown</span></div>
+    <div class="actions">${canWrite() ? '<a class="btn primary" href="#/new/experiment">New experiment</a>' : ''}<span class="hint">${hits.length} shown, newest first</span></div>
     ${hits.length ? expTable(hits) : '<p>No matches.</p>'}`;
 }
 
@@ -240,7 +259,7 @@ function viewList(kind, title, cols) {
   const head = cols.map(([, label]) => `<th>${esc(label)}</th>`).join('');
   const rows = notes.map((n) => '<tr>' + cols.map(([field]) => (field === 'id' ? `<td>${noteLink(n.id)}</td>`
     : field === 'status' ? `<td>${pill(n.get('status'))}</td>` : `<td>${esc(n.get(field))}</td>`)).join('') + '</tr>').join('');
-  return `<h1>${esc(title)}</h1><div class="actions"><a class="btn primary" href="#/new/${kind}">New ${kind}</a></div>
+  return `<h1>${esc(title)}</h1>${canWrite() ? `<div class="actions"><a class="btn primary" href="#/new/${kind}">New ${kind}</a></div>` : ''}
     ${notes.length ? `<div class="table-wrap"><table><tr>${head}</tr>${rows}</table></div>` : '<p>None yet.</p>'}`;
 }
 
@@ -253,25 +272,28 @@ async function viewNote(id) {
   });
   const meta = Object.entries(n.fields).filter(([k]) => k !== 'type')
     .map(([k, val]) => `<div>${esc(k)}</div><div>${esc(Array.isArray(val) ? val.join(', ') : val) || '-'}</div>`).join('');
-  let actions = `<div class="actions"><a class="btn primary" href="#/edit/${encodeURIComponent(n.id)}">Edit here</a>`;
+  const w = canWrite();
+  let actions = `<div class="actions">${w ? `<a class="btn primary" href="#/edit/${encodeURIComponent(n.id)}">Edit here</a>` : ''}`;
   let filesHtml = '';
   let usage = '';
   if (n.kind === 'experiment' && n.folder) {
     const flagged = ciIn(MEETING_TAG, n.getList('tags'));
-    actions += `<button class="btn" data-act="flag" data-id="${esc(n.id)}">${flagged ? 'Remove lab-meeting flag' : 'Flag for lab meeting'}</button>`;
+    if (w) actions += `<button class="btn" data-act="flag" data-id="${esc(n.id)}">${flagged ? 'Remove lab-meeting flag' : 'Flag for lab meeting'}</button>`;
     if (n.get('status') !== 'complete') {
-      actions += `<button class="btn" data-act="complete" data-id="${esc(n.id)}">Mark complete</button>`;
+      if (w) actions += `<button class="btn" data-act="complete" data-id="${esc(n.id)}">Mark complete</button>`;
     } else {
       const has = await exists(state.store, manifestPath(n.folder, n.id));
-      actions += `<button class="btn" data-act="verify" data-id="${esc(n.id)}"${has ? '' : ' disabled'}>Verify files</button>
-        <button class="btn" data-act="complete" data-force="1" data-id="${esc(n.id)}">Refresh snapshot &amp; manifest</button>`;
+      actions += `<button class="btn" data-act="verify" data-id="${esc(n.id)}"${has ? '' : ' disabled title="No manifest yet: mark the experiment complete first"'}>Verify files</button>`;
+      if (w) actions += `<button class="btn" data-act="complete" data-force="1" data-id="${esc(n.id)}">Refresh snapshot &amp; manifest</button>`;
     }
-    actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
+    if (w) actions += `<a class="btn" href="#/new/experiment?from=${encodeURIComponent(n.id)}">Repeat this experiment</a>`;
+    actions += `<button class="btn" data-act="print" data-id="${esc(n.id)}">Print / save as PDF</button>`;
+    if (w) actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
     const files = await experimentFiles(state.store, n);
     filesHtml = `<h2>Files</h2><div class="card files">${SUBFOLDERS.map((sub) => `<div><b>${esc(sub)}/</b> `
       + (files[sub].length ? files[sub].map((name) => `<a href="#" data-act="open-file" data-path="${esc(`${n.folder}/${sub}/${name}`)}">${esc(name)}</a>`).join(', ') : '<i class="hint">empty</i>')
       + '</div>').join('')}
-      <form class="drop" data-form="add-files" data-id="${esc(n.id)}">
+      ${w ? `<form class="drop" data-form="add-files" data-id="${esc(n.id)}">
         <div class="inline"><b>Add files</b><input type="file" name="files" multiple required aria-label="Files to add">
           <select name="subfolder" aria-label="Subfolder">${options(SUBFOLDERS, '5-figures')}</select></div>
         <div class="inline" style="margin-top:8px"><input type="text" name="description" placeholder="what it shows (optional, one file)" size="34" aria-label="Description">
@@ -279,18 +301,22 @@ async function viewNote(id) {
           <label><input type="checkbox" name="dated"> add today's date</label>
           <button class="btn small">Add</button></div>
         <div class="hint" style="margin-top:6px">Files are named <code>${esc(n.id)}_description.ext</code> for you. Files added to <code>2-data_raw</code> keep their original names. You can also drop files here.</div>
-      </form></div>`;
+      </form>` : ''}</div>`;
   } else {
     const used = findNotes(v, 'experiment', { [n.kind]: n.id });
     usage = `<h2>Used in</h2>${used.length ? expTable(used) : '<p>No experiment yet.</p>'}`;
-    actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
+    actions += `<button class="btn" data-act="print" data-id="${esc(n.id)}">Print / save as PDF</button>`;
+    if (w) actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
   }
   actions += `<span class="path">${esc(n.path)}</span></div>`;
   return `<h1>${esc(n.id)} <small>${esc(n.get('title'))}</small></h1>${actions}
     <div class="card"><div class="meta">${meta}</div></div><div class="card note" id="note-body">${body}</div>${filesHtml}${usage}`;
 }
 
+const VIEW_ONLY = '<h1>View only</h1><p>This notebook is open for viewing. To change it, open the folder with <b>Open notebook folder</b> (settings, Open a different folder).</p>';
+
 function viewEdit(id) {
+  if (!canWrite()) return VIEW_ONLY;
   const n = state.vault.get(id);
   if (!n) return `<h1>Not found</h1><p>There is no note with the ID ${esc(id)}.</p>`;
   const text = state.draft && state.draft.id === id ? state.draft.text : n.text;
@@ -301,30 +327,37 @@ function viewEdit(id) {
     <div class="actions"><button class="btn primary">Save</button><a class="btn" href="#/note/${encodeURIComponent(n.id)}">Cancel</a><span class="path">${esc(n.path)}</span></div></form>`;
 }
 
-function viewNew(kind) {
+function viewNew(kind, q = new URLSearchParams()) {
+  if (!canWrite()) return VIEW_ONLY;
   const v = state.vault;
   if (kind === 'experiment') {
+    /* "Repeat this experiment": start from another experiment's title, project, type, protocols, and samples */
+    const src = q.get('from') ? v.get(q.get('from')) : null;
+    const from = src && src.kind === 'experiment' ? src : null;
+    const pre = (key) => (from ? esc(from.getList(key).join(', ')) : '');
+    const chosen = new Set(from ? from.getList('samples') : []);
     const samples = sortedById(v.notes.sample);
     const projects = sortedById(v.notes.project).map((n) => n.id);
     const protocols = sortedById(v.notes.protocol).map((n) => n.id);
     return `<h1>New experiment</h1>${needSetup()}
+      ${from ? msg('ok', `Repeating <b>${esc(from.id)}</b>. The fields below are copied from it. The new experiment gets its own ID and today's date, and lists ${esc(from.id)} as related.`) : ''}
       <form class="stack" data-form="new-experiment">
         <label for="n-title">Title <span class="hint">(the only required field)</span></label>
-        <input type="text" id="n-title" name="title" required autofocus placeholder="e.g. SNRPB chromatin retention after PRMT5 inhibition: KCl titration">
-        <div class="row"><div><label for="n-project">Project</label><input type="text" id="n-project" name="project" list="projects">${datalist('projects', projects)}
+        <input type="text" id="n-title" name="title" required autofocus value="${from ? esc(from.get('title')) : ''}" placeholder="e.g. SNRPB chromatin retention after PRMT5 inhibition: KCl titration">
+        <div class="row"><div><label for="n-project">Project</label><input type="text" id="n-project" name="project" list="projects" value="${pre('project')}">${datalist('projects', projects)}
             <div class="hint">Pick an existing one or type a new ID. ${projects.length} exist.</div></div>
-          <div><label for="n-type">Experiment type</label><input type="text" id="n-type" name="exp_type" list="types">${datalist('types', EXPERIMENT_TYPES)}
+          <div><label for="n-type">Experiment type</label><input type="text" id="n-type" name="exp_type" list="types" value="${pre('experiment_type')}">${datalist('types', EXPERIMENT_TYPES)}
             <div class="hint">Separate several with commas: WesternBlot, Fractionation</div></div></div>
-        <div class="row"><div><label for="n-protocol">Protocol</label><input type="text" id="n-protocol" name="protocol" list="protocols">${datalist('protocols', protocols)}
+        <div class="row"><div><label for="n-protocol">Protocol</label><input type="text" id="n-protocol" name="protocol" list="protocols" value="${pre('protocols')}">${datalist('protocols', protocols)}
             <div class="hint">A dated copy is placed next to your note.</div></div>
           <div><label for="n-notebook">Paper notebook page</label><input type="text" id="n-notebook" name="notebook" placeholder="NB02-153"></div></div>
         <label>Samples used</label>
-        ${samples.length ? `<div class="checks">${samples.map((s) => `<label><input type="checkbox" name="samples" value="${esc(s.id)}"> ${esc(s.id)} <span class="path">${esc(s.get('title'))}</span></label>`).join('')}</div>`
+        ${samples.length ? `<div class="checks">${samples.map((s) => `<label><input type="checkbox" name="samples" value="${esc(s.id)}"${chosen.has(s.id) ? ' checked' : ''}> ${esc(s.id)} <span class="path">${esc(s.get('title'))}</span></label>`).join('')}</div>`
     : '<div class="hint">No samples recorded yet. <a href="#/new/sample">Add one</a>.</div>'}
         <label class="check" style="margin-top:16px"><input type="checkbox" name="meeting" value="1"> Flag for the next lab meeting</label>
-        <details style="margin-top:12px"><summary class="hint">More fields</summary>
-          <label for="n-related">Related experiments</label><input type="text" id="n-related" name="related" placeholder="JSRe0002, JSRe0004">
-          <label for="n-raw">Raw data is stored elsewhere</label><input type="text" id="n-raw" name="raw_data_path" placeholder="leave blank to use 2-data_raw/"></details>
+        <details style="margin-top:12px"${from ? ' open' : ''}><summary class="hint">More fields</summary>
+          <label for="n-related">Related experiments</label><input type="text" id="n-related" name="related" value="${from ? esc(from.id) : ''}" placeholder="JSRe0002, JSRe0004">
+          <label for="n-raw">Raw data location (leave blank to use 2-data_raw)</label><input type="text" id="n-raw" name="raw_data_path" placeholder="leave blank to use 2-data_raw/"></details>
         <div class="actions" style="margin-top:18px"><button class="btn primary">Create experiment</button><a href="#/" class="btn">Cancel</a></div></form>`;
   }
   if (kind === 'sample') {
@@ -372,11 +405,11 @@ async function viewBrief() {
   const { markdown } = await run('meeting_brief');
   state.lastText = markdown;
   return `<h1>Lab meeting brief</h1>
-    <div class="actions"><button class="btn primary" data-act="brief-save">Save into Inventory</button>
+    <div class="actions">${canWrite() ? '<button class="btn primary" data-act="brief-save">Save into Inventory</button>' : ''}
       <button class="btn" data-act="download-text" data-name="meeting-brief_${isoDate().replaceAll('-', '')}.md">Download</button>
       <button class="btn" data-act="copy-text">Copy</button>
       <span class="hint">Built from every experiment with <code>meeting</code> in its tags.</span></div>
-    <div class="card note">${mdToHtml(markdown, { linkHref: (x) => `#/note/${x}` })}</div>`;
+    <div class="card note">${mdToHtml(markdown, { imgBase: 'Inventory', imgSrc: (rel) => 'eln-file:' + rel, linkHref: (x) => `#/note/${x}` })}</div>`;
 }
 
 async function viewExport(q) {
@@ -396,16 +429,23 @@ async function viewExport(q) {
   let result = '';
   if (scope) {
     const args = exportArgs(q);
-    const r = await run('export_notes', args);
+    let r;
+    try {
+      r = await run('export_notes', args);
+    } catch (e) {
+      if (e.name !== 'ElnError') throw e;
+      const text = e.code === 'no_scope' ? 'Choose a project, or type at least one experiment ID.' : e.code === 'empty' ? 'No experiment matched that choice.' : e.message;
+      return `<h1>Export</h1>${msg('err', esc(text))}${form}`;
+    }
     state.lastText = r.markdown;
     state.lastExport = args;
     const name = `export_${scope === 'project' ? args.project : scope === 'ids' ? args.experiment_ids.slice(0, 3).join('-') : scope === 'active' ? 'active' : 'export'}_${isoDate().replaceAll('-', '')}`;
     result = `<h2>${r.experiments.length} experiment${r.experiments.length !== 1 ? 's' : ''}, ${r.characters.toLocaleString('en-US')} characters</h2>
       <div class="actions"><button class="btn primary" data-act="copy-text">Copy all</button>
         <button class="btn" data-act="download-text" data-name="${esc(name)}.md">Download .md</button>
-        <button class="btn" data-act="export-save">Save .md into Inventory</button>
+        ${canWrite() ? '<button class="btn" data-act="export-save">Save .md into Inventory</button>' : ''}
         <button class="btn" data-act="eln-download">Download .eln archive</button>
-        <button class="btn" data-act="eln-save">Save .eln into Inventory</button></div>
+        ${canWrite() ? '<button class="btn" data-act="eln-save">Save .eln into Inventory</button>' : ''}</div>
       <p class="hint">Paste the text into a ChatGPT conversation, or attach the .md file. The <code>.eln</code> archive is for importing into eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, or SciLog.</p>
       <textarea class="text" readonly aria-label="Export text">${esc(r.markdown)}</textarea>`;
   }
@@ -431,7 +471,7 @@ function viewAi() {
       <p>None of these needs an API key. Every factual claim an assistant makes should carry an experiment ID. If it does not, ask for one.</p></div>
     <div class="table-wrap"><table><tr><th>You want</th><th>Say something like</th><th>Works in</th></tr>
     ${ASKS.map(([want, say, where]) => `<tr><td><b>${esc(want)}</b></td><td><i>${esc(say)}</i></td><td>${esc(where)}</td></tr>`).join('')}</table></div>
-    <p class="hint">The first three rows check work that already exists, so start there.</p>`;
+    <p class="hint">The first three rows check work that already exists, so start there. "Both" means ChatGPT and the agents.</p>`;
 }
 
 function viewSettings() {
@@ -444,7 +484,7 @@ function viewSettings() {
       <div class="hint">Saved in this browser only.</div>
       <div class="actions" style="margin-top:18px"><button class="btn primary">Save</button><a href="#/" class="btn">Back</a></div></form>
     <h2>Notebook folder</h2>
-    <p><span class="path">${esc(state.store.label || '')}</span> ${state.kind === 'practice' ? '(practice notebook, kept in memory, not saved)' : ''}</p>
+    <p><span class="path">${esc(state.store.label || '')}</span> ${state.kind === 'practice' ? '(practice notebook, kept in memory, not saved)' : ''}${state.readOnly ? '(open for viewing only)' : ''}</p>
     <div class="actions"><button class="btn" data-act="switch">Open a different folder</button></div>`;
 }
 
@@ -476,13 +516,14 @@ async function render() {
   const { parts, q } = route();
   const [section = '', arg = ''] = parts;
   $('#nav').innerHTML = state.store ? NAV.map(([h, t]) => `<a href="${h}"${h === '#/' + section ? ' aria-current="page"' : ''}>${t}</a>`).join('') : '';
-  $('#where').innerHTML = state.store ? `<a href="#/settings" title="Notebook folder and your initials">${esc(state.store.label || 'notebook')}${state.person.initials ? ' · ' + esc(state.person.initials) : ''}</a>` : '';
+  $('#where').innerHTML = state.store ? `<a href="#/settings" title="Notebook folder and your initials">${esc(state.store.label || 'notebook')}${state.readOnly ? ' · view only' : state.person.initials ? ' · ' + esc(state.person.initials) : ''}</a>` : '';
   let html;
   let title = 'Lab notebook';
   try {
     if (!state.store) html = await viewConnect();
     else {
       state.vault = await loadVault(state.store);
+      state.lab = await loadLab(state.store, state.labText);
       const views = {
         '': () => viewHome(),
         experiments: () => viewExperiments(q),
@@ -491,7 +532,7 @@ async function render() {
         projects: () => viewList('project', 'Projects', [['id', 'ID'], ['title', 'Title'], ['lead', 'Lead'], ['status', 'Status']]),
         note: () => viewNote(arg),
         edit: () => viewEdit(arg),
-        new: () => viewNew(arg),
+        new: () => viewNew(arg, q),
         check: () => viewCheck(),
         brief: () => viewBrief(),
         export: () => viewExport(q),
@@ -510,6 +551,7 @@ async function render() {
   state.flash = '';
   if (state.store) await hydrateImages(tpl.content);
   main.replaceChildren(tpl.content);
+  state.dirty = false;
   document.title = title;
   const first = main.querySelector('[autofocus]');
   if (first) first.focus();
@@ -602,9 +644,25 @@ const ACTS = {
     const handle = await pickFolder();
     if (handle) await openHandle(handle);
   },
+  'pick-view': async () => {
+    const handle = await pickFolder('read');
+    if (handle) await openHandle(handle, 'folder', { readOnly: true });
+  },
   reopen: async () => {
     const handle = await recallFolder();
-    if (handle && await allowed(handle, true)) await openHandle(handle);
+    const readOnly = viewOnlyRemembered();
+    if (handle && await allowed(handle, true, readOnly ? 'read' : 'readwrite')) await openHandle(handle, 'folder', { readOnly });
+  },
+  print: async ({ id }) => {
+    /* the same HTML a snapshot holds, sent to the printer without saving a file */
+    const html = await renderSnapshotHtml(state.store, state.vault.get(id), isoDate(), state.lab);
+    const old = document.getElementById('print-frame');
+    if (old) old.remove();
+    const frame = Object.assign(document.createElement('iframe'), { id: 'print-frame', title: 'Print view' });
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    frame.srcdoc = html;
+    frame.onload = () => { frame.contentWindow.focus(); frame.contentWindow.print(); };
+    document.body.appendChild(frame);
   },
   practice: async () => {
     const store = new MemoryStore();
@@ -616,7 +674,7 @@ const ACTS = {
     await ensureVaultDirs(store);
     if (!(await exists(store, 'AGENTS.md'))) await writeText(store, 'AGENTS.md', AGENTS_MD);
     state.flash = msg('ok', 'The notebook is set up. Enter your initials under settings, then create your first experiment.');
-    await attach(store, kind, kind === 'folder' ? handle : null);
+    await attach(store, kind, { handle: kind === 'folder' ? handle : null });
   },
   'cancel-pending': async () => {
     state.pending = null;
@@ -714,6 +772,14 @@ for (const type of ['dragover', 'dragleave', 'drop']) {
   });
 }
 
+/* typing in the editor and then closing or reloading the tab asks first */
+main.addEventListener('input', (e) => {
+  if (e.target.closest('form[data-form="edit"]')) state.dirty = true;
+});
+window.addEventListener('beforeunload', (e) => {
+  if (state.dirty) e.preventDefault();
+});
+
 $('#theme-btn').addEventListener('click', () => {
   const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const next = cur === 'dark' ? 'light' : 'dark';
@@ -735,20 +801,28 @@ window.AIELN = {
   get folder() { return state.store ? state.store.label : null; },
 };
 
+function viewOnlyRemembered() {
+  try { return localStorage.getItem('ai-eln-view-only') === '1'; } catch (e) { return false; }
+}
+
 async function start() {
   const params = new URLSearchParams(location.search);
+  state.labText = (await labReady).text;
   try {
     if (params.get('store') === 'opfs') {
       /* test hook: a private folder inside the browser, with the same interface as a picked folder */
       const rootDir = await navigator.storage.getDirectory();
-      await openHandle(await rootDir.getDirectoryHandle(params.get('name') || 'ai-eln-test', { create: true }), 'test');
+      await openHandle(await rootDir.getDirectoryHandle(params.get('name') || 'ai-eln-test', { create: true }), 'test',
+        { readOnly: params.get('view') === '1', keepScreen: true });
       return;
     }
     if (canPickFolders()) {
       const handle = await recallFolder();
-      if (handle && await allowed(handle, false)) {
+      const readOnly = viewOnlyRemembered();
+      if (handle && await allowed(handle, false, readOnly ? 'read' : 'readwrite')) {
         state.store = new FsAccessStore(handle);
         state.kind = 'folder';
+        state.readOnly = readOnly;
       }
     }
   } catch (e) {

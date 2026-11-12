@@ -32,7 +32,8 @@ files or run anything.
 The same list is on the page under **Ask the AI**, and the four most
 common asks are on the cheat sheet. The first three rows are the ones to
 try in the first week: they check work that already exists rather than
-producing anything new, so a wrong answer costs nothing.
+producing anything new. Check each answer against the note and its data
+file all the same.
 
 ## Why the record is already AI-ready
 

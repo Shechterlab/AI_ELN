@@ -16,6 +16,17 @@ const TYPES = {
   h5: 'application/x-hdf5', hdf: 'application/x-hdf', nc: 'application/x-netcdf',
 };
 
+/** Images a snapshot embeds. The same table as IMAGE_TYPES in scripts/eln.py. */
+export const IMAGE_TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml',
+  webp: 'image/webp', bmp: 'image/bmp', ico: 'image/vnd.microsoft.icon', tif: 'image/tiff', tiff: 'image/tiff', avif: 'image/avif',
+};
+
+export function imageType(name) {
+  const i = name.lastIndexOf('.');
+  return i <= 0 ? null : IMAGE_TYPES[name.slice(i + 1).toLowerCase()] || null;
+}
+
 /** The media type for a file name, or null when it is not a known type. */
 export function guessMime(name) {
   const i = name.lastIndexOf('.');

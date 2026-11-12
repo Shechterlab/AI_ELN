@@ -1,0 +1,8 @@
+# One file per person: who these initials are, and the last serial numbers used.
+# The notebook tools update it when a record is created. A number recorded here is not
+# given out again, even if the folder it belonged to is deleted. You may add lines of
+# your own (orcid, email, role); they are kept.
+initials: JOR
+name: Jordan Example
+last_experiment: 3
+last_sample_p: 2

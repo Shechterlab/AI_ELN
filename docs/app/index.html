@@ -10,18 +10,24 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" data-lab-fonts href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="../assets/site.css">
   <link rel="stylesheet" href="app.css">
   <script>
-    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+    /* theme and lab colours are applied before the first paint; assets/brand.js then applies lab.yaml */
+    try {
+      var d = document.documentElement, t = localStorage.getItem('ai-eln-theme'), c = localStorage.getItem('ai-eln-lab-css');
+      if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+      if (c) { var s = document.createElement('style'); s.id = 'lab-style'; s.textContent = c; document.head.appendChild(s); }
+      if (localStorage.getItem('ai-eln-lab-name') !== 'Shechter Lab') { d.classList.add('lab-pending'); setTimeout(function () { d.classList.remove('lab-pending'); }, 900); }
+    } catch (e) {}
   </script>
 </head>
 <body>
   <header class="top rule">
     <div class="wrap bar">
       <a class="brand" href="#/" title="Lab notebook">
-        <img src="../assets/shechterlab-icon.svg" alt="" width="34" height="34">
+        <img src="../assets/shechterlab-icon.svg" data-lab-src="logo" alt="" width="34" height="34">
         <div><b>Lab notebook</b><small>Runs in this browser. Notes are plain text files in your folder.</small></div>
       </a>
       <nav class="site-nav" id="nav" aria-label="Notebook"></nav>

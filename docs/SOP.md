@@ -1,7 +1,7 @@
 # Shechter Lab Data Management SOP
 
 **Scope:** how experiments, protocols, samples, and data are recorded and
-stored in the lab, day to day. Two pages, on purpose. The precise rules are
+stored in the lab, day to day. The precise rules are
 in [`CONVENTIONS.md`](CONVENTIONS.md); the reasoning is in
 [`design-notes.md`](design-notes.md).
 
@@ -91,7 +91,9 @@ run `eln.py complete ID`). That:
    is the archival rendering, and what goes to LabArchives.
 4. Writes `1-notes/{ID}_MANIFEST.sha256`: a checksum of every file in the
    experiment folder, in the standard `sha256sum` format. **Verify files**
-   (or `eln.py verify ID`) later shows anything that changed.
+   (or `eln.py verify ID`) later shows anything that changed. Without the
+   tools, run `sha256sum -c 1-notes/{ID}_MANIFEST.sha256` from inside the
+   experiment folder (on a Mac, `shasum -a 256 -c ...`).
 
 Nothing is locked. If you revisit the experiment, edit the note, then
 **Refresh snapshot & manifest**. For LabArchives, upload the snapshot (or

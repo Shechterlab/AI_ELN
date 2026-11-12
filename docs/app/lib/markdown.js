@@ -18,14 +18,17 @@ function inline(text, r) {
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, raw) => {
     const src = unesc(raw);
     if (/^(https?:\/\/|\/|data:)/.test(src)) return `<img alt="${alt}" src="${esc(src)}">`;
-    const rel = normpath(joinBase(r.imgBase, src));
+    const rel = normpath(joinBase(r.imgBase, src)).replaceAll('\\', '/');
     return `<img alt="${alt}" src="${esc(r.imgSrc ? r.imgSrc(rel) : rel)}">`;
   });
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target=_blank rel=noopener>$1</a>');
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  /* code spans are set aside while emphasis is applied, so `_R_` stays `_R_` */
+  const code = [];
+  s = s.replaceAll('\x00', '').replace(/`([^`]+)`/g, (_, inner) => `\x00${code.push(inner) - 1}\x00`);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   s = s.replace(RE_STAR, '<i>$1</i>');
   s = s.replace(RE_UNDER, '<i>$1</i>');
+  s = s.replace(/\x00(\d+)\x00/g, (_, n) => `<code>${code[Number(n)]}</code>`);
   if (r.linkIds) s = s.replace(RE_ID_LINK, (_, id) => `<a href="${r.linkHref(id)}">${id}</a>`);
   return s;
 }

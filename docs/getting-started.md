@@ -1,7 +1,7 @@
 # Getting started
 
-Setup is done once per computer. After that, you create an experiment by
-double-clicking a launcher and filling in a form.
+Setup is done once per computer. After that, you open the notebook page and
+create an experiment by filling in a form.
 
 ## 0. Where the record lives
 
@@ -21,11 +21,13 @@ to your computer (it will be in your Dropbox or OneDrive), and go to §1.
 2. Rename the folder if you like (`ShechterLab-ELN`) and move it into the
    lab's shared Dropbox or OneDrive.
 3. Double-click `launchers/Open ELN` once to see the page come up. The
-   record starts empty. `sandbox/`, `tests/`, and `.github/` are not needed
-   for daily use and can be deleted. `reference/` holds Jacob's original materials.
+   record starts empty. `tests/` and `.github/` are not needed for daily use
+   and can be deleted. Keep `sandbox/` (the practice notebook). `reference/`
+   holds Jacob's original materials.
 
-After that, do not move or rename things inside the folder by hand. Use
-the page or the launchers.
+After that, do not move or rename experiment folders or notes by hand. Use
+the page or the launchers. Putting your own files into an experiment's
+subfolders is fine.
 
 ## 1. Open the notebook
 
@@ -34,20 +36,21 @@ the page or the launchers.
 choose the lab's notebook folder, and allow the page to edit it. The page
 works on the files in that folder and does not upload them. Next time, click
 **Reopen**. If you choose an empty folder, the page offers to set up a new
-notebook in it. Then skip to §3.
+notebook in it. Then click **settings**, enter your initials and name (they
+are saved in this browser only), and go to §3.
 
 **In Safari or Firefox, or if you prefer the launchers.** These browsers
 cannot open folders, so the notebook starts from a launcher and needs
 Python. Set that up once:
 
-**Mac.** Python is already there. The first time you double-click a
+**Mac.** The first time you double-click a
 launcher, macOS will say it's from an unidentified developer: right-click
 (or Control-click) the launcher, choose **Open**, then **Open** again
 (on the newest macOS: *System Settings → Privacy & Security → Open
 Anyway*). Only needed once per launcher, and not at all if the folder came
 by OneDrive sync or `git clone`. If a window offers to install *command
-line developer tools*, click **Install**; that is Python being set up and
-takes a few minutes.
+line developer tools*, click **Install**. This installs Python and takes a
+few minutes. It happens once.
 
 **Windows.** Install Python once from <https://www.python.org/downloads/>
 and tick **Add python.exe to PATH** on the first screen of the installer.
@@ -71,7 +74,8 @@ the page. The first time, it asks for your initials and name under
 To practice without touching the lab's record, double-click
 **`launchers/Try the Sandbox`**. It opens the same page on fictional data
 that can be reset. In the browser version, click **Open the practice
-notebook** on the first screen.
+notebook** on the first screen; it is kept in memory and is gone when you
+close the tab.
 
 ## 3. Create your first experiment
 
@@ -88,7 +92,8 @@ stood today, and a row in the inventory. The page shows the new note.
 
 Click **Edit here** on the note's page, write under the section titles,
 and click **Save**. The note is a plain text file, so you can also edit it
-in any text editor: **Open in your editor** opens it in whatever your
+in a plain-text editor (Notepad, TextEdit in plain-text mode, VS Code; not
+Word). In the launcher version, **Open in your editor** opens it in whatever your
 computer uses for `.md` files.
 
 ![A filled-in note as the page shows it](img/note.png)
@@ -100,9 +105,10 @@ you have them. Leave a section as "None" rather than deleting it.
 
 ## 5. Put files where they belong, named with the ID
 
-**Show folder** on the note's page opens the experiment folder. In the
-browser version, use **Add files** on the note's page instead: choose or
-drop the files, pick the subfolder, and they are named for you.
+In the browser version, use **Add files** on the note's page: choose or drop
+the files, pick the subfolder, and they are named for you. In the launcher
+version, **Show folder** opens the experiment folder and you put the files
+in yourself.
 
 ```
 2-data_raw/         instrument output. Original filenames. Never edit, never rename.
@@ -112,13 +118,18 @@ drop the files, pick the subfolder, and they are named for you.
 ```
 
 Start every file you make with the experiment ID; join words with hyphens.
-This makes every file findable by searching for the experiment ID. Each subfolder has a short README saying what
+A search for the experiment ID then finds every file you made for it (raw
+instrument files keep their own names and are found by opening `2-data_raw`). Each subfolder has a short README saying what
 goes in it. Full grammar: [`CONVENTIONS.md`](CONVENTIONS.md) §3.
 
 If the raw data is too large to keep here (microscopy, sequencing), leave
 it on the institutional storage and put its location in the note's
-`raw_data_path` line. A figure you put in `5-figures/` and link from the
-Results section shows up on the note's page.
+`raw_data_path` line. A figure in `5-figures/` is shown on the note's page when the
+note links to it. In the note, type a line like this, with your file's name:
+
+```
+![Blot, treated and control](../5-figures/JSRe0001_R_blot_20260904.png)
+```
 
 ## 6. The rest of the page
 
@@ -128,24 +139,30 @@ Results section shows up on the note's page.
 | **New protocol** | One file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; bump the `version` date and add a Change log line. |
 | **New project** | A summary of a research project. Conclusions cite experiment IDs. |
 | **Check** | Reads every note and folder and lists what breaks the conventions. `ERROR` = fix it; `WARN` = advice. |
-| **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. One click saves it as a file. |
+| **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. **Save into Inventory** saves it in the notebook; **Download** saves it to your Downloads folder. |
 | **Export** | Bundles a project (or all active experiments) into one file to paste into ChatGPT. See [`ai-agents.md`](ai-agents.md). |
 | **Experiments / Samples / Protocols / Projects** | Browse and filter. Every ID on every page is a link. |
-| **Ask the AI** | Example questions for an AI assistant, and which of the two methods (pasting an export into ChatGPT, or an agent opened in the folder) each one works with. |
+| **Ask the AI** | Example questions for an AI assistant, and which of the three ways (pasting an export into ChatGPT, an agent opened in the folder, or an MCP client) each one works with. |
 
 ## 7. When an experiment is finished
 
 Click **Mark complete** on the note's page. It checks that Results and
 Interpretation are written (and says so if not), sets the status and date,
-and writes two files next to the note: a one-file HTML snapshot of the
-whole experiment (figures included; print it to PDF for LabArchives) and a
-checksum list of every file in the folder, so **Verify files** can later
-show whether anything changed. The note is not locked. If you edit the
-experiment later, click **Refresh snapshot & manifest**.
+and writes two files next to the note. The first is a snapshot: one HTML
+file with the whole experiment and its figures, which you can print to PDF
+for LabArchives. The second is a manifest: a list of every file in the
+folder with its checksum (a fingerprint of the file's content), so **Verify
+files** can later show whether anything changed. The note is not locked. If you edit the
+experiment later, click **Refresh snapshot & manifest**; the completion date
+stays the same and the page tells you which files changed. If Results or
+Interpretation is empty, Mark complete refuses and offers **Complete
+anyway**, for an experiment that ended without a result.
 
 ## 8. Command line
 
-Every launcher and every button runs the same script:
+Each launcher and each button of the launcher page does the same job as one
+of these commands. (The browser version does the same jobs in JavaScript; see
+`docs/app/README.md`.)
 
 ```bash
 python3 scripts/eln.py init                                # initials, name, where files live
@@ -176,6 +193,56 @@ That writes `~/.ai_eln.json`; the page, the launchers, and every command
 use it from then on. `AI_ELN_ROOT` in the environment or `--root` on a
 command overrides it for one shell or one call.
 
+## More on the note's page
+
+- **Repeat this experiment** starts a new experiment with the same title,
+  project, type, protocols, and samples. It gets its own ID and today's
+  date, and lists the first one as related. Change the title if you like.
+- **Print / save as PDF** prints the note with its figures, the list of
+  files, the note's checksum, page numbers, and lines for signatures. In the
+  print window choose *Save as PDF* to keep a copy.
+- **Flag for lab meeting** puts the experiment in the next meeting brief.
+  **Remove lab-meeting flag** takes it out again.
+
+## Viewing someone else's notebook
+
+On the first screen of the browser version, click **View a notebook
+(read-only)** and choose the folder. The page asks only for permission to
+view. You can read, search, print, and export; every button that changes
+something is hidden. To make a folder view-only for other people no matter
+which program they use, share it as *can view* in Dropbox or OneDrive.
+
+## Offline work and sync copies
+
+Dropbox and OneDrive sync files, not edits. If the same file changes on two
+computers before they sync, the service keeps one version and saves the
+other as a copy, with a name such as `JSRe0004 (Ana's conflicted copy
+2026-11-12).md`, `JSRe0004-DESKTOP-AB12CD3.md`, or `JSRe0004 (1).md`.
+**Check** lists these copies.
+
+- **Two versions of the same note:** open both, paste anything you need from
+  the copy into the original, then delete the copy.
+- **A copy of a file in `Inventory/`:** delete the copy. Those files are
+  rebuilt from the notes.
+- **You created records on two computers while both were offline:** the two
+  computers may have given two different experiments the same ID. Do not
+  delete either one. Tell whoever looks after the notebook; one of them needs
+  a new ID. To avoid this, let the folder finish syncing before you create an
+  experiment on a second computer.
+- **A folder with no note, or a note with no subfolders:** the folder may
+  still be syncing. Wait until Dropbox or OneDrive shows it is up to date and
+  run Check again.
+
+The tools keep one small file per person in `People/` (for example
+`People/JSR.yaml`) with your name and the last numbers you used. A number
+written there is not given out again, even if a folder is deleted.
+
+## If you made an experiment by mistake
+
+Do not delete it and do not reuse its number. Click **Edit here**, change
+`status: active` to `status: abandoned`, write one sentence under
+**Decision** saying why, and save.
+
 ## If something doesn't work
 
 - **Mac: "cannot be opened because it is from an unidentified developer"**:
@@ -189,8 +256,12 @@ command overrides it for one shell or one call.
   install Python (§1) with *Add to PATH* ticked, then try again.
 - **The page says "First time here"**: click *settings* and enter your
   initials and name.
-- **"could not open a port"**: another copy of the page is already
-  running; find its window, or close it and try again.
+- **"could not open a port"**: the page tries several port numbers first.
+  If you still see this, close the other notebook windows and try again.
 - **Check says a folder "does not match {ID}_{slug}"**: someone made or
-  renamed an experiment folder by hand. Rename it to
-  `{ID}_{words-with-hyphens}` or recreate it with New experiment.
+  renamed an experiment folder by hand. An ID can only come from the tool, so
+  create the experiment with New experiment, move the files into its
+  subfolders, and delete the hand-made folder.
+- **The browser says it no longer has permission**: click **Reopen** on the
+  first screen and allow it again.
+- **Check lists a "copy made by a sync service"**: see the next section.

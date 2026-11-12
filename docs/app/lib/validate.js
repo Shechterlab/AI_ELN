@@ -11,17 +11,35 @@ import { templateKeys } from './templates.js';
 import { strip, pyRepr, validDate, basename, stem, cmp, cmpPath } from './text.js';
 import { walkFiles } from '../store/base.js';
 
-const RE_SYNC_CONFLICT = /conflicted copy/i; // Dropbox's phrase; OneDrive copies fail the ID-prefix rule instead
+/* Names sync services give the second copy when a file changed in two places:
+   Dropbox "name (Ana's conflicted copy 2026-11-12).md" and "name (Case Conflict).md";
+   OneDrive "name-DESKTOP-AB12CD3.md" (the Windows computer name). The " (1)" pattern (OneDrive, and
+   also browsers and Finder) is checked everywhere except 2-data_raw, where instruments use it too. */
+const RE_SYNC_CONFLICT = /conflicted copy|\(case conflict\)|-(?:DESKTOP|LAPTOP)-[A-Z0-9]{6,8}(?=\.[^.]*$|$)/i;
+const RE_NUMBERED_COPY = / \(\d+\)(?=\.[^.]*$|$)/;
 
-/** Files a sync service made when two people edited the same file while offline. */
+/** Files a sync service made when the same file changed on two computers. */
 export async function syncConflictFiles(store) {
   const out = [];
-  for (const d of VAULT_DIRS) {
+  for (const d of [...VAULT_DIRS, 'People']) {
     for (const p of await walkFiles(store, d)) {
-      if (RE_SYNC_CONFLICT.test(basename(p))) out.push(p);
+      const name = basename(p);
+      if (RE_SYNC_CONFLICT.test(name) || (RE_NUMBERED_COPY.test(name) && !p.split('/').includes('2-data_raw'))) out.push(p);
     }
   }
   return out.sort(cmpPath);
+}
+
+export function syncConflictAdvice(path) {
+  const parts = path.split('/');
+  if (parts.includes('Inventory')) return 'copy of a generated file, made by a sync service: delete it (the index is rebuilt from the notes)';
+  if (parts.includes('People')) {
+    return 'copy made by a sync service: the same person created records on two computers before they synced. '
+      + 'Check for two records with the same ID, then delete this copy';
+  }
+  return 'copy made by a sync service when the same file changed on two computers: open both, move anything you '
+    + 'need into the original, then delete this copy. If they are two different records that got the same ID, '
+    + 'keep both and ask for one to be renumbered';
 }
 
 /** -> [{ level: 'ERROR' | 'WARN', path, message }] */
@@ -32,8 +50,7 @@ export async function validateVault(store, vault) {
 
   for (const [folder, message] of vault.folderIssues) E(folder, message);
   for (const p of await syncConflictFiles(store)) {
-    W(p, 'sync-conflict copy (two people edited the same file while offline): compare it with the '
-      + 'original, keep one, delete the other' + (p.split('/').includes('Inventory') ? ', then re-run index' : ''));
+    W(p, syncConflictAdvice(p));
   }
 
   const knownKeys = {};
@@ -112,14 +129,14 @@ async function validateExperiment(store, note, secs, E, W) {
     const top = (await store.list(folder)) || [];
     const dirs = new Set(top.filter((e) => e.kind === 'dir').map((e) => e.name));
     const missing = SUBFOLDERS.filter((s) => !dirs.has(s));
-    if (missing.length) E(folder, `missing subfolder(s): ${missing.join(', ')}`);
+    if (missing.length) E(folder, `missing subfolder(s): ${missing.join(', ')} (still syncing? If not, create the empty folders)`);
     const checkId = folderId || nid;
     if (checkId) {
       for (const sub of NAMED_SUBFOLDERS) {
         if (!dirs.has(sub)) continue;
         const entries = ((await store.list(`${folder}/${sub}`)) || []).sort((a, b) => cmp(a.name, b.name));
         for (const f of entries) {
-          if (f.kind !== 'file' || f.name.startsWith('.') || EXEMPT_FILENAMES.has(f.name.toLowerCase())) continue;
+          if (f.kind !== 'file' || f.name.startsWith('.') || f.name.startsWith('~$') || EXEMPT_FILENAMES.has(f.name.toLowerCase())) continue;
           if (!(f.name.startsWith(checkId + '_') || f.name.startsWith(checkId + '.'))) {
             W(`${folder}/${sub}/${f.name}`, `filename should start with ${checkId}_ (see CONVENTIONS.md section 3)`);
           }

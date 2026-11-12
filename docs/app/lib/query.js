@@ -2,7 +2,7 @@
 
 import { ElnError, MEETING_TAG, REF_FIELDS } from './schema.js';
 import { sections, ciIn, sortedById } from './vault.js';
-import { cmp, isoDate, daysBefore, validDate, strip, rstrip } from './text.js';
+import { cmp, isoDate, daysBefore, validDate, strip, rstrip, words, normpath, joinPath, dirname } from './text.js';
 
 /** Notes of one kind that match every filter given. Matching ignores case. */
 export function findNotes(vault, kind, { project, status, researcher, tag, sample, protocol, exp_type, text } = {}) {
@@ -16,13 +16,26 @@ export function findNotes(vault, kind, { project, status, researcher, tag, sampl
     if (sample && !ciIn(sample, n.getList('samples'))) continue;
     if (protocol && !ciIn(protocol, n.getList('protocols'))) continue;
     if (exp_type && !ciIn(exp_type, n.getList('experiment_type'))) continue;
-    if (text && !(n.get('title') + '\n' + n.body).toLowerCase().includes(text.toLowerCase())) continue;
+    if (text) {
+      /* every word must appear somewhere in the ID, the title, or the body */
+      const hay = (n.id + '\n' + n.get('title') + '\n' + n.body).toLowerCase();
+      if (!words(text.toLowerCase()).every((w) => hay.includes(w))) continue;
+    }
     out.push(n);
   }
   return out.sort((a, b) => cmp(a.id, b.id));
 }
 
 const clean = (text) => strip((text || '').replace(/<!--.*?-->/gs, '')) || '_(not written yet)_';
+
+/** One section of a note inside the brief. The brief is saved in Inventory/, so a figure linked
+    relative to the note is re-pointed from there; a table or list starts on its own line so it still
+    renders as one. */
+function briefSection(name, raw, noteDir) {
+  const text = clean(raw).replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, src) => (
+    /^(https?:\/\/|\/|data:)/.test(src) ? all : `![${alt}](${normpath(joinPath('..', noteDir, src))})`));
+  return text.includes('\n') || '|-*#>!`'.includes(text[0]) ? `**${name}.**\n\n${text}` : `**${name}.** ${text}`;
+}
 
 /** The lab-meeting brief as Markdown: flagged experiments, active ones by project, recent completions. */
 export function buildReport(vault, { days = 30, today = isoDate() } = {}) {
@@ -39,7 +52,7 @@ export function buildReport(vault, { days = 30, today = isoDate() } = {}) {
     out.push(`${e.get('researcher')} | project: ${proj} | status: ${e.get('status')} | started ${e.get('date_started')} | \`${e.path}\``);
     out.push('');
     for (const name of ['Objective', 'Results', 'Interpretation', 'Decision']) {
-      out.push(`**${name}.** ${clean(secs.get(name) || '')}`, '');
+      out.push(briefSection(name, secs.get(name) || '', dirname(e.path)), '');
     }
   }
 
@@ -77,7 +90,7 @@ export function buildReport(vault, { days = 30, today = isoDate() } = {}) {
   return rstrip(out.join('\n')) + '\n';
 }
 
-export const EXPORT_PRIMER = `This is an export from a lab research record (AI_ELN, Shechter Lab). Each note
+export const EXPORT_PRIMER = `This is an export from a lab research record (AI_ELN, @LAB@). Each note
 below is a Markdown file with a small YAML header; the file path is given on
 the \`==== ... ====\` line above it.
 
@@ -137,9 +150,9 @@ export function relatedNotes(vault, experiments) {
 }
 
 /** One Markdown document: a primer on how to read the notes, a table of the experiments, then every note. */
-export function buildExport(vault, experiments, { related = true, today = isoDate() } = {}) {
+export function buildExport(vault, experiments, { related = true, today = isoDate(), labName = 'Lab' } = {}) {
   const extras = related ? relatedNotes(vault, experiments) : [];
-  const out = [`# AI_ELN export - ${today}`, '', EXPORT_PRIMER, '## Inventory of exported experiments', '',
+  const out = [`# AI_ELN export - ${today}`, '', EXPORT_PRIMER.replace('@LAB@', labName), '## Inventory of exported experiments', '',
     '| ID | Title | Researcher | Project | Status | Started | Completed |', '|---|---|---|---|---|---|---|'];
   for (const e of experiments) {
     out.push(`| ${e.id} | ${e.get('title')} | ${e.get('researcher')} | ${e.getList('project').join(', ') || '-'} | `

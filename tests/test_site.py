@@ -124,7 +124,8 @@ class TestApp(unittest.TestCase):
     def test_offline_list_matches_the_files(self):
         sw = (self.APP / "sw.js").read_text(encoding="utf-8")
         listed = json.loads(re.search(r"const FILES = (\[.*?\]);", sw, re.S).group(1))
-        expected = ["./", "app.css", "ui.js", "manifest.webmanifest", "../assets/site.css", "../assets/shechterlab-icon.svg"]
+        expected = ["./", "app.css", "ui.js", "manifest.webmanifest", "../assets/site.css", "../assets/brand.js",
+                    "../assets/shechterlab-icon.svg", "../lab.yaml"]
         expected += [m for m in self.modules() if m != "store/node.js"]
         self.assertEqual(sorted(listed), sorted(expected), "update FILES in docs/app/sw.js")
         for rel in listed:
@@ -143,6 +144,24 @@ class TestApp(unittest.TestCase):
         self.assertEqual(manifest["start_url"], "./")
         self.assertTrue((self.APP / manifest["icons"][0]["src"]).resolve().is_file())
         self.assertEqual(json.loads((self.APP / "package.json").read_text(encoding="utf-8"))["type"], "module")
+
+    def test_lab_yaml_has_what_the_pages_and_tools_ask_for(self):
+        fields, problems = eln.parse_header_lines((DOCS / "lab.yaml").read_text(encoding="utf-8").splitlines())
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted(fields), sorted(eln.LAB_DEFAULTS), "docs/lab.yaml and LAB_DEFAULTS list the same keys")
+        lib = (self.APP / "lib" / "lab.js").read_text(encoding="utf-8")
+        for key in eln.LAB_DEFAULTS:
+            self.assertIn(f"{key}:", lib, f"{key} is missing from LAB_DEFAULTS in lib/lab.js")
+        derived = {"affiliation"}
+        for page in (DOCS / "index.html", DOCS / "guide.html", self.APP / "index.html"):
+            html = page.read_text(encoding="utf-8")
+            self.assertIn("brand.js", html if page.parent == DOCS else (self.APP / "ui.js").read_text(encoding="utf-8"))
+            for value in re.findall(r'data-lab(?:-href|-src)?="([^"]+)"', html):
+                for key in (re.findall(r"\{([a-z_]+)\}", value) or [value]):
+                    self.assertIn(key, set(fields) | derived, f"{page.name}: data-lab uses {key}")
+        self.assertTrue((DOCS / fields["logo"]).is_file())
+        for key in ("color_primary", "color_accent"):
+            self.assertRegex(fields[key], r"^#[0-9a-fA-F]{6}$")
 
     def test_no_stray_line_separators(self):
         # U+2028/U+2029 inside a regex or string literal break the script in some engines

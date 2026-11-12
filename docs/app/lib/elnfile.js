@@ -8,6 +8,7 @@ import { mdToHtml } from './markdown.js';
 import { sha256Hex } from './sha256.js';
 import { guessMime } from './mime.js';
 import { zipStore } from './zip.js';
+import { loadLab, recordTitle } from './lab.js';
 import { isoDate, strip, words, basename, dirname, utf8 } from './text.js';
 
 export const ELN_MEDIA_TYPE = 'application/vnd.eln+zip';
@@ -26,9 +27,11 @@ export const elnRootName = (name, stamp) => (name || `ai-eln-export-${stamp}`).r
     `related` is set, the notes of the protocols, samples, and projects they refer to.
     rootName should match the archive's file name without .eln, as the specification prefers. */
 export async function buildEln(store, vault, experiments, {
-  related = true, today = isoDate(), rootName = '',
-  publisher = 'Shechter Lab research record (AI_ELN)', publisherUrl = 'https://github.com/Shechterlab/AI_ELN',
+  related = true, today = isoDate(), rootName = '', lab = null, publisher = '', publisherUrl = null,
 } = {}) {
+  const settings = lab || await loadLab(store);
+  const publisherName = publisher || `${recordTitle(settings)} (AI_ELN)`;
+  const publisherLink = publisherUrl !== null ? publisherUrl : (settings.repository_url || settings.lab_url);
   const root = elnRootName(rootName, today.replaceAll('-', ''));
   const notes = [...experiments, ...(related ? relatedNotes(vault, experiments) : [])];
   const persons = new Map();
@@ -84,8 +87,8 @@ export async function buildEln(store, vault, experiments, {
         conformsTo: { '@id': 'https://w3id.org/ro/crate/1.1' }, dateCreated: today,
         sdPublisher: { '@id': '#publisher' }, version: '1.0',
       },
-      { '@id': './', '@type': 'Dataset', name: publisher, datePublished: today, hasPart: parts },
-      { '@id': '#publisher', '@type': 'Organization', name: publisher, url: publisherUrl },
+      { '@id': './', '@type': 'Dataset', name: publisherName, datePublished: today, hasPart: parts },
+      { '@id': '#publisher', '@type': 'Organization', name: publisherName, url: publisherLink },
       ...graph, ...persons.values(),
     ],
   };

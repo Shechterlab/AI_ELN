@@ -33,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 import zipfile
 from datetime import date, timedelta
 from pathlib import Path
@@ -145,8 +146,20 @@ def err(msg: str) -> None:
 # Front matter: the flat YAML subset
 # --------------------------------------------------------------------------
 
+RE_LINE_BREAKS = re.compile("[\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029]+")
+
+
+def one_line(value) -> str:
+    """A header value is one line: any line break inside it becomes a space, so a pasted title
+    cannot split the header."""
+    return RE_LINE_BREAKS.sub(" ", "" if value is None else str(value))
+
+
 def split_front_matter(text: str) -> Tuple[Optional[List[str]], str, Optional[str]]:
-    """Return (header_lines, body, error). header_lines is None on error."""
+    """Return (header_lines, body, error). header_lines is None on error.
+    A byte-order mark at the start (Windows Notepad writes one) is ignored."""
+    if text.startswith("\ufeff"):
+        text = text[1:]
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None, text, "no YAML header (file must start with a '---' line)"
@@ -243,7 +256,7 @@ def parse_front_matter(text: str) -> Tuple[Dict[str, object], str, List[str]]:
 
 
 def quote_if_needed(value: str) -> str:
-    value = "" if value is None else str(value)
+    value = one_line(value)
     if value == "":
         return ""
     needs = (
@@ -317,9 +330,58 @@ def render_template(kind: str, values: Dict[str, str], path: Optional[Path] = No
     header, body, error = split_front_matter(text)
     if header is None:
         raise ElnError(f"template {path} is broken: {error}")
+    values = {k: one_line(v) for k, v in values.items()}
     rendered_header = [render_header_line(line, values) for line in header]
     rendered_body = RE_PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), body)
     return "---\n" + "\n".join(rendered_header) + "\n---\n" + rendered_body.rstrip("\n") + "\n"
+
+
+# --------------------------------------------------------------------------
+# lab.yaml: who the notebook belongs to and how its printouts look
+# --------------------------------------------------------------------------
+
+# Neutral defaults. docs/lab.yaml (this lab's file) is read over them, and a lab.yaml in the
+# notebook folder over that. A key that is present wins even when it is empty.
+LAB_DEFAULTS = {
+    "lab_name": "Lab", "institution": "", "department": "", "lab_url": "",
+    "product_name": "Plain-text lab notebook", "record_name": "research record",
+    "repository_url": "", "site_url": "", "logo": "",
+    "color_primary": "#155e75", "color_primary_bright": "#0e7490", "color_wash": "#ecf7f9",
+    "color_accent": "#c2410c", "color_accent_dark": "#9a3412",
+    "font_body": "Inter", "font_heading": "IBM Plex Serif", "font_mono": "IBM Plex Mono", "font_stylesheet": "",
+    "print_signatures": "yes",
+}
+RE_COLOR = re.compile(r"^(#[0-9A-Fa-f]{3,8}|[A-Za-z]{3,20})$")
+
+
+def apply_lab_text(lab: Dict[str, str], text: str) -> None:
+    fields, _ = parse_header_lines(text.splitlines())
+    for key, value in fields.items():
+        lab[key] = ", ".join(value) if isinstance(value, list) else value
+
+
+def load_lab(root: Optional[Path] = None) -> Dict[str, str]:
+    """The lab's identity and house style: defaults, then docs/lab.yaml, then {root}/lab.yaml."""
+    lab = dict(LAB_DEFAULTS)
+    for p in [REPO_ROOT / "docs" / "lab.yaml"] + ([Path(root) / "lab.yaml"] if root is not None else []):
+        try:
+            apply_lab_text(lab, p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+    for key in [k for k in lab if k.startswith("color_")]:
+        if not RE_COLOR.match(lab[key]):
+            lab[key] = LAB_DEFAULTS.get(key, "#155e75")
+    return lab
+
+
+def lab_line(lab: Dict[str, str]) -> str:
+    """'Shechter Lab, Department of Biochemistry, Albert Einstein College of Medicine'"""
+    return ", ".join(x for x in (lab["lab_name"], lab["department"], lab["institution"]) if x)
+
+
+def record_title(lab: Dict[str, str]) -> str:
+    """'Shechter Lab research record'"""
+    return f"{lab['lab_name']} {lab['record_name']}".strip()
 
 
 # --------------------------------------------------------------------------
@@ -336,9 +398,9 @@ def load_config() -> Dict[str, str]:
     if not p.exists():
         return {}
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as e:
-        raise ElnError(f"could not read config {p}: {e}")
+        raise ElnError(f"the settings file {p} is damaged ({e}). Delete it and run init again")
     return data if isinstance(data, dict) else {}
 
 
@@ -492,7 +554,7 @@ class Vault:
 
 
 def _is_note_file(p: Path) -> bool:
-    return p.is_file() and p.suffix == ".md" and not p.name.startswith((".", "_")) \
+    return p.is_file() and p.suffix == ".md" and not p.name.startswith((".", "_", "~")) \
         and p.name.lower() != "readme.md"
 
 
@@ -511,7 +573,8 @@ def load_vault(root: Path) -> Vault:
                 # Fall back to any note in 1-notes so its problems are still reported.
                 candidates = sorted(p for p in notes_dir.glob("*.md") if _is_note_file(p)) if notes_dir.is_dir() else []
                 if note_path is not None and not candidates:
-                    vault.folder_issues.append((folder, f"no note at 1-notes/{folder_id}.md"))
+                    vault.folder_issues.append((folder, f"no note at 1-notes/{folder_id}.md (if this folder was just made on "
+                                                        "another computer, wait for the sync to finish and check again)"))
                     continue
                 if not candidates:
                     continue
@@ -564,6 +627,28 @@ def section_is_empty(text: str) -> bool:
 # validate
 # --------------------------------------------------------------------------
 
+def note_save_errors(kind: str, fields: Dict[str, object]) -> List[str]:
+    """What must be right in a header before an edited note is saved: its type, the required fields,
+    the status, the dates. The full check (references, sections, file names) is `validate`."""
+    def text_of(key):
+        v = fields.get(key, "")
+        return ", ".join(v) if isinstance(v, list) else (v if isinstance(v, str) else "")
+
+    out = []
+    if text_of("type") != kind:
+        out.append(f"'type' must stay {kind}")
+    for key in REQUIRED[kind]:
+        if not text_of(key).strip():
+            out.append(f"'{key}' is missing or empty")
+    status = text_of("status")
+    if status and status not in STATUS[kind]:
+        out.append(f"status {status!r} is not one of {' | '.join(STATUS[kind])}")
+    for key in DATE_FIELDS[kind]:
+        if text_of(key) and not _valid_date(text_of(key)):
+            out.append(f"'{key}' must be a date written YYYY-MM-DD (got {text_of(key)!r})")
+    return out
+
+
 class Issue:
     __slots__ = ("level", "path", "message")
 
@@ -581,17 +666,34 @@ def _valid_date(s: str) -> bool:
         return False
 
 
-RE_SYNC_CONFLICT = re.compile(r"conflicted copy", re.IGNORECASE)  # Dropbox's phrase; OneDrive copies fail the ID-prefix rule instead
+# Names sync services give the second copy when a file changed in two places:
+# Dropbox "name (Ana's conflicted copy 2026-11-12).md" and "name (Case Conflict).md";
+# OneDrive "name-DESKTOP-AB12CD3.md" (the Windows computer name). The " (1)" pattern (OneDrive, and
+# also browsers and Finder) is checked everywhere except 2-data_raw, where instruments use it too.
+RE_SYNC_CONFLICT = re.compile(r"conflicted copy|\(case conflict\)|-(?:DESKTOP|LAPTOP)-[A-Z0-9]{6,8}(?=\.[^.]*$|$)", re.IGNORECASE)
+RE_NUMBERED_COPY = re.compile(r" \(\d+\)(?=\.[^.]*$|$)")
 
 
 def sync_conflict_files(root: Path) -> List[Path]:
-    """Files a sync service made when two people edited the same file while offline."""
+    """Files a sync service made when the same file changed on two computers."""
     out: List[Path] = []
-    for d in list(KIND_DIR.values()) + ["Inventory"]:
+    for d in list(KIND_DIR.values()) + ["Inventory", "People"]:
         base = root / d
         if base.is_dir():
-            out.extend(p for p in base.rglob("*") if p.is_file() and RE_SYNC_CONFLICT.search(p.name))
+            out.extend(p for p in base.rglob("*") if p.is_file() and (
+                RE_SYNC_CONFLICT.search(p.name) or (RE_NUMBERED_COPY.search(p.name) and "2-data_raw" not in p.parts)))
     return sorted(out)
+
+
+def sync_conflict_advice(parts) -> str:
+    if "Inventory" in parts:
+        return "copy of a generated file, made by a sync service: delete it (the index is rebuilt from the notes)"
+    if "People" in parts:
+        return ("copy made by a sync service: the same person created records on two computers before they synced. "
+                "Check for two records with the same ID, then delete this copy")
+    return ("copy made by a sync service when the same file changed on two computers: open both, move anything you "
+            "need into the original, then delete this copy. If they are two different records that got the same ID, "
+            "keep both and ask for one to be renumbered")
 
 
 def validate_vault(vault: Vault) -> List[Issue]:
@@ -602,8 +704,7 @@ def validate_vault(vault: Vault) -> List[Issue]:
     for folder, msg in vault.folder_issues:
         E(vault.rel(folder), msg)
     for p in sync_conflict_files(vault.root):
-        W(vault.rel(p), "sync-conflict copy (two people edited the same file while offline): compare it with the "
-                        "original, keep one, delete the other" + (", then re-run index" if "Inventory" in p.parts else ""))
+        W(vault.rel(p), sync_conflict_advice(p.parts))
 
     known_keys = {kind: set(template_keys(kind)) | {"type"} for kind in KINDS}
     seen_ids: Dict[str, str] = {}
@@ -689,7 +790,7 @@ def _validate_experiment(vault: Vault, note: Note, secs: Dict[str, str], E, W) -
             E(rel, f"experiment_id {nid} does not match folder {folder.name}")
         missing = [s for s in SUBFOLDERS if not (folder / s).is_dir()]
         if missing:
-            E(vault.rel(folder), f"missing subfolder(s): {', '.join(missing)}")
+            E(vault.rel(folder), f"missing subfolder(s): {', '.join(missing)} (still syncing? If not, create the empty folders)")
         check_id = folder_id or nid
         if check_id:
             for sub in NAMED_SUBFOLDERS:
@@ -698,7 +799,7 @@ def _validate_experiment(vault: Vault, note: Note, secs: Dict[str, str], E, W) -
                     continue
                 for f in sorted(d.iterdir()):
                     name = f.name
-                    if not f.is_file() or name.startswith(".") or name.lower() in EXEMPT_FILENAMES:
+                    if not f.is_file() or name.startswith((".", "~$")) or name.lower() in EXEMPT_FILENAMES:
                         continue
                     if not (name.startswith(check_id + "_") or name.startswith(check_id + ".")):
                         W(vault.rel(f), f"filename should start with {check_id}_ (see CONVENTIONS.md section 3)")
@@ -787,6 +888,7 @@ def build_index(vault: Vault) -> Dict[str, List[Dict[str, str]]]:
 def write_index(vault: Vault, quiet: bool = False) -> None:
     """Regenerate Inventory/*.csv. A file is only rewritten when its content changes, so a synced
     folder does not see four modified files every time someone creates a record."""
+    require_folder(vault.root)
     inv = vault.root / "Inventory"
     inv.mkdir(parents=True, exist_ok=True)
     rows = build_index(vault)
@@ -819,6 +921,8 @@ def write_index(vault: Vault, quiet: bool = False) -> None:
 
 def slugify(text: str, max_len: int = 60) -> str:
     """'SNRPB chromatin retention: KCl' -> 'SNRPB-chromatin-retention-KCl'. Case kept; cut on a word boundary."""
+    # accents are dropped, not the letter: "Résumé" -> "Resume"
+    text = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.category(c).startswith("M"))
     slug = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-")
     if len(slug) > max_len:
         cut = slug[:max_len + 1]
@@ -835,6 +939,61 @@ def next_number(existing: Iterable[str], pattern: re.Pattern, initials: str, let
     return highest + 1
 
 
+# --------------------------------------------------------------------------
+# People/{INITIALS}.yaml: who the initials are, and the last serial numbers they used
+# --------------------------------------------------------------------------
+
+PERSON_HEAD = ("# One file per person: who these initials are, and the last serial numbers used.\n"
+               "# The notebook tools update it when a record is created. A number recorded here is not\n"
+               "# given out again, even if the folder it belonged to is deleted. You may add lines of\n"
+               "# your own (orcid, email, role); they are kept.\n")
+PERSON_KEYS = ["initials", "name", "last_experiment"] + [f"last_sample_{letter}" for letter in SAMPLE_LETTERS]
+
+
+def person_path(root: Path, initials: str) -> Path:
+    return root / "People" / f"{initials}.yaml"
+
+
+def read_person(root: Path, initials: str) -> Dict[str, object]:
+    try:
+        text = person_path(root, initials).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    return parse_header_lines((text[1:] if text.startswith("\ufeff") else text).splitlines())[0]
+
+
+def last_serial(root: Path, initials: str, key: str) -> int:
+    value = read_person(root, initials).get(key, "")
+    return int(value) if isinstance(value, str) and value.isdigit() else 0
+
+
+def record_serial(root: Path, initials: str, key: str, number: int, name: str = "") -> Optional[str]:
+    """Write the serial just used into the person's file. Returns a warning when the file says these
+    initials belong to someone with a different name."""
+    person = read_person(root, initials)
+    warning = None
+    known = person.get("name", "")
+    known = known if isinstance(known, str) else ""
+    name = one_line(name).strip()
+    if name and name != initials and known and known != initials and known.lower() != name.lower():
+        warning = (f"the initials {initials} belong to {known} (People/{initials}.yaml), and this record was made as {name}. "
+                   "If you are two people, one of you needs different initials")
+    person["initials"] = initials
+    person["name"] = known if known and known != initials else (name or known or initials)
+    person[key] = str(max(number, last_serial(root, initials, key)))
+    keys = [k for k in PERSON_KEYS if k in person] + [k for k in person if k not in PERSON_KEYS]
+    text = PERSON_HEAD + "".join(f"{k}: {format_value(person[k])}".rstrip() + "\n" for k in keys)
+    path = person_path(root, initials)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        old = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        old = None
+    if old != text:
+        write_text_lf(path, text)
+    return warning
+
+
 def next_experiment_id(root: Path, initials: str) -> str:
     seen: List[str] = []
     exp_dir = root / "Experiments"
@@ -849,7 +1008,7 @@ def next_experiment_id(root: Path, initials: str) -> str:
                     v = fields.get("experiment_id")
                     if isinstance(v, str):
                         seen.append(v)
-    return f"{initials}e{next_number(seen, RE_EXP_ID, initials):04d}"
+    return f"{initials}e{max(next_number(seen, RE_EXP_ID, initials), last_serial(root, initials, 'last_experiment') + 1):04d}"
 
 
 def next_sample_id(root: Path, initials: str, letter: str) -> str:
@@ -862,10 +1021,18 @@ def next_sample_id(root: Path, initials: str, letter: str) -> str:
             v = fields.get("sample_id")
             if isinstance(v, str):
                 seen.append(v)
-    return f"{initials}{letter}{next_number(seen, RE_SAMPLE_ID, initials, letter):04d}"
+    number = max(next_number(seen, RE_SAMPLE_ID, initials, letter), last_serial(root, initials, f"last_sample_{letter}") + 1)
+    return f"{initials}{letter}{number:04d}"
+
+
+def require_folder(root: Path) -> None:
+    """A mistyped path, or a drive or synced folder that is not there, must not quietly start a second notebook."""
+    if not Path(root).is_dir():
+        raise ElnError(f"there is no folder at {root}. Check the path: is the drive or the synced folder available?")
 
 
 def ensure_vault_dirs(root: Path) -> None:
+    require_folder(root)
     for d in list(KIND_DIR.values()) + ["Inventory"]:
         (root / d).mkdir(parents=True, exist_ok=True)
 
@@ -908,6 +1075,23 @@ def _wizard_experiment(args, root: Path) -> None:
     print()
 
 
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul"} | {f"com{i}" for i in range(1, 10)} | {f"lpt{i}" for i in range(1, 10)}
+MAX_NAME = 80
+
+
+def check_new_name(folder: Path, name: str, what: str) -> None:
+    """Refuse a protocol or project name that cannot live on every computer the folder syncs to."""
+    if len(name) > MAX_NAME:
+        raise ElnError(f"{what} is too long: {MAX_NAME} characters at most")
+    if name.lower() in WINDOWS_RESERVED:
+        raise ElnError(f"{name} cannot be a file name on Windows; choose another {what}")
+    if folder.is_dir():
+        for p in folder.glob("*.md"):
+            if p.stem.lower() == name.lower() and p.stem != name:
+                raise ElnError(f"{p.stem} already exists. Names that differ only in capital letters are the same file "
+                               "on Windows and macOS; use the existing one or choose another name")
+
+
 class Created:
     """What a create_* call produced: the ID, the note path, extra files, and any warnings."""
     __slots__ = ("id", "path", "extra", "warnings")
@@ -927,6 +1111,14 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
         raise ElnError("an experiment needs a title")
     if not RE_INITIALS.match(initials or ""):
         raise ElnError(f"initials must be 2-4 letters, e.g. JSR (got {initials!r})")
+    require_folder(root)
+    for p in csv_items(project):
+        if not RE_PROJECT_ID.match(p):
+            raise ElnError(f"project ID {p!r} is not valid: letters, digits, and hyphens only, starting with a letter, "
+                           "no spaces (e.g. PRMT5-ChromatinRelease)")
+    # a protocol typed without its P_ prefix means the protocol of that name
+    protocol = ", ".join(f"P_{x}" if not x.startswith("P_") and not (root / "Protocols" / f"{x}.md").exists()
+                         and (root / "Protocols" / f"P_{x}.md").exists() else x for x in csv_items(protocol))
     today = date.today().isoformat()
     exp_id = next_experiment_id(root, initials)
     slug = slugify(title)
@@ -952,6 +1144,15 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
         "RELATED": related or "", "TAGS": tags or "",
     }, path=override if override and override.exists() else None))
     result = Created(exp_id, note_path)
+    warning = record_serial(root, initials, "last_experiment", int(exp_id[-4:]), researcher or "")
+    if warning:
+        result.warnings.append(warning)
+    for p in csv_items(project):
+        if not (root / "Projects" / f"{p}.md").exists():
+            result.warnings.append(f"project {p} has no page in Projects/ yet (create it with New project)")
+    for s in csv_items(samples):
+        if not (root / "Samples" / f"{s}.md").exists():
+            result.warnings.append(f"sample {s} is not in Samples/ (check the ID, or create it with New sample)")
 
     for pid in csv_items(protocol):
         src = root / "Protocols" / f"{pid}.md"
@@ -991,6 +1192,7 @@ def create_sample(root: Path, initials: str, sample_type: str, title: str, sourc
         "SAMPLE_ID": sample_id, "SAMPLE_TYPE": stype, "TITLE": title.strip(), "DATE": date.today().isoformat(),
         "SOURCE": source or "", "STORAGE": storage or "", "TAGS": tags or "",
     }))
+    record_serial(root, initials, f"last_sample_{letter}", int(sample_id[-4:]))
     if index:
         write_index(load_vault(root), quiet=True)
     return Created(sample_id, path)
@@ -1003,6 +1205,7 @@ def create_protocol(root: Path, name: str, title: str = "", tags: str = "", inde
     if not RE_PROTOCOL_NAME.match(name):
         raise ElnError("a protocol name is letters, digits, and hyphens, e.g. WesternBlot or Cellular-Fractionation")
     pid = f"P_{name}"
+    check_new_name(root / "Protocols", pid, "protocol name")
     path = root / "Protocols" / f"{pid}.md"
     if path.exists():
         raise ElnError(f"{path} already exists. Edit it in place and bump its version instead.")
@@ -1021,6 +1224,7 @@ def create_project(root: Path, project_id: str, title: str = "", lead: str = "",
     pid = (project_id or "").strip()
     if not RE_PROJECT_ID.match(pid):
         raise ElnError("a project ID starts with a letter and contains only letters, digits, and hyphens")
+    check_new_name(root / "Projects", pid, "project ID")
     path = root / "Projects" / f"{pid}.md"
     if path.exists():
         raise ElnError(f"{path} already exists.")
@@ -1161,7 +1365,7 @@ def cmd_new_project(args) -> int:
         print(f"Root:   {root}\nWould create {pid} at Projects/{pid}.md")
         return 0
     result = create_project(root, args.project_id, title=args.title or "",
-                            lead=args.lead or config.get("researcher") or "", tags=args.tags or "",
+                            lead=args.lead or config.get("researcher") or os.environ.get("AI_ELN_RESEARCHER") or "", tags=args.tags or "",
                             index=not args.no_index)
     _report_created(root, result)
     if args.open:
@@ -1199,8 +1403,10 @@ def find_notes(vault: Vault, kind: str, project: Optional[str] = None, status: O
             continue
         if exp_type and not _ci_in(exp_type, n.get_list("experiment_type")):
             continue
-        if text and text.lower() not in (n.get("title") + "\n" + n.body).lower():
-            continue
+        if text:
+            hay = (n.id + "\n" + n.get("title") + "\n" + n.body).lower()
+            if not all(word in hay for word in text.lower().split()):
+                continue
         out.append(n)
     return sorted(out, key=lambda n: n.id)
 
@@ -1231,6 +1437,23 @@ def _clean(text: str) -> str:
     return RE_HTML_COMMENT.sub("", text or "").strip() or "_(not written yet)_"
 
 
+RE_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+
+
+def _brief_section(name: str, text: str, note_dir: str) -> str:
+    """One section of a note inside the brief. The brief is saved in Inventory/, so a figure linked
+    relative to the note is re-pointed from there; a table or list starts on its own line so it still
+    renders as one."""
+    def fix(m):
+        src = m.group(2)
+        if src.startswith(("http://", "https://", "/", "data:")):
+            return m.group(0)
+        return f"![{m.group(1)}]({os.path.normpath(os.path.join('..', note_dir, src)).replace(os.sep, '/')})"
+
+    text = RE_MD_IMAGE.sub(fix, _clean(text))
+    return f"**{name}.**\n\n{text}" if "\n" in text or text[:1] in "|-*#>!`" else f"**{name}.** {text}"
+
+
 def build_report(vault: Vault, days: int = 30, today: Optional[date] = None) -> str:
     today = today or date.today()
     exps = sorted((n for n in vault.notes["experiment"] if n.id), key=lambda n: n.id)
@@ -1250,7 +1473,7 @@ def build_report(vault: Vault, days: int = 30, today: Optional[date] = None) -> 
                    f"started {e.get('date_started')} | `{vault.rel(e.path)}`")
         out.append("")
         for name in ("Objective", "Results", "Interpretation", "Decision"):
-            out.append(f"**{name}.** {_clean(secs.get(name, ''))}")
+            out.append(_brief_section(name, secs.get(name, ""), vault.rel(e.path.parent)))
             out.append("")
 
     out.append("## Active experiments by project")
@@ -1319,7 +1542,7 @@ def cmd_report(args) -> int:
 # --------------------------------------------------------------------------
 
 EXPORT_PRIMER = """\
-This is an export from a lab research record (AI_ELN, Shechter Lab). Each note
+This is an export from a lab research record (AI_ELN, @LAB@). Each note
 below is a Markdown file with a small YAML header; the file path is given on
 the `==== ... ====` line above it.
 
@@ -1381,7 +1604,8 @@ def build_export(vault: Vault, experiments: List[Note], related: bool = True,
     order = {"project": 0, "protocol": 1, "sample": 2, "experiment": 3}
     extras.sort(key=lambda n: (order[n.kind], n.id))
 
-    out = [f"# AI_ELN export - {today.isoformat()}", "", EXPORT_PRIMER, "## Inventory of exported experiments", "",
+    primer = EXPORT_PRIMER.replace("@LAB@", load_lab(vault.root)["lab_name"])
+    out = [f"# AI_ELN export - {today.isoformat()}", "", primer, "## Inventory of exported experiments", "",
            "| ID | Title | Researcher | Project | Status | Started | Completed |", "|---|---|---|---|---|---|---|"]
     for e in experiments:
         out.append(f"| {e.id} | {e.get('title')} | {e.get('researcher')} | {', '.join(e.get_list('project')) or '-'} | "
@@ -1485,10 +1709,18 @@ def _inline(s: str, r: "_Render") -> str:
 
     s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", img, s)
     s = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target=_blank rel=noopener>\1</a>', s)
-    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    # code spans are set aside while emphasis is applied, so `_R_` stays `_R_`
+    code: List[str] = []
+
+    def keep(m):
+        code.append(m.group(1))
+        return f"\x00{len(code) - 1}\x00"
+
+    s = re.sub(r"`([^`]+)`", keep, s.replace("\x00", ""))
     s = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", s)
     s = re.sub(r"(?<![\w*])\*([^*\n]+)\*(?![\w*])", r"<i>\1</i>", s)
     s = re.sub(r"(?<![\w_])_([^_\n]+)_(?![\w_])", r"<i>\1</i>", s)
+    s = re.sub(r"\x00(\d+)\x00", lambda m: f"<code>{code[int(m.group(1))]}</code>", s)
     if r.link_ids:
         s = RE_ID_LINK.sub(r'<a href="/note/\1">\1</a>', s)
     return s
@@ -1590,7 +1822,8 @@ def md_to_html(text: str, img_base: str = "", link_ids: bool = True, img_src=_we
 def set_header_field(path: Path, key: str, value) -> None:
     """Replace one header line's value, keeping any trailing comment; add the key if absent.
     Line-level, so nothing else in the file is touched."""
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text = path.read_text(encoding="utf-8")
+    lines = (text[1:] if text.startswith("\ufeff") else text).splitlines()
     if not lines or lines[0].strip() != "---":
         raise ElnError(f"{path} has no YAML header")
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
@@ -1610,23 +1843,51 @@ def set_header_field(path: Path, key: str, value) -> None:
 # Snapshots (self-contained HTML), manifests (sha256sum format), completion, verification
 # --------------------------------------------------------------------------
 
-SNAPSHOT_CSS = (
-    "body{max-width:860px;margin:32px auto;padding:0 20px;font:15px/1.5 -apple-system,BlinkMacSystemFont,"
-    "'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933}h1{font-size:22px;margin-bottom:4px}"
-    "h2{border-bottom:1px solid #e3e8ee;padding-bottom:4px;margin-top:24px;font-size:18px}"
-    "table{border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #e3e8ee;"
-    "vertical-align:top}.meta td:first-child{color:#5f6b7a;white-space:nowrap}img{max-width:100%;border:1px solid #e3e8ee}"
-    "code{background:#f1f5f9;padding:1px 4px;border-radius:4px}pre{background:#f1f5f9;padding:10px;overflow-x:auto}"
-    ".sub{color:#5f6b7a}.foot{color:#5f6b7a;font-size:13px;margin-top:40px;border-top:1px solid #e3e8ee;padding-top:10px}"
-)
+def css_string(s) -> str:
+    """Text as a CSS string literal."""
+    return '"' + re.sub(r"[\r\n]+", " ", str(s)).replace("\\", "\\\\").replace('"', '\\"').replace("<", "\\3c ") + '"'
+
+
+def snapshot_css(lab: Dict[str, str], note_id: str) -> str:
+    """The snapshot's whole stylesheet: readable on screen, laid out for paper when printed
+    (page margins, page numbers, no broken tables or figures, signature lines)."""
+    primary, accent = lab["color_primary"], lab["color_accent"]
+    return (
+        "body{max-width:860px;margin:32px auto;padding:0 20px;font:15px/1.5 -apple-system,BlinkMacSystemFont,"
+        "'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933}"
+        f".lab{{display:flex;justify-content:space-between;gap:16px;font-size:13px;color:#5f6b7a;"
+        f"border-bottom:3px solid {accent};padding-bottom:6px;margin-bottom:18px}}.lab b{{color:{primary}}}"
+        f"h1{{font-size:22px;margin:0 0 6px;color:{primary}}}"
+        "h2{border-bottom:1px solid #e3e8ee;padding-bottom:4px;margin-top:24px;font-size:18px}"
+        "table{border-collapse:collapse;margin:8px 0}th,td{text-align:left;padding:5px 9px;border-bottom:1px solid #e3e8ee;"
+        "vertical-align:top}.meta td:first-child{color:#5f6b7a;white-space:nowrap}img{max-width:100%;border:1px solid #e3e8ee}"
+        "code{background:#f1f5f9;padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#f1f5f9;padding:10px;overflow-x:auto}"
+        ".sub{color:#5f6b7a;font-weight:400}.sign{display:none}"
+        ".foot{color:#5f6b7a;font-size:13px;margin-top:40px;border-top:1px solid #e3e8ee;padding-top:10px}"
+        "@page{margin:16mm 15mm 18mm}"
+        f"@page{{@bottom-left{{content:{css_string(lab_line(lab))};font:8pt Helvetica,Arial,sans-serif;color:#5f6b7a}}"
+        f"@bottom-right{{content:{css_string(note_id)} \"  page \" counter(page) \" of \" counter(pages);"
+        "font:8pt Helvetica,Arial,sans-serif;color:#5f6b7a}}"
+        "@media print{body{max-width:none;margin:0;padding:0;font-size:10.5pt}a{color:inherit;text-decoration:none}"
+        "h1{font-size:16pt}h2{font-size:12.5pt;break-after:avoid}h3,h4{break-after:avoid}"
+        "tr,img,pre,blockquote,.sign,.prov{break-inside:avoid}pre{white-space:pre-wrap}code,pre{background:none;padding:0}"
+        ".sign{display:grid;grid-template-columns:1fr 1fr;gap:10mm 12mm;margin-top:14mm;font-size:9.5pt;color:#5f6b7a}"
+        ".sign div{border-top:1px solid #1f2933;padding-top:3px}.foot{margin-top:8mm;font-size:8.5pt}}"
+    )
+
 
 SKIP_NAMES = {".ds_store", "thumbs.db", "desktop.ini", "__pycache__"}
 
 
+IMAGE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "jpe": "image/jpeg", "gif": "image/gif",
+               "svg": "image/svg+xml", "webp": "image/webp", "bmp": "image/bmp", "ico": "image/vnd.microsoft.icon",
+               "tif": "image/tiff", "tiff": "image/tiff", "avif": "image/avif"}
+
+
 def _data_uri(path: Path, limit: int = 8_000_000) -> Optional[str]:
-    mime, _ = mimetypes.guess_type(path.name)
+    mime = IMAGE_TYPES.get(path.suffix[1:].lower())
     try:
-        if not mime or not mime.startswith("image/") or path.stat().st_size > limit:
+        if not mime or not path.is_file() or path.stat().st_size == 0 or path.stat().st_size > limit:
             return None
         return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
     except OSError:
@@ -1637,38 +1898,53 @@ def folder_files(folder: Path) -> List[Path]:
     """Every regular file under an experiment folder, sorted, skipping OS litter."""
     out = []
     for p in sorted(folder.rglob("*")):
-        if p.is_file() and p.name.lower() not in SKIP_NAMES and not p.name.startswith(".") \
-                and "__pycache__" not in p.parts:
+        if p.is_file() and p.name.lower() not in SKIP_NAMES and not p.name.startswith((".", "~$")) \
+                and not p.name.endswith(".crswap") and "__pycache__" not in p.parts:
             out.append(p)
     return out
 
 
-def render_snapshot_html(vault: Vault, note: Note, generated: Optional[str] = None) -> str:
-    """One note as a single HTML file: header table, body with images embedded as data URIs, file list.
-    Opens in any browser, prints to PDF, needs nothing else. This is the archival rendering."""
+def render_snapshot_html(vault: Vault, note: Note, generated: Optional[str] = None,
+                         lab: Optional[Dict[str, str]] = None) -> str:
+    """One note as a single HTML file: lab line, header table, body with images embedded as data URIs,
+    file list, provenance (path and SHA-256 of the note). It opens in any browser and prints to PDF
+    with page numbers and signature lines; it needs nothing else. This is the archival rendering."""
     generated = generated or date.today().isoformat()
+    lab = lab or load_lab(vault.root)
     base_dir = note.path.parent
 
     def img_src(rel: str) -> str:
         return _data_uri(base_dir / rel) or rel
 
-    text = note.path.read_text(encoding="utf-8", errors="replace")
+    raw = note.path.read_bytes()
+    text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
     _, body_md, _ = split_front_matter(text)
     meta = "".join(f"<tr><td>{esc(k)}</td><td>{esc(', '.join(v) if isinstance(v, list) else v) or '-'}</td></tr>"
                    for k, v in note.fields.items())
     files_html = ""
+    provenance = [("Record", f"<code>{esc(vault.rel(note.path))}</code>"),
+                  ("SHA-256 of the note", f"<code>{hashlib.sha256(raw).hexdigest()}</code>"),
+                  ("Snapshot generated", esc(generated))]
     if note.folder is not None:
         rows = []
         for p in folder_files(note.folder):
             rel = p.relative_to(note.folder).as_posix()
             rows.append(f"<tr><td>{esc(rel)}</td><td>{p.stat().st_size:,}</td></tr>")
         files_html = "<h2>Files in this experiment folder</h2><table><tr><th>path</th><th>bytes</th></tr>" + "".join(rows) + "</table>"
-    return (f"<!doctype html><html><head><meta charset=utf-8><title>{esc(note.id)} {esc(note.get('title'))}</title>"
-            f"<style>{SNAPSHOT_CSS}</style></head><body>"
+        provenance.append(("Checksums of every file", f"<code>1-notes/{esc(note.id)}_MANIFEST.sha256</code> (written when the experiment is marked complete)"))
+    prov_html = "<h2>Provenance</h2><table class=\"meta prov\">" + "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in provenance) + "</table>"
+    sign_html = ""
+    if lab["print_signatures"].strip().lower() not in ("no", "false", "0", "off", ""):
+        sign_html = "<div class=sign><div>Recorded by (signature, date)</div><div>Reviewed by (signature, date)</div></div>"
+    return (f"<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
+            f"<title>{esc(note.id)} {esc(note.get('title'))}</title>"
+            f"<style>{snapshot_css(lab, note.id)}</style></head><body>"
+            f"<div class=lab><span><b>{esc(lab['lab_name'])}</b>{esc(''.join(', ' + x for x in (lab['department'], lab['institution']) if x))}</span>"
+            f"<span>{esc(note.id)}</span></div>"
             f"<h1>{esc(note.id)} <span class=sub>{esc(note.get('title'))}</span></h1>"
             f"<table class=meta>{meta}</table>"
             f"{md_to_html(body_md, img_base='', link_ids=False, img_src=img_src)}"
-            f"{files_html}"
+            f"{files_html}{prov_html}{sign_html}"
             f"<div class=foot>Snapshot of <code>{esc(vault.rel(note.path))}</code> generated {esc(generated)} by AI_ELN. "
             f"The Markdown file is the record; this rendering is for reading, printing, and archiving.</div>"
             f"</body></html>")
@@ -1705,23 +1981,32 @@ def write_manifest(folder: Path, exp_id: str) -> Path:
     return p
 
 
-def read_manifest(folder: Path, exp_id: str) -> Optional[Dict[str, str]]:
+def read_manifest(folder: Path, exp_id: str, strict: bool = False) -> Optional[Dict[str, str]]:
+    """{path: sha256} from the manifest, or None when there is none. With strict, a manifest that is
+    empty or has lines that are not `<hash>  <path>` is an error instead of being read as far as it goes."""
     p = manifest_path(folder, exp_id)
     if not p.exists():
         return None
     out = {}
-    for line in p.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^([0-9a-f]{64})\s+\*?(.+)$", line.strip())
+    bad = 0
+    text = p.read_text(encoding="utf-8", errors="replace")
+    for line in (text[1:] if text.startswith("\ufeff") else text).splitlines():
+        m = re.match(r"^([0-9a-f]{64})[ \t]+\*?(.+)$", line)
         if m:
             out[m.group(2)] = m.group(1)
+        elif line.strip():
+            bad += 1
+    if strict and (bad or not out):
+        raise ElnError(f"{exp_id}: the manifest is damaged ({bad} unreadable line{'s' if bad != 1 else ''}, {len(out)} "
+                       "entries). Mark the experiment complete again to write a new one")
     return out
 
 
 def verify_manifest(folder: Path, exp_id: str) -> Tuple[List[str], List[str], List[str]]:
     """(missing, modified, added) relative to the manifest written at completion."""
-    recorded = read_manifest(folder, exp_id)
+    recorded = read_manifest(folder, exp_id, strict=True)
     if recorded is None:
-        raise ElnError(f"{exp_id} has no manifest (it has not been completed with eln.py)")
+        raise ElnError(f"{exp_id} has no manifest (it has not been marked complete)")
     now = hash_folder(folder, exp_id)
     missing = sorted(p for p in recorded if p not in now)
     modified = sorted(p for p in recorded if p in now and now[p] != recorded[p])
@@ -1736,7 +2021,9 @@ def complete_experiment(root: Path, exp_id: str, when: Optional[str] = None, for
     note = vault.by_id.get(exp_id)
     if note is None or note.kind != "experiment" or note.folder is None:
         raise ElnError(f"no experiment {exp_id}")
-    when = when or date.today().isoformat()
+    # completing again refreshes the snapshot and manifest; the completion date stays unless one is given
+    already = note.get("status") == "complete" and _valid_date(note.get("date_completed"))
+    when = when or (note.get("date_completed") if already else date.today().isoformat())
     if not _valid_date(when):
         raise ElnError(f"date must be YYYY-MM-DD (got {when!r})")
     secs = sections(note.body)
@@ -1745,6 +2032,17 @@ def complete_experiment(root: Path, exp_id: str, when: Optional[str] = None, for
         raise ElnError(f"{exp_id}: the {' and '.join(empty)} section{'s are' if len(empty) > 1 else ' is'} still empty. "
                        f"Write {'them' if len(empty) > 1 else 'it'} first, or pass --force to complete anyway.")
     warnings: List[str] = []
+    if _valid_date(note.get("date_started")) and when < note.get("date_started"):
+        warnings.append(f"the completion date {when} is before the start date {note.get('date_started')}")
+    if already and manifest_path(note.folder, exp_id).exists():
+        try:
+            missing, modified, added = verify_manifest(note.folder, exp_id)
+            changed = [f"modified {p}" for p in modified] + [f"missing {p}" for p in missing] + [f"added {p}" for p in added]
+            if changed:
+                warnings.append(f"{len(changed)} file{'s' if len(changed) != 1 else ''} changed since the previous manifest "
+                                f"({'; '.join(changed[:5])}{'; ...' if len(changed) > 5 else ''}). The new manifest records the current state")
+        except ElnError as e:
+            warnings.append(str(e))
     raw = note.get("raw_data_path")
     if raw and not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", raw) and not raw.startswith("\\\\") \
             and not (root / raw).exists() and not Path(raw).expanduser().exists():
@@ -1844,12 +2142,15 @@ def _person_node(name: str) -> Dict[str, str]:
 
 
 def build_eln(vault: Vault, experiments: List[Note], related: bool = True, today: Optional[date] = None,
-              publisher: str = "Shechter Lab research record (AI_ELN)",
-              publisher_url: str = "https://github.com/Shechterlab/AI_ELN", root_name: Optional[str] = None) -> bytes:
+              publisher: Optional[str] = None, publisher_url: Optional[str] = None,
+              root_name: Optional[str] = None) -> bytes:
     """Bytes of a .eln archive containing the selected experiments (whole folders) plus, if related,
     the protocols, samples, and projects they reference (their notes). root_name should match the
     archive's filename stem, as the specification prefers."""
     today = today or date.today()
+    lab = load_lab(vault.root)
+    publisher = publisher or f"{record_title(lab)} (AI_ELN)"
+    publisher_url = publisher_url if publisher_url is not None else (lab["repository_url"] or lab["lab_url"])
     stamp = today.strftime("%Y%m%d")
     root_name = re.sub(r"[^A-Za-z0-9._-]+", "-", root_name or f"ai-eln-export-{stamp}").strip("-") or "eln-export"
     notes: List[Note] = list(experiments)
@@ -1974,6 +2275,7 @@ def cmd_init(args) -> int:
     if root != REPO_ROOT:
         data["root"] = str(root)
     p = save_config(data)
+    root.mkdir(parents=True, exist_ok=True)  # init is the one command that may create the notebook folder
     ensure_vault_dirs(root)
     if root != REPO_ROOT and not (root / "AGENTS.md").exists():
         write_text_lf((root / "AGENTS.md"), POINTER_AGENTS_MD.format(repo=REPO_ROOT, root=root))
@@ -1990,6 +2292,7 @@ def cmd_init(args) -> int:
 # --------------------------------------------------------------------------
 
 def cmd_validate(args) -> int:
+    require_folder(resolve_root(args.root))
     vault = load_vault(resolve_root(args.root))
     issues = validate_vault(vault)
     return print_issues(vault, issues, args.strict)
@@ -2162,6 +2465,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return args.func(args)
     except ElnError as e:
         err(f"error: {e}")
+        return 1
+    except BrokenPipeError:
+        # the reader went away (output piped to `head`): nothing is wrong
+        try:
+            sys.stdout = open(os.devnull, "w")
+        except OSError:
+            pass
+        return 0
+    except OSError as e:
+        where = f": {e.filename}" if e.filename else ""
+        err(f"error: {e.strerror or e}{where}. Is the folder there, synced, and not read-only? Are the names too long?")
         return 1
 
 

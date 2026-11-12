@@ -1,0 +1,37 @@
+# lab.yaml: who this notebook belongs to, and how its pages and printouts look.
+#
+# To use this notebook for another lab, edit this file and replace the logo
+# (docs/assets/). Nothing else needs to change; there is no build step.
+#
+# Format: one "key: value" per line, like a note header. Quote a value that
+# starts with # (colours). Layering, later wins, as in lab_pipelines:
+#   built-in defaults  <  this file  <  lab.yaml in a notebook folder (optional)
+# The website and the notebook page read this file. Snapshots, printouts, and
+# exports read it too, and a notebook folder can override it with its own copy.
+
+# ---- who ----
+lab_name: Shechter Lab
+institution: Albert Einstein College of Medicine
+department: Department of Biochemistry
+lab_url: https://www.shechterlab.org/
+
+# ---- what the tool is called here ----
+product_name: Plain-text lab notebook
+record_name: research record            # as in "Shechter Lab research record"
+repository_url: https://github.com/Shechterlab/AI_ELN
+site_url: https://shechterlab.github.io/AI_ELN/
+logo: assets/shechterlab-icon.svg       # relative to docs/
+
+# ---- house style ----
+color_primary: '#155e75'                # top bar, headings, buttons
+color_primary_bright: '#0e7490'         # hover and focus
+color_wash: '#ecf7f9'                   # pale background behind highlighted items
+color_accent: '#c2410c'                 # links and the rule under the top bar
+color_accent_dark: '#9a3412'            # links when pointed at
+font_body: Inter
+font_heading: IBM Plex Serif
+font_mono: IBM Plex Mono
+font_stylesheet: https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap
+
+# ---- printouts and snapshots ----
+print_signatures: yes                   # "Recorded by" and "Reviewed by" lines on printed pages (yes or no)

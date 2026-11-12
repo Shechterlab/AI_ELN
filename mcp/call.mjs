@@ -16,7 +16,13 @@ import { TOOLS, callTool, mcpTools, openAiTools, resultToJson } from '../docs/ap
 import { parseFlags, resolveConfig } from './config.mjs';
 
 const { opt, rest } = parseFlags(process.argv.slice(2), ['--root', '--today', '--initials', '--researcher'], ['--list', '--openai', '--text']);
-const config = resolveConfig(opt);
+let config;
+try {
+  config = resolveConfig(opt);
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
+}
 
 if (opt.openai) {
   console.log(JSON.stringify(openAiTools(), null, 2));
@@ -28,14 +34,14 @@ if (opt.openai) {
   }
   console.log(`\n${TOOLS.length} tools.`);
 } else {
-  const ctx = { store: new NodeStore(config.root), person: config.person, today: opt.today || undefined };
+  const ctx = { store: new NodeStore(config.root), person: config.person, today: opt.today || undefined, labText: config.labText };
   try {
     const result = await callTool(ctx, rest[0], rest[1] ? JSON.parse(rest[1]) : {});
     if (opt.text) process.stdout.write(result.text ?? result.markdown ?? resultToJson(result) + '\n');
     else console.log(resultToJson(result));
     process.exitCode = result.ok === false ? 2 : 0;
   } catch (e) {
-    console.error(e.name === 'ElnError' || e instanceof SyntaxError ? e.message : e.stack);
+    console.error(e.name === 'ElnError' || e instanceof SyntaxError ? e.message : e.code ? `${e.code}: ${e.message}` : e.stack);
     process.exitCode = 1;
   }
 }

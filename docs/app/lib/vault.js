@@ -57,7 +57,7 @@ export class Vault {
 }
 
 export function isNoteName(name) {
-  return name.endsWith('.md') && name.length > 3 && !name.startsWith('.') && !name.startsWith('_') && name.toLowerCase() !== 'readme.md';
+  return name.endsWith('.md') && name.length > 3 && !/^[._~]/.test(name) && name.toLowerCase() !== 'readme.md';
 }
 
 export async function readNote(store, kind, path, folder = null) {
@@ -101,7 +101,7 @@ export async function loadVault(store) {
         /* fall back to any note in 1-notes so its problems are still reported */
         const candidates = listing ? listing.filter((e) => e.kind === 'file' && isNoteName(e.name)).map((e) => e.name).sort(cmp) : [];
         if (noteName !== null && !candidates.length) {
-          vault.folderIssues.push([folder, `no note at 1-notes/${folderId}.md`]);
+          vault.folderIssues.push([folder, `no note at 1-notes/${folderId}.md (if this folder was just made on another computer, wait for the sync to finish and check again)`]);
           continue;
         }
         if (!candidates.length) continue;

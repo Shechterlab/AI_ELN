@@ -24,6 +24,12 @@ export function lstripChars(s, chars) {
   return s.slice(a);
 }
 
+const RE_LINE_BREAKS = /[\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029]+/g;
+/** A header value is one line: any line break inside it becomes a space. */
+export const oneLine = (value) => String(value === null || value === undefined ? '' : value).replace(RE_LINE_BREAKS, ' ');
+/** Text without a leading byte-order mark (Windows Notepad writes one). */
+export const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+
 /** str.splitlines(): no trailing empty line, and '' gives []. */
 export function splitlines(s) {
   if (s === '') return [];

@@ -177,7 +177,7 @@ class App:
             ("/report", "Lab meeting brief", "Summary of experiments flagged for the meeting."),
             ("/export", "Export for ChatGPT", "A single file to paste into a chat."),
         ]
-        body = [self.need_setup() or "", "<h1>Shechter Lab research record</h1>",
+        body = [self.need_setup() or "", f"<h1>{esc(eln.record_title(eln.load_lab(self.root)))}</h1>",
                 f"<p>You are <b>{who}</b> &middot; {len(exps)} experiments, {len(active)} active, "
                 f"{len(flagged)} flagged for lab meeting &middot; <a href='/setup'>settings</a></p>",
                 "<div class=grid>" + "".join(f"<a class=tile href='{h}'><b>{esc(t)}</b><span>{esc(d)}</span></a>"
@@ -308,6 +308,9 @@ class App:
             return "Header problem: " + "; ".join(problems), None
         if fields.get(eln.ID_FIELD[n.kind]) != nid:
             return f"The header's {eln.ID_FIELD[n.kind]} must stay {nid}.", None
+        errors = eln.note_save_errors(n.kind, fields)
+        if errors:
+            return "Not saved. In the header: " + "; ".join(errors) + ".", None
         eln.write_text_lf(n.path, text if text.endswith("\n") else text + "\n")
         eln.write_index(eln.load_vault(self.root), quiet=True)
         return None, f"/note/{nid}?saved=1"
@@ -350,7 +353,7 @@ class App:
           <label style='margin-top:16px'><input type=checkbox name=meeting value=1 {'checked' if vals.get('meeting') else ''}> Flag for the next lab meeting</label>
           <details style='margin-top:12px'><summary class=hint>Advanced</summary>
             <label>Related experiments</label><input type=text name=related value='{esc(vals.get('related'))}' placeholder='JSRe0002, JSRe0004'>
-            <label>Raw data lives elsewhere</label><input type=text name=raw_data_path value='{esc(vals.get('raw_data_path'))}' placeholder='leave blank to use 2-data_raw/'>
+            <label>Raw data location (leave blank to use 2-data_raw)</label><input type=text name=raw_data_path value='{esc(vals.get('raw_data_path'))}' placeholder='leave blank to use 2-data_raw/'>
           </details>
           <div class=actions style='margin-top:18px'><button class=btn>Create experiment</button><a href='/' class='btn secondary'>Cancel</a></div>
         </form>"""
@@ -416,15 +419,16 @@ class App:
         body = f"""
         <h1>Ask the AI</h1>
         <div class=card>
-          <p>Two ways, neither needs an API key. <b>ChatGPT:</b> click <a href='/export'>Export</a>, copy, paste into a chat
+          <p>Three ways, none needs an API key. <b>ChatGPT:</b> click <a href='/export'>Export</a>, copy, paste into a chat
           (once, paste <code>docs/ai-briefing.md</code> as the chat's instructions). It can reason about the notes but cannot see
           data files or run anything. <b>Codex, Claude Code, Cowork:</b> open the tool in this folder; it reads the lab's rules
           and skills itself, and can read files and run analyses.</p>
+          <p><b>MCP clients:</b> <code>node mcp/server.mjs</code> offers the notebook's own operations (create, find, check, complete, export) as tools. See <code>mcp/README.md</code>.</p>
           <p>You do not need to name a skill. Describe the task and the assistant chooses the method. Every factual claim it makes should carry
           an experiment ID; if it does not, ask for one.</p>
         </div>
         <table><tr><th>You want</th><th>Say something like</th><th>Works in</th></tr>{rows}</table>
-        <p class=hint>The first three rows check work that already exists, so a wrong answer costs nothing: start there.
+        <p class=hint>The first three rows check work that already exists, so start there. Check each answer against the note all the same.
         Full details, what each skill needs, and a transcript of these asks run on the sandbox:
         <code>docs/ai-agents.md</code> and <code>sandbox/PILOT.md</code>.</p>"""
         return page("Ask the AI", body, "/ai", self.root)

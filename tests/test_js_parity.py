@@ -378,6 +378,128 @@ class TestOperations(ParityCase):
             path = tool(node, "render_snapshot", {"id": nid})["path"]
             self.assertEqual((node / path).read_text(encoding="utf-8"), want, nid)
 
+    def test_findings_from_the_role_play_stay_fixed(self):
+        """Each block is a problem a role-played user found; both tools must now handle it, the same way."""
+        py, node = self.sandbox_copy("py"), self.sandbox_copy("js")
+
+        # line breaks in a title, accents in a folder name, a protocol typed without P_
+        title = "R\u00e9sum\u00e9 of \u03b1-tubulin\nstatus: complete"
+        r_py = eln.create_experiment(py, "ZZ", "Zed", title, protocol="WesternBlot, P_Immunofluorescence", project="Nope", samples="ALXa0001, ALXz9")
+        r_js = tool(node, "create_experiment", {"title": title, "protocol": "WesternBlot, P_Immunofluorescence", "project": "Nope",
+                                                 "samples": "ALXa0001, ALXz9", "initials": "ZZ", "researcher": "Zed"})
+        self.assertEqual(r_py.path.parent.parent.name, "ZZe0001_Resume-of-tubulin-status-complete")
+        self.assertEqual(r_js["warnings"], r_py.warnings)
+        self.assertEqual(len(r_py.warnings), 2)
+        fields, _, problems = eln.parse_front_matter(r_py.path.read_text(encoding="utf-8"))
+        self.assertEqual((problems, fields["status"], fields["protocols"]), ([], "active", ["P_WesternBlot", "P_Immunofluorescence"]))
+        for bad in ({"project": "two words"},):
+            with self.assertRaises(eln.ElnError):
+                eln.create_experiment(py, "ZZ", "Zed", "x", **bad)
+        for call in (lambda: eln.create_protocol(py, "westernblot"), lambda: eln.create_project(py, "CON"),
+                     lambda: eln.create_project(py, "prmt5-chromatinrelease"), lambda: eln.create_protocol(py, "B" * 200)):
+            with self.assertRaises(eln.ElnError):
+                call()
+
+        # a note saved by Windows Notepad (byte-order mark, CRLF) is still a note
+        for root in (py, node):
+            note = next((root / "Experiments").glob("ALXe0001_*/1-notes/ALXe0001.md"))
+            note.write_bytes(b"\xef\xbb\xbf" + note.read_bytes().replace(b"\n", b"\r\n"))
+        self.assertEqual(eln.load_vault(py).by_id["ALXe0001"].get("status"), "complete")
+        self.assertEqual(tool(node, "read_note", {"id": "ALXe0001"})["fields"]["status"], "complete")
+
+        # sync copies under every name the services use; lock files are ignored
+        for root in (py, node):
+            folder = next(p for p in (root / "Experiments").iterdir() if p.name.startswith("ALXe0003"))
+            for name in ("1-notes/ALXe0003-DESKTOP-AB12CD3.md", "1-notes/ALXe0003 (1).md", "5-figures/ALXe0003_fig (Case Conflict).png",
+                         "2-data_raw/scan (1).tif", "3-code/~$ALXe0003_notes.docx", "2-data_raw/y.crswap"):
+                (folder / name).write_text("x", encoding="utf-8")
+            (root / "Inventory" / "samples (1).csv").write_text("x", encoding="utf-8")
+            (root / "Projects" / "~$lock.md").write_text("x", encoding="utf-8")
+            (root / "Experiments" / "ZZe0009_half-synced" / "1-notes").mkdir(parents=True)
+        want = py_validate_text(py)
+        self.assertEqual(tool(node, "check_notebook", text=True, ok_codes=(2,)), want)
+        self.assertEqual(want.count("copy made by a sync service"), 3)
+        self.assertEqual(want.count("copy of a generated file"), 1)
+        self.assertNotIn("scan (1).tif", want)
+        self.assertNotIn("~$", want)
+        self.assertIn("wait for the sync to finish", want)
+
+        # searching takes words in any order; the brief keeps tables and figures usable
+        vault = eln.load_vault(py)
+        self.assertEqual([n["id"] for n in tool(node, "find_notes", {"text": "retention chromatin SNRPB"})["notes"]],
+                         [n.id for n in eln.find_notes(vault, "experiment", text="retention chromatin SNRPB")])
+        self.assertGreater(len(eln.find_notes(vault, "experiment", text="retention chromatin SNRPB")), 2)
+        for root in (py, node):
+            note = next((root / "Experiments").glob("ALXe0004_*/1-notes/ALXe0004.md"))
+            text = note.read_text(encoding="utf-8").replace("## Results\n", "## Results\n\n| lane | signal |\n|---|---|\n| 1 | 2.0 |\n\n![blot](../5-figures/ALXe0004_R_blot.png) and `_R_` stays code\n", 1)
+            eln.write_text_lf(note, text)
+        brief = eln.build_report(eln.load_vault(py))
+        self.assertEqual(tool(node, "meeting_brief")["markdown"], brief)
+        self.assertIn("**Results.**\n\n| lane | signal |", brief)
+        self.assertIn("](../Experiments/ALXe0004_", brief)
+        self.assertIn("<table>", eln.md_to_html(brief))
+        self.assertEqual(js("mdToHtml", ["`_R_` and _i_ and `a*b*c`", "", False])[0], "<p><code>_R_</code> and <i>i</i> and <code>a*b*c</code></p>")
+        self.assertEqual(eln.md_to_html("`_R_` and _i_ and `a*b*c`", link_ids=False), "<p><code>_R_</code> and <i>i</i> and <code>a*b*c</code></p>")
+
+        # completing again keeps the completion date and says what changed since
+        for root in (py, node):
+            folder = next(p for p in (root / "Experiments").iterdir() if p.name.startswith("ALXe0002"))
+            (folder / "4-data_processed" / "ALXe0002_late.csv").write_text("a\n", encoding="utf-8")
+        r_py = eln.complete_experiment(py, "ALXe0002")
+        r_js = tool(node, "complete_experiment", {"id": "ALXe0002"})
+        self.assertEqual(eln.load_vault(py).by_id["ALXe0002"].get("date_completed"), "2026-07-08")
+        self.assertEqual(r_js["warnings"], r_py["warnings"])
+        self.assertIn("added 4-data_processed/ALXe0002_late.csv", r_py["warnings"][0])
+        self.assertEqual(len(list((py / "Experiments").glob("ALXe0002_*/1-notes/*_snapshot_*.html"))), 1)
+
+        # a manifest that was damaged does not verify; names ending in a space survive
+        for root in (py, node):
+            folder = next(p for p in (root / "Experiments").iterdir() if p.name.startswith("ALXe0002"))
+            with open(folder / "1-notes" / "ALXe0002_MANIFEST.sha256", "a", encoding="utf-8") as f:
+                f.write("garbage line\n")
+        folder = next(p for p in (py / "Experiments").iterdir() if p.name.startswith("ALXe0002"))
+        with self.assertRaises(eln.ElnError):
+            eln.verify_manifest(folder, "ALXe0002")
+        damaged = tool(node, "verify_files", {"id": "ALXe0002"}, ok_codes=(2,))["results"][0]
+        self.assertIn("damaged", damaged["error"])
+
+        # the two notebooks are still the same files
+        for root in (py, node):
+            for p in list(root.rglob("*MANIFEST.sha256")):
+                pass
+        self.assertSameTree(py, node)
+
+    def test_serial_numbers_are_remembered_per_person(self):
+        py, node = self.tmp / "py", self.tmp / "js"
+        for root in (py, node):
+            root.mkdir()
+        a_py = eln.create_experiment(py, "ZZ", "Zed Zed", "first")
+        a_js = tool(node, "create_experiment", {"title": "first", "initials": "ZZ", "researcher": "Zed Zed"})
+        eln.create_sample(py, "ZZ", "antibody", "ab one")
+        tool(node, "create_sample", {"sample_type": "antibody", "title": "ab one", "initials": "ZZ"})
+        self.assertEqual((py / "People" / "ZZ.yaml").read_text(encoding="utf-8").splitlines()[-4:],
+                         ["initials: ZZ", "name: Zed Zed", "last_experiment: 1", "last_sample_a: 1"])
+        # a line the person added is kept
+        for root in (py, node):
+            with open(root / "People" / "ZZ.yaml", "a", encoding="utf-8", newline="\n") as f:
+                f.write("orcid: 0000-0002-1825-0097\n")
+        # the folder and the sample are deleted (or lost by a sync): their numbers are not given out again
+        shutil.rmtree(a_py.path.parent.parent)
+        shutil.rmtree(node / a_js["folder"])
+        (py / "Samples" / "ZZa0001.md").unlink()
+        (node / "Samples" / "ZZa0001.md").unlink()
+        b_py = eln.create_experiment(py, "ZZ", "Someone Else", "second")
+        b_js = tool(node, "create_experiment", {"title": "second", "initials": "ZZ", "researcher": "Someone Else"})
+        self.assertEqual((b_py.id, b_js["id"]), ("ZZe0002", "ZZe0002"))
+        self.assertEqual(eln.create_sample(py, "ZZ", "antibody", "ab two").id, "ZZa0002")
+        self.assertEqual(tool(node, "create_sample", {"sample_type": "antibody", "title": "ab two", "initials": "ZZ"})["id"], "ZZa0002")
+        # two names for one set of initials is said out loud
+        self.assertEqual(b_js["warnings"], b_py.warnings)
+        self.assertIn("the initials ZZ belong to Zed Zed", b_py.warnings[0])
+        self.assertIn("orcid: 0000-0002-1825-0097", (node / "People" / "ZZ.yaml").read_text(encoding="utf-8"))
+        self.assertSameTree(py, node)
+        self.assertEqual(py_validate_text(py), tool(node, "check_notebook", text=True, ok_codes=(0, 2)))
+
     def test_eln_archive(self):
         root = self.sandbox_copy("s")
         vault = eln.load_vault(root)

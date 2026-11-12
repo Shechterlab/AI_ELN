@@ -15,6 +15,8 @@ from this folder.
 |---|---|
 | `index.html` | the landing page |
 | `guide.html` | displays a guide; it fetches the `.md` file and renders it in the browser, so there is no second copy |
+| `lab.yaml` | the lab's name, links, colours, and fonts; the pages, the notebook, and the printouts read it. Edit this file to use the site for another lab |
+| `assets/brand.js` | applies `lab.yaml` to a page |
 | `assets/site.css` | styles, matching the lab's other sites (shechterlab.org and the tool pages) |
 | `app/` | the notebook itself, running in the browser on a folder you choose; see [`app/README.md`](app/README.md) |
 | `assets/site.js` | theme button and the "Name an experiment" box, which uses the notebook's own naming code (`app/lib/names.js`) |
@@ -28,6 +30,21 @@ from this folder.
 Repository **Settings → Pages → Build and deployment → Deploy from a
 branch**, branch `main`, folder `/docs`, Save. The site is published at the
 address above. There is no build step.
+
+## Using the site for another lab
+
+1. Copy the repository.
+2. Edit `lab.yaml`: `lab_name`, `institution`, `department`, `lab_url`,
+   `repository_url`, `site_url`, the five `color_` values, the three `font_`
+   names and `font_stylesheet`.
+3. Replace the logo file and point `logo:` at it.
+4. Turn on GitHub Pages as described above.
+
+No page needs editing and there is no build step. Text marked
+`data-lab="..."` in the HTML is filled from `lab.yaml`, and links to this
+lab's repository are rewritten to yours. Run
+`python3 scripts/build_js_templates.py` once so the copy used offline
+matches your file.
 
 ## Editing
 

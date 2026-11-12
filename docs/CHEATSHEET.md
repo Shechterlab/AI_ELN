@@ -63,7 +63,7 @@ Results · Interpretation · Decision · Follow-up experiments · Files
 
 **New experiment** · **New sample** · **New protocol** · **New project** ·
 **Check** · **Meeting brief** · **Export** for ChatGPT or `.eln` ·
-on a note: **Edit here** · **Mark complete** · **Verify files**
+on a note: **Edit here** · **Add files** · **Repeat this experiment** · **Print / save as PDF** · **Mark complete** · **Verify files**
 
 Same from a terminal: `python3 scripts/eln.py new experiment --title "..."`,
 `validate`, `find`, `report`, `export`, `index`, `init`; `python3 scripts/eln_web.py` for the page.

@@ -2,10 +2,11 @@
    Same grammar as scripts/eln.py (see docs/CONVENTIONS.md, section 4). */
 
 import { RE_KEY } from './schema.js';
-import { strip, rstrip, lstrip, splitlines, pyRepr } from './text.js';
+import { strip, rstrip, lstrip, splitlines, pyRepr, oneLine, stripBom } from './text.js';
 
 /** -> { header: string[] | null, body, error } */
-export function splitFrontMatter(text) {
+export function splitFrontMatter(input) {
+  const text = stripBom(input);
   const lines = splitlines(text);
   if (!lines.length || strip(lines[0]) !== '---') {
     return { header: null, body: text, error: "no YAML header (file must start with a '---' line)" };
@@ -103,7 +104,7 @@ export function parseFrontMatter(text) {
 }
 
 export function quoteIfNeeded(input) {
-  const value = input === null || input === undefined ? '' : String(input);
+  const value = oneLine(input);
   if (value === '') return '';
   const needs = value.includes(': ') || value.includes(' #') || value.includes(',')
     || '[]{}#&*!|>\'"%@`'.includes(value[0]) || value !== strip(value) || value.endsWith(':');
@@ -132,7 +133,7 @@ export function splitValueComment(rest) {
 /** Replace one header line's value, keeping its trailing comment; add the key if it is absent.
     Works on lines, so nothing else in the file changes. Returns the new text. */
 export function setHeaderField(text, key, value, what = 'the note') {
-  const lines = splitlines(text);
+  const lines = splitlines(stripBom(text));
   if (!lines.length || strip(lines[0]) !== '---') throw new Error(`${what} has no YAML header`);
   let end = -1;
   for (let i = 1; i < lines.length; i++) {

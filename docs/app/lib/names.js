@@ -5,7 +5,9 @@ import { extname, stem } from './text.js';
 
 /** 'SNRPB chromatin retention: KCl' -> 'SNRPB-chromatin-retention-KCl'. Case kept; cut on a word boundary. */
 export function slugify(text, maxLen = 60) {
-  let slug = String(text === null || text === undefined ? '' : text).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  /* accents are dropped, not the letter: "Résumé" -> "Resume" */
+  const plain = String(text === null || text === undefined ? '' : text).normalize('NFKD').replace(/\p{M}/gu, '');
+  let slug = plain.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (slug.length > maxLen) {
     const cut = slug.slice(0, maxLen + 1);
     slug = cut.includes('-') ? cut.slice(0, cut.lastIndexOf('-')) : slug.slice(0, maxLen);
@@ -42,7 +44,7 @@ export function nextNumber(existing, initials, letter = 'e') {
     {ID}[_R]_{words-with-hyphens}[_{YYYYMMDD}].ext
     `description` falls back to the original file's name. */
 export function fileNameFor(id, { originalName = '', description = '', result = false, date = '' } = {}) {
-  const ext = extname(originalName);
+  const ext = extname(originalName).replace(/[^A-Za-z0-9.]/g, '');
   let words = slugify(description || stem(originalName));
   /* a file that already starts with the ID keeps the rest of its name */
   if (!description && (originalName.startsWith(id + '_') || originalName.startsWith(id + '.'))) return originalName;

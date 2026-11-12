@@ -4,16 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Plain-text lab notebook · Shechter Lab</title>
+  <title data-lab="{product_name} · {lab_name}">Plain-text lab notebook · Shechter Lab</title>
   <meta name="application-name" content="Plain-text lab notebook">
   <meta name="description" content="A lab notebook kept as plain files in a shared folder. Each experiment has an ID, a folder, and a Markdown note. A page in your browser creates the files in your own folder and checks the naming conventions.">
   <link rel="icon" href="assets/shechterlab-icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="assets/site.css?v=20261112c">
+  <link rel="stylesheet" data-lab-fonts href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="assets/site.css?v=20261112d">
   <script>
-    try { var t = localStorage.getItem('ai-eln-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+    /* theme and lab colours are applied before the first paint; assets/brand.js then applies lab.yaml */
+    try {
+      var d = document.documentElement, t = localStorage.getItem('ai-eln-theme'), c = localStorage.getItem('ai-eln-lab-css');
+      if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+      if (c) { var s = document.createElement('style'); s.id = 'lab-style'; s.textContent = c; document.head.appendChild(s); }
+      if (localStorage.getItem('ai-eln-lab-name') !== 'Shechter Lab') { d.classList.add('lab-pending'); setTimeout(function () { d.classList.remove('lab-pending'); }, 900); }
+    } catch (e) {}
   </script>
 </head>
 <body>
@@ -23,8 +29,8 @@
     <header class="top">
       <div class="wrap bar">
         <a class="brand" href="./" title="Plain-text lab notebook">
-          <img src="assets/shechterlab-icon.svg" alt="" width="34" height="34">
-          <div><b>Plain-text lab notebook</b><small>Shechter Lab</small></div>
+          <img src="assets/shechterlab-icon.svg" data-lab-src="logo" alt="" width="34" height="34">
+          <div><b data-lab="product_name">Plain-text lab notebook</b><small data-lab="lab_name">Shechter Lab</small></div>
         </a>
         <nav class="site-nav" aria-label="Pages">
           <a href="./" aria-current="page">Overview</a>
@@ -41,7 +47,7 @@
     <div class="wrap hero-grid">
       <div>
         <h1>A lab notebook kept as plain files in a shared folder</h1>
-        <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You fill in a form in your browser, and the folders and files are created in your own folder. It needs no account, server, or installation, and the notes open in any text editor.</p>
+        <p class="lede">Each experiment gets an ID, a folder with the same five subfolders, and a Markdown note. You fill in a form in your browser, and the folders and files are created in your own folder. It needs no account or server. In Chrome or Edge it needs no installation. The notes open in any plain-text editor.</p>
         <div class="cta">
           <a class="btn" href="app/">Open the notebook</a>
           <a class="btn ghost" href="guide.html?d=getting-started">Get started</a>
@@ -50,7 +56,7 @@
       </div>
       <figure>
         <div class="frame">
-          <div class="chrome"><i></i><i></i><i></i><span>127.0.0.1 · on your computer</span></div>
+          <div class="chrome"><i></i><i></i><i></i><span>the notebook page</span></div>
           <img src="img/home.png" alt="The notebook's home page: buttons for New experiment, New sample, Check everything, Lab meeting brief and Export, above a list of recent experiments." width="1180" height="1010">
         </div>
         <figcaption>The notebook page, shown with the fictional sandbox data. It runs in your browser and reads and writes ordinary files in your folder.</figcaption>
@@ -92,7 +98,7 @@
             <header>What you see <span>in the notebook page</span></header>
             <div class="body rendered">
               <h4>SNRPB chromatin retention after PRMT5 inhibition</h4>
-              <p class="by"><span class="cite">JSRe0002</span> · Jacob Roth · started 1 Sept 2026</p>
+              <p class="by"><span class="cite">JSRe0002</span> · Jacob Roth · started 1 Sept 2026 · example</p>
               <div class="tags"><span class="tag ok">active</span><span class="tag">PRMT5-ChromatinRelease</span><span class="tag">P_WesternBlot</span><span class="tag">for lab meeting</span></div>
               <h5>Objective</h5>
               <p>Does PRMT5 inhibition increase the chromatin-bound fraction of SNRPB?</p>
@@ -131,7 +137,7 @@ has not been blotted directly.</pre>
         <ul class="notes">
           <li><b>The form fills in the header.</b><span>The lines between the dashes are metadata: project, researcher, status, protocols. They are used for searching, and AI tools read them first.</span></li>
           <li><b><code>##</code> marks a heading.</b><span>The headings are added when the note is created. You write normal text under them.</span></li>
-          <li><b>No other program is required.</b><span>You can edit in the notebook page with <em>Edit here</em>, or open the file in TextEdit, Notepad, Word, or VS Code.</span></li>
+          <li><b>No other program is required.</b><span>You can edit in the notebook page with <em>Edit here</em>, or open the file in a plain-text editor such as Notepad, TextEdit in plain-text mode, or VS Code. Do not use Word; it adds formatting.</span></li>
         </ul>
       </div>
     </section>
@@ -149,7 +155,7 @@ has not been blotted directly.</pre>
                 <input id="try-initials" type="text" value="JSR" maxlength="4" spellcheck="false">
               </div>
               <div class="field">
-                <label for="try-number">Experiment number</label>
+                <label for="try-number">Example number</label>
                 <input id="try-number" type="number" value="2" min="1" max="9999" inputmode="numeric">
               </div>
             </div>
@@ -180,7 +186,7 @@ has not been blotted directly.</pre>
             </div>
             <ul class="legend">
               <li><i class="seg-a"></i><span><b>Experiment ID.</b> Initials, <code>e</code> for experiment, and a four-digit number. Every file from the experiment starts with it.</span></li>
-              <li><i class="seg-b"></i><span><b>R marks a result.</b> Use it for the final figures you would show at lab meeting. Optional.</span></li>
+              <li><i class="seg-b"></i><span><b>R marks the result.</b> Use it for the one figure or table you would show at lab meeting. Optional.</span></li>
               <li><i class="seg-c"></i><span><b>Description.</b> A few words joined with hyphens.</span></li>
               <li><i class="seg-d"></i><span><b>Date as YYYYMMDD.</b> Optional.</span></li>
             </ul>
@@ -210,10 +216,11 @@ has not been blotted directly.</pre>
         <div class="grid-3">
           <div class="card"><h3>No accounts</h3><p>The folder lives in the lab's Dropbox or OneDrive. Anyone with access to the folder has the notebook and the tools.</p></div>
           <div class="card"><h3>No database</h3><p>If two people edit the same note while offline, the sync service keeps both copies and <em>Check</em> lists them.</p></div>
-          <div class="card"><h3>Search by ID</h3><p>Every file name starts with its experiment ID. A Finder or Explorer search for the ID finds the note, the data, and the figures.</p></div>
+          <div class="card"><h3>Search by ID</h3><p>Every file name starts with its experiment ID. A Finder or Explorer search for the ID finds the note, the processed data, and the figures. Raw instrument files keep their own names in <code>2-data_raw</code>.</p></div>
           <div class="card"><h3>Convention check</h3><p><em>Check</em> reads every folder and note and lists misnamed files, missing fields, and IDs that do not match anything.</p></div>
+          <div class="card"><h3>Read-only viewing and printing</h3><p>Anyone in the lab can open a notebook with <em>View a notebook</em>, which cannot change it. <em>Print / save as PDF</em> prints a note with its figures, file list, checksum, page numbers, and signature lines.</p></div>
           <div class="card"><h3>Lab meeting brief</h3><p>Flag an experiment for lab meeting. <em>Meeting brief</em> collects the objective, results, and decision from each flagged experiment.</p></div>
-          <div class="card"><h3>Standard export</h3><p><em>Export</em> saves a <code>.eln</code> archive, the exchange format read by eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog.</p></div>
+          <div class="card"><h3>Standard export</h3><p><em>Export</em> makes text to paste into ChatGPT, or a <code>.eln</code> archive, the exchange format read by eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog.</p></div>
         </div>
 
         <div class="table-wrap" style="margin-top:28px">
@@ -277,6 +284,9 @@ has not been blotted directly.</pre>
           <details><summary>Does it work with Dropbox and OneDrive?</summary><p>Yes, either one, as long as its desktop app syncs the notebook folder to your computer. The page writes ordinary files into that folder and the sync app does the rest. The Dropbox or OneDrive website alone is not enough.</p></details>
           <details><summary>What if two people edit the same note?</summary><p>The sync service keeps both copies and marks one as a conflict. <em>Check</em> lists conflict copies; open both and keep one. Experiment IDs include your initials, so two people cannot be assigned the same ID.</p></details>
           <details><summary>Is it private?</summary><p>The page reads and writes the files in the folder you choose and does not send them anywhere. The notes are as private as the shared folder. An AI tool sees a note only if you paste it into a chat or open the tool in the folder.</p></details>
+          <details><summary>Can other people read my notebook without changing it?</summary><p>Yes. In the notebook page they click <em>View a notebook (read-only)</em> and choose the folder; the page then asks only for permission to view and hides every button that changes something. To make the folder view-only in every program, share it as "can view" in Dropbox or OneDrive.</p></details>
+          <details><summary>Can I print a note or keep a PDF?</summary><p>Yes. <em>Print / save as PDF</em> on a note prints it with its figures, the list of files, the checksum of the note, page numbers, and lines for signatures. <em>Mark complete</em> also saves the same page as an HTML file next to the note.</p></details>
+          <details><summary>Can another lab use this?</summary><p>Yes. Copy the repository, edit <code>docs/lab.yaml</code> (lab name, links, colours, fonts), and replace the logo. The website, the notebook page, and the printouts all read that one file.</p></details>
           <details><summary>What about LabArchives?</summary><p>LabArchives remains the official archive. <em>Mark complete</em> saves a single HTML file with the figures embedded. Print it to PDF and upload it under the same experiment ID.</p></details>
           <details><summary>What if we stop using it?</summary><p>The folder of text files and figures stays usable without the tools. The <code>.eln</code> export can be imported into other notebook systems.</p></details>
         </div>
@@ -327,11 +337,12 @@ has not been blotted directly.</pre>
 
   <footer>
     <div class="wrap">
-      <p><a href="https://www.shechterlab.org/">Shechter Lab</a>, Department of Biochemistry, Albert Einstein College of Medicine. The experiment IDs, the five subfolders, and the result-file naming come from Jacob Roth's system. This project implements it as Markdown notes with a tool that creates and checks them.</p>
+      <p><a href="https://www.shechterlab.org/" data-lab-href="lab_url" data-lab="lab_name">Shechter Lab</a><span data-lab="{affiliation}">, Department of Biochemistry, Albert Einstein College of Medicine</span>. The experiment IDs, the five subfolders, and the result-file naming come from Jacob Roth's system. This project implements it as Markdown notes with a tool that creates and checks them.</p>
       <p>Guides: <a href="guide.html?d=getting-started">Getting started</a> · <a href="guide.html?d=CHEATSHEET">Cheat sheet</a> · <a href="guide.html?d=CONVENTIONS">The rules</a> · <a href="guide.html?d=SOP">Lab data SOP</a> · <a href="guide.html?d=ai-agents">Using AI</a> · <a href="guide.html?d=design-notes">Why it is built this way</a> · <a href="https://github.com/Shechterlab/AI_ELN">Source on GitHub</a></p>
     </div>
   </footer>
 
-  <script type="module" src="assets/site.js?v=20261112c"></script>
+  <script type="module" src="assets/brand.js?v=20261112d"></script>
+  <script type="module" src="assets/site.js?v=20261112d"></script>
 </body>
 </html>

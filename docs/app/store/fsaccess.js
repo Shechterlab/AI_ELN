@@ -83,10 +83,11 @@ export class FsAccessStore {
 
 export const canPickFolders = () => typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 
-/** Ask the person to choose the notebook folder. Returns a handle, or null if they cancelled. */
-export async function pickFolder() {
+/** Ask the person to choose the notebook folder. mode 'read' asks only for permission to view.
+    Returns a handle, or null if they cancelled. */
+export async function pickFolder(mode = 'readwrite') {
   try {
-    return await window.showDirectoryPicker({ id: 'ai-eln-notebook', mode: 'readwrite' });
+    return await window.showDirectoryPicker({ id: 'ai-eln-notebook', mode });
   } catch (e) {
     if (e.name === 'AbortError') return null;
     throw e;
@@ -94,8 +95,8 @@ export async function pickFolder() {
 }
 
 /** True once the browser lets this page read and write the folder. Must follow a click when it has to ask. */
-export async function allowed(handle, ask = false) {
-  const opts = { mode: 'readwrite' };
+export async function allowed(handle, ask = false, mode = 'readwrite') {
+  const opts = { mode };
   if (typeof handle.queryPermission !== 'function') return true;
   if ((await handle.queryPermission(opts)) === 'granted') return true;
   return ask ? (await handle.requestPermission(opts)) === 'granted' : false;

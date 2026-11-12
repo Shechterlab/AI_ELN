@@ -110,6 +110,9 @@ await page.fill('textarea[name="text"]', original.replace('experiment_id: JSRe00
 await click('Save');
 check('changing the ID in the header is refused and the text is kept',
   (await text()).includes('must stay JSRe0001') && (await page.inputValue('textarea[name="text"]')).includes('JSRe0009'));
+await page.fill('textarea[name="text"]', original.replace('status: active', 'status: done').replace(/^title: .*$/m, 'title:'));
+await click('Save');
+check('a header the checker would reject is not saved', (await text()).includes('Not saved') && (await text()).includes("'title' is missing or empty") && (await text()).includes("status 'done'"));
 const written = original
   .replace(/(## Results\n)/, '$1\nThe chromatin fraction rose from 0.31 to 0.58 (n = 3).\n\n![blot](../5-figures/JSRe0001_R_blot-summary.png)\n')
   .replace(/(## Interpretation\n)/, '$1\nConsistent with the hypothesis; see JSRa0001 and P_WesternBlot.\n');
@@ -137,6 +140,19 @@ await page.check('input[name="result"]');
 await click('Add');
 check('adding a file never overwrites', (await text()).includes('already exists'));
 
+check('print and repeat are offered on the note', (await page.getByRole('button', { name: 'Print / save as PDF', exact: true }).count()) === 1
+  && (await page.getByRole('link', { name: 'Repeat this experiment' }).count()) === 1);
+await page.getByRole('link', { name: 'Repeat this experiment' }).click();
+await page.waitForSelector('#n-title');
+check('repeating an experiment copies its title, project, protocol and samples',
+  (await page.inputValue('#n-title')) === 'SNRPB chromatin retention: KCl titration' && (await page.inputValue('#n-project')) === 'PRMT5-ChromatinRelease'
+  && (await page.inputValue('#n-protocol')) === 'P_WesternBlot' && (await page.isChecked('input[name="samples"][value="JSRa0001"]'))
+  && (await page.inputValue('#n-related')) === 'JSRe0001');
+await page.fill('#n-title', 'SNRPB chromatin retention: KCl titration, repeat 2');
+await click('Create experiment');
+check('the repeat gets the next ID', (await text('h1')).includes('JSRe0002'));
+await open('#/note/JSRe0001');
+
 await click('Mark complete');
 check('experiment marked complete with snapshot and manifest', (await text()).includes('JSRe0001 is complete') && (await text()).includes('_snapshot_'));
 await click('Verify files');
@@ -151,6 +167,8 @@ await shot('note-complete');
 
 await open('#/check');
 check('Check finds no problems', (await text()).includes('0 errors') && (await text()).includes('0 warnings'), (await text()).slice(0, 400));
+await open('#/experiments');
+check('the experiment list is newest first', (await page.locator('#main table tr td a').first().textContent()) === 'JSRe0002');
 await open('#/brief');
 check('meeting brief lists the flagged experiment', (await text()).includes('JSRe0001 - SNRPB chromatin retention: KCl titration') && (await text()).includes('rose from 0.31 to 0.58'));
 await click('Save into Inventory');
@@ -169,6 +187,11 @@ check('.eln download is a zip archive', zip.readUInt32LE(0) === 0x04034b50 && dl
 await settle();
 if (flag('--dump')) fs.copyFileSync(elnPath, path.join(flag('--dump'), '..', 'e2e-export.eln'));
 
+await open('#/export');
+await page.selectOption('#x-scope', 'ids');
+await page.fill('#x-ids', 'JSRe0001, JSRe9999');
+await click('Build export');
+check('a wrong ID in Export shows the message above the form', (await text()).includes('JSRe9999 not found') && (await page.locator('#x-ids').count()) === 1);
 await open('#/experiments?status=complete');
 check('experiment list filters by status', (await text()).includes('1 shown'));
 await open('#/samples');
@@ -204,6 +227,47 @@ if (flag('--dump')) {
   }
   check('notebook written to disk for the Python validator', Object.keys(files).length > 15, String(Object.keys(files).length));
 }
+
+/* the same notebook opened for viewing only */
+await page.goto(`${base}/app/?store=opfs&name=${name}&view=1#/note/JSRe0001`);
+await page.waitForSelector('#note-body');
+body = await text();
+check('viewer mode shows the note without anything that changes it',
+  body.includes('rose from 0.31 to 0.58') && (await page.getByRole('link', { name: 'Edit here' }).count()) === 0
+  && (await page.getByRole('button', { name: 'Mark complete' }).count()) === 0 && (await page.locator('form[data-form="add-files"]').count()) === 0
+  && (await page.getByRole('button', { name: 'Print / save as PDF', exact: true }).count()) === 1 && (await text('#where')).includes('view only'));
+const refused = await page.evaluate(async () => {
+  try { await window.AIELN.call('create_experiment', { title: 'x', initials: 'JSR' }); return 'created'; } catch (e) { return e.message; }
+});
+check('viewer mode refuses a change made through the tools', refused.includes('viewing only'), refused);
+await open('#/');
+check('viewer home has no New buttons', !(await text()).includes('New experiment') && (await text()).includes('viewing only'));
+await open('#/edit/JSRe0001');
+check('viewer cannot reach the editor', (await text()).includes('View only') && (await page.locator('textarea').count()) === 0);
+
+/* another lab: only lab.yaml differs */
+/* a fresh context without the offline cache, so the substituted lab.yaml is what the page gets */
+const otherContext = await browser.newContext({ serviceWorkers: 'block' });
+const other = await otherContext.newPage();
+await other.route('**/lab.yaml', (route) => route.fulfill({ contentType: 'text/yaml', body:
+  "lab_name: Example Lab\ninstitution: Example University\nproduct_name: Bench notes\nrecord_name: notebook\nrepository_url: https://example.org/repo\ncolor_primary: '#7c2d12'\ncolor_accent: '#1d4ed8'\nprint_signatures: no\n" }));
+await other.goto(`${base}/index.html`);
+await other.waitForFunction(() => !document.documentElement.classList.contains('lab-pending'));
+const brand = await other.evaluate(() => ({
+  title: document.title, name: document.querySelector('.brand b').textContent, lab: document.querySelector('.brand small').textContent,
+  teal: getComputedStyle(document.documentElement).getPropertyValue('--teal').trim(),
+  repo: [...document.querySelectorAll('a')].filter((a) => a.href.includes('Shechterlab/AI_ELN')).length,
+  footer: document.querySelector('footer').textContent,
+}));
+check('editing lab.yaml rebrands the site: names, colours, links',
+  brand.title === 'Bench notes · Example Lab' && brand.name === 'Bench notes' && brand.lab === 'Example Lab' && brand.teal === '#7c2d12'
+  && brand.repo === 0 && brand.footer.includes('Example Lab, Example University'), JSON.stringify(brand));
+await other.goto(`${base}/app/`);
+await other.waitForSelector('text=Open your notebook');
+await other.getByRole('button', { name: 'Open the practice notebook', exact: true }).click();
+await other.waitForSelector('text=Example Lab notebook');
+check('the notebook page uses the lab name from lab.yaml', (await other.textContent('#main h1')) === 'Example Lab notebook');
+await otherContext.close();
 
 /* practice notebook, narrow screen, offline */
 await page.goto(`${base}/app/`);

@@ -73,11 +73,14 @@ reference and tells you if one points nowhere.
 ├── Protocols/    P_{Name}.md
 ├── Samples/      {SAMPLE_ID}.md
 ├── Projects/     {PROJECT_ID}.md
-└── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv  (generated)
+├── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv  (generated)
+├── People/       {INITIALS}.yaml: one per person, written by the tool
+└── lab.yaml      optional: lab name and house style for printouts
 ```
 
-- The **slug** is the title with anything that isn't a letter or digit
-  turned into `-`, trimmed to 60 characters. Case is kept so gene names stay
+- The **slug** is the title with accents removed (`Résumé` becomes
+  `Resume`) and anything that still isn't a letter or digit turned into
+  `-`, trimmed to 60 characters. Case is kept so gene names stay
   readable (`SNRPB-chromatin-retention`). The tool makes it; you don't.
 - The five subfolders are created by the tool and are never renamed,
   reordered, or added to per experiment. The value of the system is that
@@ -88,6 +91,21 @@ reference and tells you if one points nowhere.
   case of keeping the notes somewhere else. See `docs/getting-started.md`.)
 - `Inventory/` is **generated** by `eln.py index` from the notes. Never
   hand-edit it; edit the note and re-index.
+
+### People/ and lab.yaml
+
+`People/{INITIALS}.yaml` holds a person's name and the last serial numbers
+their initials used (`last_experiment`, `last_sample_p`, ...). The tool
+writes it when it creates a record. The next ID is one more than the higher
+of that number and what is in the folders, so a number is not given out
+again when a folder is deleted or has not synced yet. If a record is created
+under initials that the file says belong to someone with a different name,
+the tool says so. You may add lines of your own (`orcid`, `email`, `role`).
+
+`lab.yaml` (optional, at the top of the notebook folder) holds the lab's
+name, institution, and house style in the same flat `key: value` form. It
+overrides `docs/lab.yaml` from the tools for this notebook's snapshots,
+printouts, and exports.
 
 ## 3. Filenames
 
@@ -270,13 +288,17 @@ Experiments · Reagents in use · Figures · Related protocols.**
 - `status` is the one field you're expected to keep current. An experiment
   is `complete` when Results and Interpretation are written and
   `raw_data_path` points at backed-up storage. Set it with **Mark
-  complete** on the page or `eln.py complete ID`: that checks those
-  conditions, sets `status` and `date_completed`, and writes two standard
+  complete** on the page or `eln.py complete ID`: that refuses if Results
+  or Interpretation is empty, warns if `raw_data_path` cannot be found (it
+  cannot check that the place is backed up; that is yours to know), sets
+  `status` and `date_completed`, and writes two standard
   files next to the note, a self-contained HTML snapshot and a
   `sha256sum`-format manifest, so the state of the folder at completion is
   recorded and later changes are detectable (`eln.py verify`). Nothing is
-  locked. `paused` and `abandoned` both need one honest sentence in the
-  note saying why.
+  locked. Completing an experiment again rewrites the snapshot and the
+  manifest, keeps the original `date_completed`, and reports which files
+  changed since the last manifest. `paused` and `abandoned` both need one
+  sentence in the note saying why.
 
 ## 6. What the validator enforces
 
@@ -292,7 +314,9 @@ are advice unless you pass `--strict`.
   `sample_type` outside the allowed set, a date that isn't `YYYY-MM-DD`.
 - A protocol / sample / project whose filename doesn't match its ID, or a
   sample whose type letter doesn't match its `sample_type`.
-- The same ID appearing twice anywhere.
+- The same ID appearing twice anywhere. (A copy that a sync service made of
+  a file is reported as a warning with what to do about it; see "Offline
+  work and sync copies" in the getting-started guide.)
 
 **Warnings** — things worth fixing before you forget:
 

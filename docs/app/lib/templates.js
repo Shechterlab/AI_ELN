@@ -4,7 +4,7 @@
 import { TEMPLATES } from './builtin_templates.js';
 import { ElnError } from './schema.js';
 import { splitFrontMatter, parseFrontMatter, splitValueComment, formatValue, quoteIfNeeded, csvItems } from './frontmatter.js';
-import { rstrip, strip } from './text.js';
+import { rstrip, strip, oneLine } from './text.js';
 import { isFile, readText } from '../store/base.js';
 
 const PLACEHOLDER = /\{\{([A-Z_]+)\}\}/;
@@ -40,9 +40,10 @@ export function renderHeaderLine(line, values) {
 }
 
 /** Fill a template's {{PLACEHOLDERS}}. Header values are quoted when YAML needs it. */
-export function renderTemplateText(text, values, what = 'template') {
+export function renderTemplateText(text, input, what = 'template') {
   const { header, body, error } = splitFrontMatter(text);
   if (header === null) throw new ElnError(`${what} is broken: ${error}`);
+  const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, oneLine(v)]));
   return '---\n' + header.map((line) => renderHeaderLine(line, values)).join('\n') + '\n---\n'
     + fill(body, values).replace(/\n+$/, '') + '\n';
 }

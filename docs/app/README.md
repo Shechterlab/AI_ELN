@@ -31,6 +31,7 @@ app/
     closeout.js         mark complete, HTML snapshot, sha256 manifest, verify
     elnfile.js, zip.js  the .eln archive (RO-Crate in a ZIP)
     sha256.js, mime.js  hashing, media types
+    lab.js              lab.yaml: lab name and house style for snapshots, printouts, exports
     conventions.js      the rules as one page of text, given to AI clients
     tools.js            every operation as a named tool with a JSON Schema
   store/                where the files are
@@ -39,6 +40,16 @@ app/
     memory.js           in memory, for practice mode and tests
     node.js             Node's fs, for mcp/server.mjs and mcp/call.mjs
 ```
+
+## Viewing, printing, repeating
+
+- **View a notebook (read-only)** asks the browser only for permission to
+  view, hides every control that changes something, and refuses any tool call
+  that would write. `index.html?store=opfs&view=1` does the same in tests.
+- **Print / save as PDF** renders the same HTML a snapshot holds and sends it
+  to the printer. Nothing is saved.
+- **Repeat this experiment** opens the New experiment form filled in from an
+  existing experiment.
 
 ## Extending it
 
