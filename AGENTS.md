@@ -36,10 +36,17 @@ etc. live. Check before assuming paths are repo-relative; pass `--root` if
 needed. IDs: experiments `{INITIALS}e{NNNN}`, samples
 `{INITIALS}{p|i|a|c|m|t|r|s|g}{NNNN}`, protocols `P_{Name}`, projects named.
 
-**`sandbox/` is fictional.** It holds made-up experiments for practice
-(researchers "Alex Example" and "Jordan Example"). Never cite anything in
-it as a lab result and never let a search stray into it. Work there only
-when the person explicitly asks for the sandbox (`--root sandbox`).
+**`sandbox/` is fictional.** It holds two made-up notebooks for practice
+(`sandbox/alex` for "Alex Example", `sandbox/jordan` for "Jordan Example").
+Never cite anything in it as a lab result and never let a search stray into
+it. Work there only when the person explicitly asks for the sandbox
+(`--root sandbox/alex`).
+
+**IDs with someone else's initials.** A notebook belongs to one person. A
+note may cite a record from another person's notebook by its ID (a sample
+`ALXc0001` in a note of `JOR`). That record is not in this folder, and Check
+does not report it as missing. Do not create it here; say that it is in the
+other notebook if asked.
 
 ## The tool
 

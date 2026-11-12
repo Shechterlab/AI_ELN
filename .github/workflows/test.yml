@@ -34,7 +34,8 @@ jobs:
       - name: The sandbox follows the conventions and matches its generator
         shell: bash
         run: |
-          python scripts/eln.py validate --strict --root sandbox
+          python scripts/eln.py validate --strict --root sandbox/alex
+          python scripts/eln.py validate --strict --root sandbox/jordan
           python sandbox/rebuild.py
           git diff --exit-code -- sandbox/ || { echo "sandbox/ differs from what sandbox/rebuild.py produces: run it and commit."; exit 1; }
       - name: Inventory CSVs are current

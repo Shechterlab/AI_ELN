@@ -55,7 +55,7 @@ matches your file.
 - **The landing page:** edit `index.html`. To preview:
   `cd docs && python3 -m http.server`, then open <http://127.0.0.1:8000/>.
 - **Screenshots:** run the page on the sandbox
-  (`python3 scripts/eln_web.py --root sandbox`) and capture `/`,
+  (`python3 scripts/eln_web.py --root sandbox/alex`) and capture `/`,
   `/new/experiment`, and `/note/ALXe0002`.
 
 `tests/test_site.py` checks that every link on the pages points at a file

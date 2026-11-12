@@ -10,6 +10,13 @@ in §3 is not in the committed files.
 Nothing here is real data. The point is to show the *shape* of what each
 path produces before anyone tries it on real notes.
 
+**This transcript is from when the sandbox was one notebook shared by both
+fictional researchers.** It is kept as it was run. The sandbox is now two
+notebooks, `alex/` and `jordan/`, so the commands below need `--root
+sandbox/alex` or `--root sandbox/jordan`, and a search covers one person's
+notebook at a time. Some numbers and file names in the sandbox have changed
+since.
+
 ## 1. "What do we know about SNRPB chromatin retention after PRMT5 inhibition?"
 
 Skill: `eln-search-and-cite`. Filter first, read only the matches, answer

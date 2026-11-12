@@ -6,9 +6,10 @@ import {
   REQUIRED_SECTIONS, SUBFOLDERS, NAMED_SUBFOLDERS, EXEMPT_FILENAMES, SAMPLE_LETTERS, SAMPLE_TYPES,
   RE_EXP_FOLDER, RE_SAMPLE_ID,
 } from './schema.js';
-import { sections, sectionIsEmpty } from './vault.js';
+import { sections, sectionIsEmpty, ciIn } from './vault.js';
 import { templateKeys } from './templates.js';
 import { strip, pyRepr, validDate, basename, stem, cmp, cmpPath } from './text.js';
+import { knownInitials, initialsOf, inAnotherNotebook } from './create.js';
 import { walkFiles } from '../store/base.js';
 
 /* Names sync services give the second copy when a file changed in two places:
@@ -60,6 +61,10 @@ export async function validateVault(store, vault) {
   const knownKeys = {};
   for (const kind of KINDS) knownKeys[kind] = new Set([...(await templateKeys(store, kind)), 'type']);
   const seenIds = new Map();
+  const known = await knownInitials(store);
+  for (const n of vault.allNotes()) {
+    if (initialsOf(n.id)) known.add(initialsOf(n.id));
+  }
 
   for (const note of vault.allNotes()) {
     const rel = note.path;
@@ -73,8 +78,10 @@ export async function validateVault(store, vault) {
     for (const key of REQUIRED[kind]) {
       if (!strip(note.get(key))) E(rel, `required field '${key}' is missing or empty`);
     }
+    /* an adopted older folder has no protocol or project on record; that is not something to fix */
+    const adopted = kind === 'experiment' && ciIn('adopted', note.getList('tags'));
     for (const key of SHOULD[kind]) {
-      if (key in note.fields && !strip(note.get(key))) W(rel, `'${key}' is empty`);
+      if (key in note.fields && !strip(note.get(key)) && !(adopted && ['project', 'protocols'].includes(key))) W(rel, `'${key}' is empty`);
     }
     for (const key of Object.keys(note.fields)) {
       if (!knownKeys[kind].has(key)) W(rel, `unknown header key '${key}' (not in templates/${kind}.md - typo?)`);
@@ -97,6 +104,7 @@ export async function validateVault(store, vault) {
     for (const [key, targetKind] of Object.entries(REF_FIELDS[kind])) {
       for (const ref of note.getList(key)) {
         const target = vault.get(ref);
+        if (target === null && inAnotherNotebook(ref, known)) continue;
         if (target === null) W(rel, `'${key}' refers to ${ref}, which does not exist in ${KIND_DIR[targetKind]}/`);
         else if (target.kind !== targetKind) W(rel, `'${key}' refers to ${ref}, which is a ${target.kind}, not a ${targetKind}`);
       }

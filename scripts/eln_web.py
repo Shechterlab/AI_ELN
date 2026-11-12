@@ -407,8 +407,8 @@ class App:
         body = f"""
         <h1>Settings</h1>{f"<div class='msg err'>{esc(err)}</div>" if err else ''}{"<div class='msg ok'>Saved.</div>" if saved else ''}
         <form class=stack method=post>
-          <label>Your initials (2-4 letters)</label><input type=text name=initials required value='{esc(initials)}' placeholder='JSR'>
-          <div class=hint>Your IDs will look like {esc(initials or 'JSR')}e0001. Numbering is per person, so nobody collides.</div>
+          <label>Your initials (three letters)</label><input type=text name=initials required value='{esc(initials)}' placeholder='JSR'>
+          <div class=hint>Your IDs will look like {esc(initials or 'JSR')}e0001. Use first, middle, and last initial: three letters are less likely to be the same as someone else's than two. Two to four letters are accepted.</div>{f"<div class='msg warn'>{esc(eln.SHORT_INITIALS)}</div>" if len(initials) == 2 else ''}
           <label>Your full name</label><input type=text name=researcher value='{esc(researcher)}'>
           <div class=hint>Files live in <span class=path>{esc(self.root)}</span>. To change that, run <code>python3 scripts/eln.py init --root PATH</code>.</div>
           <div class=actions style='margin-top:18px'><button class=btn>Save</button><a href='/' class='btn secondary'>Back</a></div>
@@ -596,7 +596,11 @@ def make_handler(app: App):
                     if q.get("saved"):
                         msg += "<div class='msg ok'>Saved.</div>"
                     out = app.note(nid, msg)
-                    return self.send_html(out) if out else self.not_found(f"No note with ID {nid}")
+                    if out:
+                        return self.send_html(out)
+                    elsewhere = eln.in_another_notebook(nid, eln.known_initials(app.root))
+                    return self.not_found(f"No note with ID {nid} in this notebook"
+                                          + (f". Its initials are {eln.initials_of(nid)}, so it is a record in that person's notebook" if elsewhere else ""))
                 if path.startswith("/edit/"):
                     out = app.edit(path[len("/edit/"):])
                     return self.send_html(out) if out else self.not_found("No such note")

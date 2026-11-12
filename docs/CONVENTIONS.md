@@ -27,9 +27,17 @@ they'll follow.
 | Protocol | `P_{Name}` | `P_WesternBlot` | `eln.py new protocol` |
 | Project | `{Name}` | `PRMT5-ChromatinRelease` | `eln.py new project` |
 
-- **`INITIALS`** — 2 to 4 uppercase letters, one set per researcher (`JSR`,
-  `DSL`). Your initials are your namespace: your numbering never collides
-  with anyone else's, so no central counter is needed.
+- **`INITIALS`** — uppercase letters, one set per researcher (`JSR`,
+  `DSL`). Use three: first, middle, and last initial. Two to four are
+  accepted, but two-letter initials are more likely to be the same as
+  someone else's, and the tools say so when you set them. Your initials are
+  your namespace: your numbering never collides with anyone else's, so no
+  central counter is needed.
+- **An ID with someone else's initials** refers to a record in that person's
+  notebook (`samples: [ALXc0001]` in a note of `JOR`). Check cannot see that
+  record and does not report it as missing. It does report a missing record
+  whose initials are the notebook's own. A mistyped set of initials therefore
+  goes unnoticed; read them once when you write them.
 - **`NNNN`** — four digits, zero-padded, sequential *per researcher and per
   type*. `JSRe0002` and `JSRp0002` are unrelated. Numbers are never reused,
   even if an experiment is abandoned.

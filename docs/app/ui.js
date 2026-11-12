@@ -6,7 +6,7 @@ import { loadVault, ciIn, sortedById } from './lib/vault.js';
 import { findNotes, exportScope } from './lib/query.js';
 import { mdToHtml } from './lib/markdown.js';
 import { splitFrontMatter, csvItems } from './lib/frontmatter.js';
-import { ensureVaultDirs, addFile, readNotebook, setNotebookOwner, NOTEBOOK_FILE } from './lib/create.js';
+import { ensureVaultDirs, addFile, readNotebook, setNotebookOwner, NOTEBOOK_FILE, knownInitials, initialsOf, inAnotherNotebook } from './lib/create.js';
 import { manifestPath, renderSnapshotHtml } from './lib/closeout.js';
 import { loadLab, recordTitle } from './lib/lab.js';
 import { labReady } from '../assets/brand.js';
@@ -313,7 +313,11 @@ function viewList(kind, title, cols) {
 async function viewNote(id) {
   const v = state.vault;
   const n = v.get(id);
-  if (!n) return `<h1>Not found</h1><p>There is no note with the ID ${esc(id)}.</p>`;
+  if (!n) {
+    const elsewhere = inAnotherNotebook(id, await knownInitials(state.store));
+    return `<h1>Not in this notebook</h1><p>There is no note with the ID ${esc(id)} here.${elsewhere
+      ? ` Its initials are ${esc(initialsOf(id))}, so it is a record in that person's notebook. Open their folder to see it.` : ''}</p>`;
+  }
   const body = mdToHtml(splitFrontMatter(n.text).body, {
     imgBase: dirname(n.path), imgSrc: (rel) => 'eln-file:' + rel, linkHref: (x) => `#/note/${x}`,
   });
@@ -360,6 +364,7 @@ async function viewNote(id) {
     <div class="card"><div class="meta">${meta}</div></div><div class="card note" id="note-body">${body}</div>${filesHtml}${usage}`;
 }
 
+const SHORT_INITIALS = "Two-letter initials are more likely to be the same as someone else's. Three letters (first, middle, last name) are recommended.";
 const VIEW_ONLY = '<h1>View only</h1><p>This notebook is open for viewing. To change it, open the folder with <b>Open notebook folder</b> (settings, Open a different folder).</p>';
 
 function viewEdit(id) {
@@ -549,8 +554,8 @@ function viewSettings() {
   const p = state.person;
   return `<h1>Settings</h1>
     <form class="stack" data-form="settings">
-      <label for="s-initials">Your initials (2 to 4 letters)</label><input type="text" id="s-initials" name="initials" required value="${esc(p.initials)}" placeholder="JSR" maxlength="4">
-      <div class="hint">Your IDs will look like ${esc(p.initials || 'JSR')}e0001. IDs start with your initials, so two people cannot get the same ID.</div>
+      <label for="s-initials">Your initials (three letters)</label><input type="text" id="s-initials" name="initials" required value="${esc(p.initials)}" placeholder="JSR" maxlength="4">
+      <div class="hint">Your IDs will look like ${esc(p.initials || 'JSR')}e0001. Use first, middle, and last initial: three letters are less likely to be the same as someone else's than two. Two to four letters are accepted.</div>
       <label for="s-name">Your full name</label><input type="text" id="s-name" name="researcher" value="${esc(p.researcher)}">
       <div class="hint">Saved in this browser. If <code>notebook.md</code> in the notebook folder does not name an owner yet, they are written there too.</div>
       <div class="actions" style="margin-top:18px"><button class="btn primary">Save</button><a href="#/" class="btn">Back</a></div></form>
@@ -677,7 +682,7 @@ const FORMS = {
     state.person = { initials, researcher: d.researcher || initials };
     try { localStorage.setItem('ai-eln-person', JSON.stringify(state.person)); } catch (e) { /* private mode */ }
     if (canWrite() && state.kind !== 'practice') await setNotebookOwner(state.store, state.person.researcher, initials);
-    state.flash = msg('ok', 'Saved.');
+    state.flash = msg('ok', 'Saved.') + (initials.length === 2 ? msg('warn', `${SHORT_INITIALS} You can change them here before you create your first record.`) : '');
     return go('#/');
   },
   'new-experiment': async (d) => {

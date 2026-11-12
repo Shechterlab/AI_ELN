@@ -1,0 +1,2 @@
+Clones 1-8 picked from the FLAG-SNRPB ligation plate. Expected band 1.1 kb.
+Positive: 2, 3, 5, 8. Clone 3 sent for sequencing -> became JORp0001.

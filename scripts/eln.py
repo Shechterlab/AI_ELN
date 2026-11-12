@@ -440,7 +440,7 @@ def resolve_person(args, config: Dict[str, str], interactive: bool = False) -> T
     if not initials and interactive:
         print("First time here. Two quick questions (asked only once):")
         while not RE_INITIALS.match(initials):
-            initials = _prompt("  Your initials (2-4 letters, e.g. JSR)").upper()
+            initials = _prompt("  Your initials (three letters, e.g. JSR)").upper()
         researcher = _prompt("  Your full name", researcher or initials)
         config.update({"initials": initials, "researcher": researcher})
         save_config(config)
@@ -723,6 +723,7 @@ def validate_vault(vault: Vault) -> List[Issue]:
 
     known_keys = {kind: set(template_keys(kind)) | {"type"} for kind in KINDS}
     seen_ids: Dict[str, str] = {}
+    known = known_initials(vault.root) | {initials_of(n.id) for n in vault.all_notes()}
 
     for note in vault.all_notes():
         rel = vault.rel(note.path)
@@ -739,8 +740,10 @@ def validate_vault(vault: Vault) -> List[Issue]:
         for key in REQUIRED[kind]:
             if not note.get(key).strip():
                 E(rel, f"required field '{key}' is missing or empty")
+        # an adopted older folder has no protocol or project on record; that is not something to fix
+        adopted = kind == "experiment" and _ci_in("adopted", note.get_list("tags"))
         for key in SHOULD[kind]:
-            if key in note.fields and not note.get(key).strip():
+            if key in note.fields and not note.get(key).strip() and not (adopted and key in ("project", "protocols")):
                 W(rel, f"'{key}' is empty")
         for key in note.fields:
             if key not in known_keys[kind]:
@@ -766,6 +769,8 @@ def validate_vault(vault: Vault) -> List[Issue]:
         for key, target_kind in REF_FIELDS[kind].items():
             for ref in note.get_list(key):
                 target = vault.by_id.get(ref)
+                if target is None and in_another_notebook(ref, known):
+                    continue
                 if target is None:
                     W(rel, f"'{key}' refers to {ref}, which does not exist in {KIND_DIR[target_kind]}/")
                 elif target.kind != target_kind:
@@ -1036,6 +1041,38 @@ def set_notebook_owner(root: Path, owner: str, initials: str) -> None:
         _update_notebook(root, values)
 
 
+SHORT_INITIALS = ("Two-letter initials are more likely to be the same as someone else's. "
+                  "Three letters (first, middle, last name) are recommended.")
+
+
+def initials_of(record_id: str) -> str:
+    """'JSRe0002' -> 'JSR'; '' for anything that is not an experiment or sample ID."""
+    m = RE_EXP_ID.match(record_id or "") or RE_SAMPLE_ID.match(record_id or "")
+    return m.group(1) if m else ""
+
+
+def known_initials(root: Path) -> set:
+    """The initials this notebook holds records for: the owner's, and those on any record in it."""
+    out = set()
+    owner = read_notebook(root).get("initials")
+    if isinstance(owner, str) and RE_INITIALS.match(owner):
+        out.add(owner)
+    exp, samples = root / "Experiments", root / "Samples"
+    if exp.is_dir():
+        out.update(m.group(1)[:-5] for p in exp.iterdir() if p.is_dir() for m in [RE_EXP_FOLDER.match(p.name)] if m)
+    if samples.is_dir():
+        out.update(initials_of(p.stem) for p in samples.iterdir() if p.suffix == ".md")
+    out.discard("")
+    return out
+
+
+def in_another_notebook(ref: str, known: set) -> bool:
+    """An experiment or sample ID with initials this notebook has no records for points into someone
+    else's notebook. It cannot be checked from here, so it is not reported as missing."""
+    ini = initials_of(ref)
+    return bool(ini) and ini not in known
+
+
 def next_experiment_id(root: Path, initials: str) -> str:
     seen: List[str] = []
     exp_dir = root / "Experiments"
@@ -1192,8 +1229,9 @@ def create_experiment(root: Path, initials: str, researcher: str, title: str, pr
     for p in csv_items(project):
         if not (root / "Projects" / f"{p}.md").exists():
             result.warnings.append(f"project {p} has no page in Projects/ yet (create it with New project)")
+    known = known_initials(root)
     for s in csv_items(samples):
-        if not (root / "Samples" / f"{s}.md").exists():
+        if not (root / "Samples" / f"{s}.md").exists() and not in_another_notebook(s, known):
             result.warnings.append(f"sample {s} is not in Samples/ (check the ID, or create it with New sample)")
 
     for pid in csv_items(protocol):
@@ -2562,7 +2600,7 @@ def cmd_init(args) -> int:
     root_in = args.root or config.get("root") or ""
     if interactive:
         print("AI_ELN setup. Press Enter to keep a default.")
-        initials = _prompt("Your initials (2-4 letters, e.g. JSR)", initials)
+        initials = _prompt("Your initials (three letters, e.g. JSR)", initials)
         researcher = _prompt("Your full name", researcher)
         root_in = _prompt("Where should Experiments/ etc. live? (blank = this repo)", root_in)
     initials = initials.strip().upper()
@@ -2582,6 +2620,8 @@ def cmd_init(args) -> int:
     if root != REPO_ROOT and not (root / "AGENTS.md").exists():
         write_text_lf((root / "AGENTS.md"), POINTER_AGENTS_MD.format(repo=REPO_ROOT, root=root))
     print(f"Saved {p}")
+    if len(initials) == 2:
+        err(f"  note: {SHORT_INITIALS}")
     print(f"  initials:   {initials}")
     print(f"  researcher: {researcher}")
     print(f"  root:       {root}{'' if root != REPO_ROOT else '  (this repo)'}")
@@ -2622,7 +2662,7 @@ def build_parser() -> argparse.ArgumentParser:
                "  eln.py new sample --type plasmid --title \"pcDNA3-FLAG-SNRPB\"\n"
                "  eln.py validate --strict\n"
                "  eln.py find --status active --tag meeting\n"
-               "  eln.py --root sandbox find --text SNRPB      # --root works before or after the command\n"
+               "  eln.py --root sandbox/alex find --text SNRPB      # --root works before or after the command\n"
                "  eln.py export --project PRMT5-ChromatinRelease --out brief.md\n")
     p.add_argument("--version", action="version", version=f"eln.py {__version__}")
     p.add_argument("--root", default=None, help=root_help)

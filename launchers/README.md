@@ -15,7 +15,7 @@ page.
 | Launcher | Does |
 |---|---|
 | **Open ELN** | The page described above, on the lab's record. |
-| **Try the Sandbox** | The same page on the fictional practice record in `sandbox/`. Make a mess; `python3 sandbox/rebuild.py` resets it. |
+| **Try the Sandbox** | The same page on a fictional practice notebook, `sandbox/alex`. Make a mess; `python3 sandbox/rebuild.py` resets it. |
 | **New Experiment** | Terminal-window version: asks a few questions, creates the folder, note, and protocol snapshot, opens the note. First run also asks your initials and name. |
 | **New Sample** / **New Protocol** / **New Project** | Terminal-window versions of the same forms. |
 | **Check Everything** | Lists everything that breaks the conventions. `ERROR` = fix; `WARN` = advice. |

@@ -3,7 +3,7 @@
 
      node mcp/call.mjs --list                                    the tools and their arguments
      node mcp/call.mjs check_notebook                            run a tool on this folder
-     node mcp/call.mjs --root sandbox find_notes '{"status":"active"}'
+     node mcp/call.mjs --root sandbox/alex find_notes '{"status":"active"}'
      node mcp/call.mjs create_experiment '{"title":"...","initials":"JSR"}'
      node mcp/call.mjs --text check_notebook                     print the result's text instead of JSON
 

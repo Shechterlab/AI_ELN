@@ -102,11 +102,10 @@ class ParityCase(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.addCleanup(lambda: setattr(eln, "date", self._date))
 
-    def sandbox_copy(self, name: str) -> Path:
+    def sandbox_copy(self, name: str, whose: str = "alex") -> Path:
+        """A copy of one of the two sandbox notebooks (Alex's unless Jordan's is asked for)."""
         dst = self.tmp / name
-        shutil.copytree(REPO_ROOT / "sandbox", dst, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
-        for extra in ("README.md", "PILOT.md"):
-            (dst / extra).unlink()
+        shutil.copytree(REPO_ROOT / "sandbox" / whose, dst, ignore=shutil.ignore_patterns("__pycache__"))
         return dst
 
     cli = staticmethod(run_cli)
@@ -292,7 +291,43 @@ class TestOperations(ParityCase):
         self.assertEqual(py_validate_text(py), tool(py, "check_notebook", text=True, ok_codes=(0, 2)))
 
     def test_check_on_the_sandbox(self):
-        self.assertEqual(py_validate_text(REPO_ROOT / "sandbox"), tool(REPO_ROOT / "sandbox", "check_notebook", text=True))
+        for whose in ("alex", "jordan"):
+            root = REPO_ROOT / "sandbox" / whose
+            want = py_validate_text(root)
+            self.assertIn("0 errors, 0 warnings", want, whose)
+            self.assertEqual(want, tool(root, "check_notebook", text=True), whose)
+
+    def test_records_in_someone_elses_notebook(self):
+        """Jordan's notes cite Alex's samples and experiments. Those IDs carry initials Jordan's notebook has
+        no records for, so they are not reported as missing; a wrong ID with Jordan's own initials still is."""
+        py, node = self.sandbox_copy("py", "jordan"), self.sandbox_copy("js", "jordan")
+        note = eln.load_vault(py).by_id["JORe0001"]
+        self.assertTrue({"ALXc0001", "ALXa0003"} <= set(note.get_list("samples")))
+        self.assertEqual(note.get_list("related_experiments"), ["ALXe0002"])
+        self.assertEqual(eln.known_initials(py), {"JOR"})
+        r_py = eln.create_experiment(py, "JOR", "Jordan Example", "Uses a sample of Alex's", samples="ALXc0002, JORp0009, QQa0001",
+                                     related="ALXe0003, JORe0099", protocol="P_WesternBlot", project="PRMT5-ChromatinRelease")
+        r_js = tool(node, "create_experiment", {"title": "Uses a sample of Alex's", "samples": "ALXc0002, JORp0009, QQa0001",
+                                                 "related": "ALXe0003, JORe0099", "protocol": "P_WesternBlot",
+                                                 "project": "PRMT5-ChromatinRelease"})
+        self.assertEqual(r_js["id"], "JORe0005", "with no initials given, the owner in notebook.md is used")
+        self.assertEqual(r_py.warnings, ["sample JORp0009 is not in Samples/ (check the ID, or create it with New sample)"])
+        self.assertEqual(r_js["warnings"], r_py.warnings)
+        self.assertSameTree(py, node)
+        want = py_validate_text(py)
+        self.assertIn("'samples' refers to JORp0009, which does not exist in Samples/", want)
+        self.assertIn("'related_experiments' refers to JORe0099", want)
+        for elsewhere in ("ALXc0002", "ALXe0003", "QQa0001"):
+            self.assertNotIn(elsewhere + ",", want)
+        self.assertIn("0 errors, 2 warnings", want)
+        self.assertEqual(want, tool(node, "check_notebook", text=True))
+        # in a notebook that does hold ALX records, a missing ALX record is reported as before
+        alex = self.sandbox_copy("alex")
+        r = eln.create_experiment(alex, "ALX", "Alex Example", "Wrong sample", samples="ALXc0009", protocol="P_WesternBlot",
+                                  project="PRMT5-ChromatinRelease")
+        self.assertEqual(len(r.warnings), 1)
+        self.assertIn("'samples' refers to ALXc0009", py_validate_text(alex))
+        self.assertEqual(py_validate_text(alex), tool(alex, "check_notebook", text=True))
 
     def test_check_reports_the_same_problems(self):
         root = self.sandbox_copy("broken")
@@ -345,7 +380,7 @@ class TestOperations(ParityCase):
         for choice, args in [({"all": True}, (None, [], None, True)),
                              ({"status": "active"}, (None, [], "active", False)),
                              ({"project": "prmt5-chromatinrelease", "related": False}, ("prmt5-chromatinrelease", [], None, False)),
-                             ({"experiment_ids": ["JORe0002", "ALXe0002"]}, (None, ["JORe0002", "ALXe0002"], None, False))]:
+                             ({"experiment_ids": ["ALXe0003", "ALXe0002"]}, (None, ["ALXe0003", "ALXe0002"], None, False))]:
             exps = eln.select_for_export(vault, *args)
             want = eln.build_export(vault, exps, related=choice.get("related", True))
             got = tool(root, "export_notes", choice)
@@ -389,10 +424,10 @@ class TestOperations(ParityCase):
         self.assertEqual(len(modified) + len(missing) + len(added), 3)
         everything = tool(node, "verify_files", {}, ok_codes=(2,))
         self.assertEqual(everything["drift"], 1)
-        self.assertEqual(len(everything["results"]), 3)
+        self.assertEqual(len(everything["results"]), 4, "the three completed here and the adopted ALXe0006")
 
         vault = eln.load_vault(py)
-        for nid in ("ALXa0001", "P_WesternBlot", "JORe0001"):
+        for nid in ("ALXa0001", "P_WesternBlot", "ALXe0003", "ALXe0006"):
             note = vault.by_id[nid]
             want = eln.render_snapshot_html(vault, note, generated=TODAY)
             path = tool(node, "render_snapshot", {"id": nid})["path"]
@@ -404,14 +439,14 @@ class TestOperations(ParityCase):
 
         # line breaks in a title, accents in a folder name, a protocol typed without P_
         title = "R\u00e9sum\u00e9 of \u03b1-tubulin\nstatus: complete"
-        r_py = eln.create_experiment(py, "ZZ", "Zed", title, protocol="WesternBlot, P_Immunofluorescence", project="Nope", samples="ALXa0001, ALXz9")
-        r_js = tool(node, "create_experiment", {"title": title, "protocol": "WesternBlot, P_Immunofluorescence", "project": "Nope",
+        r_py = eln.create_experiment(py, "ZZ", "Zed", title, protocol="WesternBlot, P_RTqPCR", project="Nope", samples="ALXa0001, ALXz9")
+        r_js = tool(node, "create_experiment", {"title": title, "protocol": "WesternBlot, P_RTqPCR", "project": "Nope",
                                                  "samples": "ALXa0001, ALXz9", "initials": "ZZ", "researcher": "Zed"})
         self.assertEqual(r_py.path.parent.parent.name, "ZZe0001_Resume-of-tubulin-status-complete")
         self.assertEqual(r_js["warnings"], r_py.warnings)
         self.assertEqual(len(r_py.warnings), 2)
         fields, _, problems = eln.parse_front_matter(r_py.path.read_text(encoding="utf-8"))
-        self.assertEqual((problems, fields["status"], fields["protocols"]), ([], "active", ["P_WesternBlot", "P_Immunofluorescence"]))
+        self.assertEqual((problems, fields["status"], fields["protocols"]), ([], "active", ["P_WesternBlot", "P_RTqPCR"]))
         for bad in ({"project": "two words"},):
             with self.assertRaises(eln.ElnError):
                 eln.create_experiment(py, "ZZ", "Zed", "x", **bad)
@@ -658,10 +693,10 @@ class TestOperations(ParityCase):
     def test_eln_archive(self):
         root = self.sandbox_copy("s")
         vault = eln.load_vault(root)
-        exps = eln.select_for_export(vault, None, ["ALXe0002", "JORe0001"], None, False)
-        py_bytes = eln.build_eln(vault, exps, root_name=f"export_ALXe0002-JORe0001_{TODAY.replace('-', '')}")
-        r = tool(root, "export_notes", {"experiment_ids": ["ALXe0002", "JORe0001"], "format": "eln"})
-        self.assertEqual(r["path"], f"Inventory/export_ALXe0002-JORe0001_{TODAY.replace('-', '')}.eln")
+        exps = eln.select_for_export(vault, None, ["ALXe0002", "ALXe0003"], None, False)
+        py_bytes = eln.build_eln(vault, exps, root_name=f"export_ALXe0002-ALXe0003_{TODAY.replace('-', '')}")
+        r = tool(root, "export_notes", {"experiment_ids": ["ALXe0002", "ALXe0003"], "format": "eln"})
+        self.assertEqual(r["path"], f"Inventory/export_ALXe0002-ALXe0003_{TODAY.replace('-', '')}.eln")
         with zipfile.ZipFile(io.BytesIO(py_bytes)) as zp, zipfile.ZipFile(root / r["path"]) as zj:
             self.assertIsNone(zj.testzip())
             self.assertEqual(sorted(zp.namelist()), sorted(zj.namelist()))

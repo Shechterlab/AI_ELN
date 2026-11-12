@@ -902,9 +902,12 @@ class TestRepoExample(unittest.TestCase):
         self.assertIn("0 errors, 0 warnings", out)
 
     def test_sandbox_validates_strict(self):
-        code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT / "sandbox"))
+        for whose in ("alex", "jordan"):
+            code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT / "sandbox" / whose))
+            self.assertEqual(code, 0, out)
+        code, out, _ = run("validate", "--strict", "--root", str(REPO_ROOT / "sandbox" / "alex"))
         self.assertEqual(code, 0, out)
-        self.assertIn("7 experiments", out)
+        self.assertIn("6 experiments", out)
         self.assertIn("0 errors, 0 warnings", out)
 
     def test_templates_parse_and_match_schema(self):

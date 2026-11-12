@@ -219,7 +219,7 @@ Tests: `python3 -m unittest discover -s tests` (the JavaScript tests run when No
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md): the rules, precisely
 - [`docs/SOP.md`](docs/SOP.md): what's required, what's flexible, what happens when an experiment is done
 - [`docs/ai-agents.md`](docs/ai-agents.md) / [`docs/ai-briefing.md`](docs/ai-briefing.md): AI without API keys
-- [`sandbox/`](sandbox/README.md): fictional record to practice on; [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
+- [`sandbox/`](sandbox/README.md): two fictional notebooks to practice on (`alex/`, `jordan/`); [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
 - [`docs/design-notes.md`](docs/design-notes.md): why it's shaped this way; where LabArchives fits
 - [`reference/jacob-original-system/`](reference/jacob-original-system/): the spreadsheet-and-folders system by Jacob Roth that this is a direct translation of
 

@@ -2,7 +2,7 @@
    existence, so IDs, folder names, and headers are always right. */
 
 import {
-  ElnError, SUBFOLDERS, VAULT_DIRS, RE_INITIALS, RE_EXP_FOLDER, RE_PROTOCOL_NAME, RE_PROJECT_ID,
+  ElnError, SUBFOLDERS, VAULT_DIRS, RE_INITIALS, RE_EXP_FOLDER, RE_EXP_ID, RE_SAMPLE_ID, RE_PROTOCOL_NAME, RE_PROJECT_ID,
   SAMPLE_LETTERS, SAMPLE_TYPES, NAMED_SUBFOLDERS,
 } from './schema.js';
 import { parseFrontMatter, formatValue, quoteIfNeeded, setHeaderField, csvItems } from './frontmatter.js';
@@ -141,6 +141,35 @@ export async function setNotebookOwner(store, owner, initials) {
   if (Object.keys(values).length || !(await exists(store, NOTEBOOK_FILE))) await updateNotebook(store, values);
 }
 
+/** 'JSRe0002' -> 'JSR'; '' for anything that is not an experiment or sample ID. */
+export function initialsOf(recordId) {
+  const m = RE_EXP_ID.exec(recordId || '') || RE_SAMPLE_ID.exec(recordId || '');
+  return m ? m[1] : '';
+}
+
+/** The initials this notebook holds records for: the owner's, and those on any record in it. -> Set */
+export async function knownInitials(store) {
+  const out = new Set();
+  const owner = (await readNotebook(store)).initials;
+  if (typeof owner === 'string' && RE_INITIALS.test(owner)) out.add(owner);
+  for (const e of (await store.list('Experiments')) || []) {
+    const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) out.add(m[1].slice(0, -5));
+  }
+  for (const e of (await store.list('Samples')) || []) {
+    if (e.kind === 'file' && e.name.endsWith('.md')) out.add(initialsOf(stem(e.name)));
+  }
+  out.delete('');
+  return out;
+}
+
+/** An experiment or sample ID with initials this notebook has no records for points into someone else's
+    notebook. It cannot be checked from here, so it is not reported as missing. */
+export const inAnotherNotebook = (ref, known) => {
+  const ini = initialsOf(ref);
+  return Boolean(ini) && !known.has(ini);
+};
+
 export async function nextExperimentId(store, initials) {
   const seen = [];
   for (const folder of (await store.list('Experiments')) || []) {
@@ -225,8 +254,9 @@ export async function createExperiment(store, {
   for (const p of csvItems(project)) {
     if (!(await exists(store, `Projects/${p}.md`))) result.warnings.push(`project ${p} has no page in Projects/ yet (create it with New project)`);
   }
+  const known = await knownInitials(store);
   for (const s of csvItems(samples)) {
-    if (!(await exists(store, `Samples/${s}.md`))) result.warnings.push(`sample ${s} is not in Samples/ (check the ID, or create it with New sample)`);
+    if (!(await exists(store, `Samples/${s}.md`)) && !inAnotherNotebook(s, known)) result.warnings.push(`sample ${s} is not in Samples/ (check the ID, or create it with New sample)`);
   }
 
   for (const pid of protocols) {

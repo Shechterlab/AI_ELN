@@ -18,9 +18,9 @@ in it (and keeping the folder from disappearing in git, which ignores empty
 directories). `README.md` is exempt from the filename rule everywhere.
 
 This folder starts empty. To see what filled-in experiments look like,
-open the fictional record in [`sandbox/`](../sandbox/README.md)
-(`launchers/Try the Sandbox`); `sandbox/Experiments/ALXe0002_*` is the best
-example.
+open the fictional notebooks in [`sandbox/`](../sandbox/README.md)
+(`launchers/Try the Sandbox`); `sandbox/alex/Experiments/ALXe0002_*` is the
+best example.
 
 Large raw data (microscopy, sequencing, mass spec) does not live in
 `2-data_raw/` here; it stays on institutional storage and the note's

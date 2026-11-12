@@ -61,7 +61,7 @@ class TestMcpServer(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name) / "nb"
-        shutil.copytree(REPO_ROOT / "sandbox", self.root)
+        shutil.copytree(REPO_ROOT / "sandbox" / "alex", self.root)
 
     def start(self, *flags, version="2025-06-18"):
         client = Client(self.root, *flags)
@@ -110,7 +110,7 @@ class TestMcpServer(unittest.TestCase):
         found = client.call("find_notes", {"status": "active"})
         self.assertFalse(found["isError"])
         self.assertEqual(found["structuredContent"], json.loads(found["content"][0]["text"]))
-        self.assertEqual([n["id"] for n in found["structuredContent"]["notes"]], ["ALXe0004"])
+        self.assertEqual([n["id"] for n in found["structuredContent"]["notes"]], ["ALXe0004", "ALXe0005"])
 
         note = client.call("read_note", {"id": "ALXe0002"})["structuredContent"]
         self.assertEqual(note["fields"]["status"], "complete")
@@ -149,6 +149,9 @@ class TestMcpServer(unittest.TestCase):
         client.close()
 
     def test_mistakes_are_reported_not_fatal(self):
+        # a notebook that does not say whose it is: with no initials anywhere, creating a record is refused
+        book = self.root / "notebook.md"
+        book.write_bytes(book.read_bytes().replace(b"initials: ALX", b"initials:").replace(b"owner: Alex Example", b"owner:"))
         client, _ = self.start()
         for name, args, expected in [
             ("read_note", {"id": "NOPEe0001"}, "no note NOPEe0001"),

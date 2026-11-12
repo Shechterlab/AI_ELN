@@ -1,5 +1,6 @@
 @echo off
-rem Double-click me: the same page as "Open ELN", but on the fictional practice record in sandbox\.
+rem Double-click me: the same page as "Open ELN", but on a fictional practice notebook (sandbox\alex).
+rem For the other one: python scripts\eln_web.py --root sandbox\jordan
 setlocal
 cd /d "%~dp0\.."
 set "PY="
@@ -11,5 +12,5 @@ if not defined PY (
   pause
   exit /b 1
 )
-%PY% scripts\eln_web.py --root sandbox --port 8766
+%PY% scripts\eln_web.py --root sandbox\alex --port 8766
 pause

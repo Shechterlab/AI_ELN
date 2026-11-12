@@ -1,0 +1,2 @@
+12-well plates, one per day. Rows: 0, 0.1, 1, 10 uM EPZ015666. Three wells per dose.
+Seeded 2 x 10^4 cells per well on day 0.
