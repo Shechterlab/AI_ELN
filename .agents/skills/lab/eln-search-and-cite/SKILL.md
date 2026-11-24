@@ -30,7 +30,7 @@ with `AI_ELN_ROOT`, or with `--root` on the command. That is one person's
 records. To search another person's notebook, run the command again with
 `--root` set to that folder.
 
-`Inventory/experiments.csv`, `samples.csv`, `protocols.csv`, `projects.csv`
+`Inventory/experiments.csv`, `samples.csv`, `protocols.csv`, `projects.csv`, `figures.csv`
 in the notebook folder are regenerated from the notes and can be read
 directly (lists inside a cell are separated by `;`).
 

@@ -8,13 +8,13 @@
 
    Each tool has a JSON Schema for its arguments, so any client can validate or describe it. */
 
-import { ElnError, KINDS, ID_FIELD, SUBFOLDERS, STATUS, SAMPLE_TYPES, MEETING_TAG, REQUIRED, DATE_FIELDS } from './schema.js';
+import { ElnError, KINDS, ID_FIELD, SUBFOLDERS, FIGURE_SUBFOLDERS, STATUS, SAMPLE_TYPES, MEETING_TAG, REQUIRED, DATE_FIELDS } from './schema.js';
 import { parseFrontMatter, setHeaderField, csvItems } from './frontmatter.js';
 import { loadVault, ciIn, sortedById, writeSection } from './vault.js';
 import { templateKeys } from './templates.js';
 import { validateVault, formatIssues, countIssues } from './validate.js';
 import { writeIndex, formatIndexResult } from './inventory.js';
-import { createExperiment, createSample, createProtocol, createProject, addFile, requireFolder, notebookPerson, knownInitials, inAnotherNotebook, initialsOf } from './create.js';
+import { createExperiment, createSample, createProtocol, createProject, createFigure, addFile, requireFolder, notebookPerson, knownInitials, inAnotherNotebook, initialsOf } from './create.js';
 import { adoptFolder, adoptableFolders } from './adopt.js';
 import { exportFolder } from './exportfolder.js';
 import { findNotes, buildReport, buildExport, selectForExport, exportScope } from './query.js';
@@ -78,13 +78,17 @@ const brief = (n) => ({
   ...(n.kind === 'sample' ? { sample_type: n.get('sample_type'), storage_location: n.get('storage_location') } : {}),
   ...(n.kind === 'protocol' ? { version: n.get('version') } : {}),
   ...(n.kind === 'project' ? { lead: n.get('lead') } : {}),
+  ...(n.kind === 'figure' ? {
+    researcher: n.get('researcher'), label: n.get('label'), target: n.get('target'), project: n.getList('project'),
+    experiments: n.getList('experiments'), date_started: n.get('date_started'), date_final: n.get('date_final'), folder: n.folder,
+  } : {}),
 });
 
-/** The files of an experiment, by subfolder, as paths inside the subfolder. Files in folders below it
+/** The files of an experiment or a figure, by subfolder, as paths inside the subfolder. Files in folders below it
     (an adopted folder in 2-data_raw, for one) are included; the subfolder's README and hidden files are not. */
 export async function experimentFiles(store, note) {
   const out = {};
-  for (const sub of SUBFOLDERS) {
+  for (const sub of note.kind === 'figure' ? FIGURE_SUBFOLDERS : SUBFOLDERS) {
     const dir = `${note.folder}/${sub}`;
     out[sub] = (await walkFiles(store, dir)).map((p) => p.slice(dir.length + 1))
       .filter((rel) => rel.toLowerCase() !== 'readme.md' && !rel.split('/').some((part) => part.startsWith('.')));
@@ -144,7 +148,7 @@ export const TOOLS = [
   {
     name: 'notebook_overview',
     title: 'Overview',
-    description: 'Counts of experiments, samples, protocols, and projects; the project and protocol IDs; experiments flagged for lab meeting; older folders that are not records yet (see adopt_folder).',
+    description: 'Counts of experiments, samples, protocols, projects, and figures; the project, protocol, and figure IDs; experiments flagged for lab meeting; older folders that are not records yet (see adopt_folder).',
     readOnly: true,
     inputSchema: obj({}),
     handler: async (ctx) => {
@@ -159,6 +163,7 @@ export const TOOLS = [
         projects: sortedById(v.notes.project).map((n) => ({ id: n.id, title: n.get('title'), status: n.get('status') })),
         protocols: sortedById(v.notes.protocol).map((n) => ({ id: n.id, title: n.get('title'), version: n.get('version') })),
         samples: sortedById(v.notes.sample).map((n) => ({ id: n.id, sample_type: n.get('sample_type'), title: n.get('title') })),
+        figures: sortedById(v.notes.figure).map((n) => ({ id: n.id, label: n.get('label'), title: n.get('title'), status: n.get('status'), experiments: n.getList('experiments') })),
         notes_with_problems: v.allNotes().filter((n) => n.problems.length).map((n) => n.path),
         researchers: [...new Set(exps.map((e) => e.get('researcher')).filter(Boolean))].sort(cmp),
         flagged_for_meeting: exps.filter((e) => ciIn(MEETING_TAG, e.getList('tags'))).map((e) => e.id),
@@ -174,12 +179,13 @@ export const TOOLS = [
     inputSchema: obj({
       kind: str('Which records to search.', { enum: KINDS, default: 'experiment' }),
       project: str('Project ID the experiment belongs to.'),
-      status: str('Status, e.g. active, complete, paused, abandoned.'),
+      status: str('Status, e.g. active, complete, paused, abandoned; for a figure: draft, final, published, retired.'),
       researcher: str('Part of the researcher\'s (or project lead\'s) name.'),
       tag: str('A tag, e.g. meeting.'),
       sample: str('A sample ID the experiment used.'),
       protocol: str('A protocol ID the experiment followed.'),
       exp_type: str('An experiment type, e.g. WesternBlot.'),
+      experiment: str('With kind "figure": an experiment ID the figure has a panel from.'),
       sample_type: str('With kind "sample": the type, e.g. antibody.', { enum: Object.keys(SAMPLE_TYPES) }),
       text: str('Words to look for in the ID, title, or body. Every word must appear; order does not matter.'),
     }),
@@ -193,9 +199,9 @@ export const TOOLS = [
   {
     name: 'read_note',
     title: 'Read a note',
-    description: 'One note by ID: its header fields, its full Markdown text, and for an experiment the files in each subfolder.',
+    description: 'One note by ID: its header fields, its full Markdown text, for an experiment or a figure the files in each subfolder, and for an experiment the figures that use it.',
     readOnly: true,
-    inputSchema: obj({ id: str('The ID, e.g. JSRe0002, JSRp0001, P_WesternBlot, or a project ID.') }, ['id']),
+    inputSchema: obj({ id: str('The ID, e.g. JSRe0002, JSRp0001, JSRf0001, P_WesternBlot, or a project ID.') }, ['id']),
     handler: async (ctx, a) => {
       const v = await loadVault(ctx.store);
       if (v.get(a.id) === null && inAnotherNotebook(a.id, await knownInitials(ctx.store))) {
@@ -203,8 +209,10 @@ export const TOOLS = [
       }
       const n = noteOrThrow(v, a.id);
       const out = { id: n.id, kind: n.kind, path: n.path, folder: n.folder, fields: { ...n.fields }, text: n.text };
-      if (n.kind === 'experiment' && n.folder) out.files = await experimentFiles(ctx.store, n);
-      else out.used_in = findNotes(v, 'experiment', { [n.kind]: n.id }).map((e) => e.id);
+      if (['experiment', 'figure'].includes(n.kind) && n.folder) out.files = await experimentFiles(ctx.store, n);
+      if (n.kind === 'experiment') out.figures = findNotes(v, 'figure', { experiment: n.id }).map((f) => f.id);
+      else if (n.kind === 'project') out.figures = findNotes(v, 'figure', { project: n.id }).map((f) => f.id);
+      if (['sample', 'protocol', 'project'].includes(n.kind)) out.used_in = findNotes(v, 'experiment', { [n.kind]: n.id }).map((e) => e.id);
       return out;
     },
   },
@@ -282,6 +290,22 @@ export const TOOLS = [
     handler: async (ctx, a) => createProject(ctx.store, {
       ...a, lead: a.lead || (ctx.person && ctx.person.researcher) || '', today: ctx.today || isoDate(),
     }),
+  },
+  {
+    name: 'create_figure',
+    title: 'New figure',
+    description: 'Create a figure record for an assembled figure that goes out (a paper, a grant, a talk): assigns the next ID, makes Figures/{ID}_{title}/ with 1-notes, 2-panels, 3-source, 4-exports and the note, and updates the index. The note has a Panels table that says which experiment each panel came from. The program the figure is made in does not matter. A result figure for one experiment is not this: it stays in that experiment\'s 5-figures.',
+    inputSchema: obj({
+      title: line('What the figure shows, in a phrase. Becomes the folder name.'),
+      experiments: line('The experiment ID(s) the panels come from, comma-separated.'),
+      project: line('Project ID(s), comma-separated.'),
+      label: line('What it is called where it is used, e.g. Figure 2. Can be filled in or changed later.'),
+      target: line('Where it is going: a journal, a grant, a talk.'),
+      tools: line('What it is made with, comma-separated, e.g. R, Prism, Illustrator.'),
+      tags: line('Tags, comma-separated.'),
+      ...CREATE_COMMON,
+    }, ['title']),
+    handler: async (ctx, a) => createFigure(ctx.store, { ...a, ...(await person(ctx, a)), today: ctx.today || isoDate() }),
   },
   {
     name: 'adopt_folder',
@@ -371,10 +395,10 @@ export const TOOLS = [
   {
     name: 'add_file',
     title: 'Add a file',
-    description: 'Put a file into an experiment subfolder under a conforming name ({ID}[_R]_{description}[_{date}].ext). In 2-data_raw the original name is kept. Never overwrites.',
+    description: 'Put a file into a subfolder of an experiment or a figure under a conforming name ({ID}[_R]_{description}[_{date}].ext). In an experiment\'s 2-data_raw the original name is kept. Never overwrites.',
     inputSchema: obj({
-      id: str('Experiment ID.'),
-      subfolder: str('Which subfolder.', { enum: SUBFOLDERS }),
+      id: str('Experiment or figure ID.'),
+      subfolder: str('Which subfolder. An experiment has 1-notes, 2-data_raw, 3-code, 4-data_processed, 5-figures; a figure has 1-notes, 2-panels, 3-source, 4-exports.', { enum: [...new Set([...SUBFOLDERS, ...FIGURE_SUBFOLDERS])] }),
       original_name: str('The file\'s current name, with its extension.'),
       text: str('The content, for a text file.'),
       base64: str('The content, base64-encoded, for any other file.'),

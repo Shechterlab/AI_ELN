@@ -64,9 +64,9 @@ class TestBrowserNotebook(unittest.TestCase):
             self.assertIn("AI_ELN", (root / "AGENTS.md").read_text(encoding="utf-8"))
             # notebook.md: whose notebook, and the last IDs given out; the browser writes what Python would
             book = eln.read_notebook(root)
-            self.assertEqual((book["owner"], book["initials"], book["last_ids"]), ("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002"]))
+            self.assertEqual((book["owner"], book["initials"], book["last_ids"]), ("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002", "JSRf0001"]))
             self.assertEqual((root / "notebook.md").read_text(encoding="utf-8"),
-                             eln.notebook_text("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002"]))
+                             eln.notebook_text("Jacob Roth", "JSR", ["JSRa0001", "JSRe0002", "JSRf0001"]))
             # the folder export is plain files, and is itself a notebook folder with no errors
             exported = next((root / "Exports").glob("export_all_*"))
             self.assertTrue((exported / "README.md").exists() and (exported / "all-notes.md").exists())

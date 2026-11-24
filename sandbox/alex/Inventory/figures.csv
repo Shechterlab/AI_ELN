@@ -1,0 +1,2 @@
+figure_id,title,label,researcher,project,experiments,target,tools,date_started,date_final,status,tags,folder
+ALXf0001,PRMT5 inhibition keeps SNRPB on chromatin,Figure 2,Alex Example,PRMT5-ChromatinRelease,ALXe0002;ALXe0003;JORe0001,manuscript draft,Python;Inkscape,2026-09-08,,draft,,Figures/ALXf0001_PRMT5-inhibition-keeps-SNRPB-on-chromatin

@@ -4,9 +4,10 @@
 import {
   KINDS, KIND_DIR, VAULT_DIRS, ID_FIELD, ID_PATTERN, REQUIRED, SHOULD, STATUS, DATE_FIELDS, REF_FIELDS,
   REQUIRED_SECTIONS, SUBFOLDERS, NAMED_SUBFOLDERS, EXEMPT_FILENAMES, SAMPLE_LETTERS, SAMPLE_TYPES,
-  RE_EXP_FOLDER, RE_SAMPLE_ID,
+  RE_EXP_FOLDER, RE_SAMPLE_ID, RE_FIG_FOLDER, RE_EXP_ID_IN_TEXT, FIGURE_SUBFOLDERS,
 } from './schema.js';
-import { sections, sectionIsEmpty, ciIn } from './vault.js';
+import { sections, sectionIsEmpty, ciIn, panelRows } from './vault.js';
+import { isLitter } from './closeout.js';
 import { templateKeys } from './templates.js';
 import { strip, pyRepr, validDate, basename, stem, cmp, cmpPath } from './text.js';
 import { knownInitials, initialsOf, inAnotherNotebook, notebookProblems, NOTEBOOK_FILE } from './create.js';
@@ -117,6 +118,7 @@ export async function validateVault(store, vault) {
     }
 
     if (kind === 'experiment') await validateExperiment(store, note, secs, E, W);
+    else if (kind === 'figure') await validateFigure(store, note, secs, E, W);
     else if (kind === 'sample') {
       const m = nid ? RE_SAMPLE_ID.exec(nid) : null;
       const stype = note.get('sample_type');
@@ -162,6 +164,49 @@ async function validateExperiment(store, note, secs, E, W) {
     for (const name of ['Results', 'Interpretation']) {
       if (secs.has(name) && sectionIsEmpty(secs.get(name))) W(rel, `status is complete but the '## ${name}' section is empty`);
     }
+  }
+}
+
+async function validateFigure(store, note, secs, E, W) {
+  const rel = note.path;
+  const folder = note.folder;
+  const nid = note.id;
+  if (folder === null) return;
+  const name = basename(folder);
+  const m = RE_FIG_FOLDER.exec(name);
+  const folderId = m ? m[1] : null;
+  if (folderId && nid && folderId !== nid) E(rel, `figure_id ${nid} does not match folder ${name}`);
+  const top = (await store.list(folder)) || [];
+  const dirs = new Set(top.filter((e) => e.kind === 'dir').map((e) => e.name));
+  const missing = FIGURE_SUBFOLDERS.filter((s) => !dirs.has(s));
+  if (missing.length) E(folder, `missing subfolder(s): ${missing.join(', ')} (still syncing? If not, create the empty folders)`);
+  const checkId = folderId || nid;
+  const filesIn = async (sub) => (dirs.has(sub) ? ((await store.list(`${folder}/${sub}`)) || []).filter((f) => f.kind === 'file') : []);
+  for (const sub of checkId ? FIGURE_SUBFOLDERS : []) {
+    for (const f of (await filesIn(sub)).sort((a, b) => cmp(a.name, b.name))) {
+      if (f.name.startsWith('.') || f.name.startsWith('~$') || EXEMPT_FILENAMES.has(f.name.toLowerCase())) continue;
+      if (!(f.name.startsWith(checkId + '_') || f.name.startsWith(checkId + '.'))) {
+        W(`${folder}/${sub}/${f.name}`, `filename should start with ${checkId}_ (see CONVENTIONS.md section 3)`);
+      }
+    }
+  }
+  /* the Panels table: every experiment it names is in the header, every file it names is in 2-panels/ */
+  const listed = note.getList('experiments');
+  const named = [];
+  const panels = new Set((await filesIn('2-panels')).map((f) => f.name));
+  for (const cells of panelRows(secs.get('Panels') || '')) {
+    for (const x of cells.join(' ').match(RE_EXP_ID_IN_TEXT) || []) {
+      if (!listed.includes(x) && !named.includes(x)) named.push(x);
+    }
+    const fileCell = cells.length >= 6 ? strip(cells[cells.length - 1].replace(/^`+|`+$/g, '')) : '';
+    if (fileCell && !panels.has(fileCell.split('/').pop())) W(rel, `panel ${cells[0] || '?'}: ${fileCell} is not in 2-panels/`);
+  }
+  for (const x of named) W(rel, `the Panels table names ${x}, which is not in 'experiments' in the header`);
+  const status = note.get('status');
+  if (status === 'final' || status === 'published') {
+    if (!note.get('date_final')) W(rel, `status is ${status} but date_final is empty`);
+    const finished = (await filesIn('4-exports')).filter((f) => !EXEMPT_FILENAMES.has(f.name.toLowerCase()) && !isLitter(f.name));
+    if (!finished.length) W(rel, `status is ${status} but 4-exports/ holds no finished figure`);
   }
 }
 

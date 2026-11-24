@@ -261,6 +261,9 @@ class TestOperations(ParityCase):
         eln.create_experiment(root, "JSR", "Jacob Roth", "A plain second experiment with a title that is long enough to be cut on a word boundary somewhere")
         eln.create_experiment(root, "ABCD", "", "!!!", related="JSRe0001", raw_data_path="smb://server/share/run 7")
         eln.create_experiment(root, "JSR", "Jacob Roth", "Third", exp_type="qPCR", project="Second, PRMT5-ChromatinRelease")
+        eln.create_figure(root, "JSR", "Jacob Roth", 'SNRPB stays on chromatin: "Figure 2", draft #1', project="PRMT5-ChromatinRelease, NoSuchProject",
+                          experiments="JSRe0001, JSRe0003, JSRe0099, XYZe0004", label="Figure 2", target="eLife", tools="R, Illustrator")
+        eln.create_figure(root, "ABCD", "", "!!!")
 
     def build_js(self, root: Path):
         root.mkdir()
@@ -284,6 +287,14 @@ class TestOperations(ParityCase):
         tool(root, "create_experiment", {"title": "A plain second experiment with a title that is long enough to be cut on a word boundary somewhere", **who})
         tool(root, "create_experiment", {"title": "!!!", "related": "JSRe0001", "raw_data_path": "smb://server/share/run 7", "initials": "ABCD"})
         tool(root, "create_experiment", {"title": "Third", "exp_type": "qPCR", "project": "Second, PRMT5-ChromatinRelease", **who})
+        r = tool(root, "create_figure", {
+            "title": 'SNRPB stays on chromatin: "Figure 2", draft #1', "project": "PRMT5-ChromatinRelease, NoSuchProject",
+            "experiments": "JSRe0001, JSRe0003, JSRe0099, XYZe0004", "label": "Figure 2", "target": "eLife", "tools": "R, Illustrator", **who})
+        self.assertEqual(r["id"], "JSRf0001")
+        self.assertEqual(r["warnings"], ["project NoSuchProject has no page in Projects/ yet (create it with New project)",
+                                         "experiment JSRe0099 is not in Experiments/ (check the ID)"],
+                         "XYZe0004 is in someone else's notebook and is not reported")
+        tool(root, "create_figure", {"title": "!!!", "initials": "ABCD"})
 
     def test_creating_records_writes_identical_folders(self):
         py, node = self.tmp / "py", self.tmp / "js"
@@ -377,6 +388,79 @@ class TestOperations(ParityCase):
         self.assertGreater(want.count("\n"), 30)
         self.assertEqual(tool(root, "check_notebook", {"strict": True}, text=True, ok_codes=(2,)), want)
 
+    def test_figure_records(self):
+        py, node = self.sandbox_copy("py"), self.sandbox_copy("js")
+        # the next figure number continues from the folders and from notebook.md, in either tool
+        self.assertEqual(eln.create_figure(py, "ALX", "Alex Example", "Second figure", experiments="ALXe0005").id, "ALXf0002")
+        self.assertEqual(tool(node, "create_figure", {"title": "Second figure", "experiments": "ALXe0005"})["id"], "ALXf0002")
+        self.assertEqual(tool(py, "create_figure", {"title": "Third, made by the page"})["id"], "ALXf0003")
+        self.assertEqual(eln.create_figure(node, "ALX", "Alex Example", "Third, made by the page").id, "ALXf0003")
+        self.assertSameTree(py, node)
+        self.assertIn("ALXf0003", eln.read_notebook(py)["last_ids"])
+
+        # find by the experiment a figure has a panel from
+        for exp, want in (("ALXe0002", ["ALXf0001"]), ("alxe0005", ["ALXf0002"]), ("ALXe0004", [])):
+            self.assertEqual([n.id for n in eln.find_notes(eln.load_vault(py), "figure", experiment=exp)], want)
+            self.assertEqual([n["id"] for n in tool(node, "find_notes", {"kind": "figure", "experiment": exp})["notes"]], want)
+        read = tool(node, "read_note", {"id": "ALXe0002"})
+        self.assertEqual(read["figures"], ["ALXf0001"])
+        fig = tool(node, "read_note", {"id": "ALXf0001"})
+        self.assertEqual(sorted(fig["files"]), ["1-notes", "2-panels", "3-source", "4-exports"])
+        self.assertEqual(fig["files"]["2-panels"], ["ALXf0001_a_SNRPB-blot-A549.png", "ALXf0001_b_SNRPB-blot-HeLa.png"])
+        self.assertNotIn("used_in", fig)
+        self.assertEqual(tool(node, "notebook_overview")["counts"]["figures"], 3)
+
+        # a file added to a figure is named with the figure ID, in every subfolder
+        added = tool(node, "add_file", {"id": "ALXf0001", "subfolder": "2-panels", "original_name": "plot final.pdf",
+                                        "text": "x", "description": "c quantification", "result": True})
+        self.assertEqual(added["name"], "ALXf0001_c-quantification.pdf")
+        refused = subprocess.run([NODE, str(REPO_ROOT / "mcp" / "call.mjs"), "--root", str(node), "add_file",
+                                  json.dumps({"id": "ALXf0001", "subfolder": "2-data_raw", "original_name": "a.txt", "text": "x"})],
+                                 capture_output=True, text=True)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("1-notes, 2-panels, 3-source, 4-exports", refused.stderr)
+        (py / added["path"]).write_bytes(b"x")
+
+        # the same problems, in the same words
+        for root in (py, node):
+            folder = next(p for p in (root / "Figures").iterdir() if p.name.startswith("ALXf0001"))
+            note = folder / "1-notes" / "ALXf0001.md"
+            text = note.read_text(encoding="utf-8")
+            text = text.replace("| `ALXf0001_b_SNRPB-blot-HeLa.png` |", "| `2-panels/ALXf0001_b_missing.png` |")
+            text = text.replace("| not received yet | |", "| see ALXe0005 and JORe0002 \\| notes | |")
+            text = text.replace("status: draft", "status: final").replace("experiments: [ALXe0002, ALXe0003, JORe0001]", "experiments: [ALXe0002, ALXe0003, JORe0001, ALXe0077, P_WesternBlot]")
+            note.write_bytes(text.encode("utf-8"))
+            (folder / "4-exports" / "ALXf0001_v1_20260915.png").unlink()
+            (folder / "4-exports" / ".DS_Store").write_bytes(b"x")
+            (folder / "3-source" / "layout copy.ai").write_bytes(b"x")
+            shutil.rmtree(folder / "2-panels")
+            (folder / "2-panels").mkdir()
+            (folder / "2-panels" / "ALXf0001_a_SNRPB-blot-A549.png").write_bytes(b"x")
+            second = next(p for p in (root / "Figures").iterdir() if p.name.startswith("ALXf0002"))
+            shutil.rmtree(second / "3-source")
+            second.rename(second.with_name("ALXf0009_Second-figure"))
+            (root / "Figures" / "Fig 3 old").mkdir()
+            (root / "Figures" / "ALXf0010_empty" / "1-notes").mkdir(parents=True)
+        report = py_validate_text(py)
+        self.assertEqual(report, tool(node, "check_notebook", text=True, ok_codes=(0, 2)))
+        for line in ("ERROR  folder name does not match {ID}_{slug} (figure folders are made with New figure)",
+                     "ERROR  no note at 1-notes/ALXf0010.md",
+                     "ERROR  note should be named 1-notes/ALXf0009.md, found ALXf0002.md",
+                     "ERROR  figure_id ALXf0002 does not match folder ALXf0009_Second-figure",
+                     "ERROR  missing subfolder(s): 3-source",
+                     "WARN   filename should start with ALXf0001_",
+                     "WARN   filename should start with ALXf0009_",
+                     "WARN   panel b: 2-panels/ALXf0001_b_missing.png is not in 2-panels/",
+                     "WARN   the Panels table names ALXe0005, which is not in 'experiments' in the header",
+                     "WARN   the Panels table names JORe0002, which is not in 'experiments' in the header",
+                     "WARN   'experiments' refers to ALXe0077, which does not exist in Experiments/",
+                     "WARN   'experiments' refers to P_WesternBlot, which is a protocol, not a experiment",
+                     "WARN   status is final but date_final is empty",
+                     "WARN   status is final but 4-exports/ holds no finished figure"):
+            self.assertIn(line, report)
+        self.assertNotIn("JORe0001", report, "an experiment in someone else's notebook is not reported as missing")
+        self.assertIn("3 figures", report)
+
     def test_index_brief_and_export(self):
         root = self.sandbox_copy("s")
         before = tree(root / "Inventory")
@@ -439,7 +523,7 @@ class TestOperations(ParityCase):
         self.assertEqual(len(everything["results"]), 5, "every completed experiment in Alex's notebook")
 
         vault = eln.load_vault(py)
-        for nid in ("ALXa0001", "P_WesternBlot", "ALXe0003", "ALXe0006"):
+        for nid in ("ALXa0001", "P_WesternBlot", "ALXe0003", "ALXe0006", "ALXf0001"):
             note = vault.by_id[nid]
             want = eln.render_snapshot_html(vault, note, generated=TODAY)
             path = tool(node, "render_snapshot", {"id": nid})["path"]
@@ -738,7 +822,7 @@ class TestOperations(ParityCase):
         self.assertEqual(len(folders), 6 + 8)
         self.assertIn("0 errors", py_validate_text(py))
         self.assertFalse((py / ".eln-lock").exists())
-        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0014, ALXi0001, ALXp0008]", (py / "notebook.md").read_text(encoding="utf-8"))
+        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0014, ALXf0001, ALXi0001, ALXp0008]", (py / "notebook.md").read_text(encoding="utf-8"))
         shutil.rmtree(py)
         py = self.sandbox_copy("py")
 
@@ -808,7 +892,7 @@ class TestOperations(ParityCase):
             (root / "notebook.md").unlink()
         eln.create_sample(py, "ALX", "plasmid", "after the loss")
         tool(node, "create_sample", {"sample_type": "plasmid", "title": "after the loss", "initials": "ALX"})
-        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0007, ALXi0001, ALXp0001]", (py / "notebook.md").read_text(encoding="utf-8"))
+        self.assertIn("last_ids: [ALXa0003, ALXc0002, ALXe0007, ALXf0001, ALXi0001, ALXp0001]", (py / "notebook.md").read_text(encoding="utf-8"))
         self.assertSameTree(py, node)
 
         # whose record: the notebook's owner comes before settings saved on the computer; a flag comes before both

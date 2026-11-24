@@ -1,9 +1,9 @@
-/* Creating records. This is the only way an experiment, sample, protocol, or project comes into
+/* Creating records. This is the only way an experiment, sample, protocol, project, or figure comes into
    existence, so IDs, folder names, and headers are always right. */
 
 import {
   ElnError, SUBFOLDERS, VAULT_DIRS, KIND_DIR, RE_INITIALS, RE_EXP_FOLDER, RE_EXP_ID, RE_SAMPLE_ID, RE_PROTOCOL_NAME, RE_PROJECT_ID,
-  SAMPLE_LETTERS, SAMPLE_TYPES, NAMED_SUBFOLDERS,
+  SAMPLE_LETTERS, SAMPLE_TYPES, NAMED_SUBFOLDERS, FIGURE_SUBFOLDERS, RE_FIG_FOLDER, RE_FIG_ID,
 } from './schema.js';
 import { parseFrontMatter, formatValue, quoteIfNeeded, setHeaderField, csvItems } from './frontmatter.js';
 import { renderTemplate } from './templates.js';
@@ -24,6 +24,17 @@ export const SUBFOLDER_READMES = {
     + 'cropped images, normalized values), named `{ID}_what-it-is.csv` and the like.\n',
   '5-figures': 'Exported panels. The results summary you show in lab meeting is\n'
     + '`{ID}_R_what-it-shows_YYYYMMDD.png` (the `R` is what makes it findable in one search).\n',
+};
+
+export const FIGURE_READMES = {
+  '1-notes': 'The figure note `{ID}.md` is here. Legend drafts and comments from co-authors can go here too;\n'
+    + 'name them `{ID}_something.md`.\n',
+  '2-panels': 'One file per panel, as it goes into the figure: `{ID}_a_what-it-shows.pdf`, `{ID}_b_...`.\n'
+    + 'Copy each from the experiment that made it, and name that experiment in the Panels table of the note.\n',
+  '3-source': 'The file the figure is laid out in, whatever the program: Illustrator, CanvasX, Prism, PowerPoint,\n'
+    + 'an R or Python script. Name it `{ID}_layout.ai`, `{ID}_assemble.R`, and so on.\n',
+  '4-exports': 'The finished figure as it was sent out, one file per version: `{ID}_v1_{YYYYMMDD}.pdf`.\n'
+    + 'Do not overwrite an old version. Add a new file, and a line under Versions in the note.\n',
 };
 
 /** A mistyped path, or a drive or synced folder that is not there, must not quietly start a second notebook. */
@@ -91,7 +102,8 @@ const NOTEBOOK_BODY = `
 
 This folder is a plain-text lab notebook. Each experiment is a folder in
 \`Experiments/\` with a Markdown note. Protocols, samples, and projects are
-Markdown notes in their own folders. \`Inventory/\` is an index made from them.
+Markdown notes in their own folders. A figure that goes into a paper, a grant
+or a talk is a folder in \`Figures/\`. \`Inventory/\` is an index made from them.
 
 The lines at the top are kept by the notebook tools. \`owner\` and \`initials\`
 say whose notebook this is; correct them if they are wrong. \`last_ids\` holds
@@ -158,11 +170,15 @@ export function highestIds(ids) {
   return [...[...best].map(([prefix, number]) => `${prefix}${String(number).padStart(4, '0')}`), ...other].sort(cmp);
 }
 
-/** The experiment and sample IDs that the folder and file names show. */
+/** The experiment, figure and sample IDs that the folder and file names show. */
 async function idsInFolders(store) {
   const out = [];
   for (const e of (await store.list('Experiments')) || []) {
     const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) out.push(m[1]);
+  }
+  for (const e of (await store.list('Figures')) || []) {
+    const m = e.kind === 'dir' ? RE_FIG_FOLDER.exec(e.name) : null;
     if (m) out.push(m[1]);
   }
   for (const e of (await store.list('Samples')) || []) {
@@ -214,9 +230,9 @@ export async function setNotebookOwner(store, owner, initials) {
   if (Object.keys(values).length || !(await exists(store, NOTEBOOK_FILE))) await updateNotebook(store, values);
 }
 
-/** 'JSRe0002' -> 'JSR'; '' for anything that is not an experiment or sample ID. */
+/** 'JSRe0002' -> 'JSR'; '' for anything that is not an experiment, sample, or figure ID. */
 export function initialsOf(recordId) {
-  const m = RE_EXP_ID.exec(recordId || '') || RE_SAMPLE_ID.exec(recordId || '');
+  const m = RE_EXP_ID.exec(recordId || '') || RE_SAMPLE_ID.exec(recordId || '') || RE_FIG_ID.exec(recordId || '');
   return m ? m[1] : '';
 }
 
@@ -227,6 +243,10 @@ export async function knownInitials(store) {
   if (typeof owner === 'string' && RE_INITIALS.test(owner)) out.add(owner);
   for (const e of (await store.list('Experiments')) || []) {
     const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) out.add(m[1].slice(0, -5));
+  }
+  for (const e of (await store.list('Figures')) || []) {
+    const m = e.kind === 'dir' ? RE_FIG_FOLDER.exec(e.name) : null;
     if (m) out.add(m[1].slice(0, -5));
   }
   for (const e of (await store.list('Samples')) || []) {
@@ -259,6 +279,16 @@ export async function nextExperimentId(store, initials) {
   return `${initials}e${String(number).padStart(4, '0')}`;
 }
 
+export async function nextFigureId(store, initials) {
+  const seen = [];
+  for (const folder of (await store.list('Figures')) || []) {
+    const m = folder.kind === 'dir' ? RE_FIG_FOLDER.exec(folder.name) : null;
+    if (m) seen.push(m[1]);
+  }
+  const number = Math.max(nextNumber(seen, initials, 'f'), (await lastIssued(store, initials, 'f')) + 1);
+  return `${initials}f${String(number).padStart(4, '0')}`;
+}
+
 export async function nextSampleId(store, initials, letter) {
   const seen = [];
   for (const f of (await store.list('Samples')) || []) {
@@ -272,8 +302,8 @@ export async function nextSampleId(store, initials, letter) {
 }
 
 /** A one-paragraph README in each subfolder: says what goes there, and keeps the folder from being empty. */
-export async function writeSubfolderReadmes(store, folder, expId) {
-  for (const [sub, text] of Object.entries(SUBFOLDER_READMES)) {
+export async function writeSubfolderReadmes(store, folder, expId, readmes = SUBFOLDER_READMES) {
+  for (const [sub, text] of Object.entries(readmes)) {
     const p = `${folder}/${sub}/README.md`;
     if (!(await exists(store, p))) await writeText(store, p, `# ${sub}\n\n${text.replaceAll('{ID}', expId)}`);
   }
@@ -371,6 +401,56 @@ async function createExperimentLocked(store, {
   return result;
 }
 
+/** A figure record: a folder for the panels, the layout file, and the finished versions, with a note that
+    says which experiment each panel came from. It does not matter what program the figure is made in.
+    -> { id, path, folder, extra: [], warnings: [text] } */
+export async function createFigure(store, {
+  initials, researcher = '', title, project = '', experiments = '', label = '', target = '', tools = '', tags = '',
+  today = isoDate(), index = true,
+}) {
+  const cleanTitle = strip(title || '');
+  if (!cleanTitle) throw new ElnError('a figure needs a title', 'no_title');
+  checkInitials(initials);
+  await requireFolder(store);
+  for (const p of csvItems(project)) {
+    if (!RE_PROJECT_ID.test(p)) {
+      throw new ElnError(`project ID ${pyRepr(p)} is not valid: letters, digits, and hyphens only, starting with a letter, `
+        + 'no spaces (e.g. PRMT5-ChromatinRelease)', 'bad_name');
+    }
+  }
+  const result = await withLock(store, async () => {
+    const figId = await nextFigureId(store, initials);
+    const slug = slugify(cleanTitle);
+    const folder = `Figures/${slug ? `${figId}_${slug}` : figId}`;
+    if (await exists(store, folder)) throw new ElnError(`${folder} already exists. Aborting.`, 'exists');
+    await ensureVaultDirs(store);
+    for (const sub of FIGURE_SUBFOLDERS) await store.mkdir(`${folder}/${sub}`);
+    await writeSubfolderReadmes(store, folder, figId, FIGURE_READMES);
+    const notePath = `${folder}/1-notes/${figId}.md`;
+    await writeText(store, notePath, await renderTemplate(store, 'figure', {
+      FIGURE_ID: figId, TITLE: cleanTitle, RESEARCHER: researcher || initials, PROJECT: project || '',
+      EXPERIMENTS: experiments || '', LABEL: label || '', TARGET: target || '', TOOLS: tools || '',
+      DATE: today, TAGS: tags || '',
+    }));
+    await recordId(store, figId);
+    return { id: figId, path: notePath, folder, extra: [], warnings: [] };
+  });
+  for (const p of csvItems(project)) {
+    if (!(await exists(store, `Projects/${p}.md`))) result.warnings.push(`project ${p} has no page in Projects/ yet (create it with New project)`);
+  }
+  const known = await knownInitials(store);
+  const there = new Set();
+  for (const e of (await store.list('Experiments')) || []) {
+    const m = e.kind === 'dir' ? RE_EXP_FOLDER.exec(e.name) : null;
+    if (m) there.add(m[1]);
+  }
+  for (const x of csvItems(experiments)) {
+    if (!there.has(x) && !inAnotherNotebook(x, known)) result.warnings.push(`experiment ${x} is not in Experiments/ (check the ID)`);
+  }
+  if (index) await indexAfterCreate(store, result);
+  return result;
+}
+
 export const createSample = (store, args) => withLock(store, () => createSampleLocked(store, args));
 
 async function createSampleLocked(store, { initials, sample_type, title, source = '', storage = '', tags = '', today = isoDate(), index = true }) {
@@ -438,14 +518,16 @@ export async function addFile(store, vault, {
   id, subfolder, original_name, bytes, description = '', result = false, date = '',
 }) {
   const note = vault.get(id);
-  if (!note || note.kind !== 'experiment' || !note.folder) throw new ElnError(`no experiment ${id}`, 'not_found');
-  if (!SUBFOLDERS.includes(subfolder)) throw new ElnError(`subfolder must be one of ${SUBFOLDERS.join(', ')}`, 'bad_subfolder');
+  if (!note || !['experiment', 'figure'].includes(note.kind) || !note.folder) throw new ElnError(`no experiment or figure ${id}`, 'not_found');
+  const figure = note.kind === 'figure';
+  const subfolders = figure ? FIGURE_SUBFOLDERS : SUBFOLDERS;
+  if (!subfolders.includes(subfolder)) throw new ElnError(`subfolder must be one of ${subfolders.join(', ')}`, 'bad_subfolder');
   /* the name as the computer had it: no folders, no control characters, no trailing dots or spaces */
   const original = String(original_name || '').split(/[\\/]/).pop().replace(/[\x00-\x1f\x7f\u2028\u2029]/g, '').replace(/[ .]+$/, '');
   if (!original || original.startsWith('.')) throw new ElnError('the file needs a name', 'bad_name');
   if (date && !validDate(date)) throw new ElnError(`date must be YYYY-MM-DD (got ${pyRepr(date)})`, 'bad_date');
-  const raw = !NAMED_SUBFOLDERS.includes(subfolder);
-  const name = raw ? original : fileNameFor(id, { originalName: original, description, result, date });
+  const raw = !figure && !NAMED_SUBFOLDERS.includes(subfolder); // in a figure folder every file is named with the ID
+  const name = raw ? original : fileNameFor(id, { originalName: original, description, result: result && !figure, date });
   if (/[\\/:*?"<>|\x00-\x1f]/.test(name) && !raw) throw new ElnError(`"${name}" is not a usable file name`, 'bad_name');
   if (name.includes('/') || name.includes('\\') || name === '..' || name === '.') throw new ElnError(`"${name}" is not a usable file name`, 'bad_name');
   if (utf8(name).length > 200) throw new ElnError('the file name is too long: shorten the description (200 characters at most)', 'bad_name');

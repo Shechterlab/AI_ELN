@@ -1,5 +1,5 @@
 /* Inventory/*.csv: an index of every note, generated from the note headers. Open it in Excel.
-   The notes are the record; these four files can always be rebuilt from them. */
+   The notes are the record; these files can always be rebuilt from them. */
 
 import { sortedById } from './vault.js';
 import { dirname } from './text.js';
@@ -11,6 +11,8 @@ export const INDEX_COLUMNS = {
   samples: ['sample_id', 'sample_type', 'title', 'source', 'storage_location', 'date_created', 'status', 'used_in_experiments'],
   protocols: ['protocol_id', 'title', 'version', 'status', 'used_in_experiments'],
   projects: ['project_id', 'title', 'lead', 'status', 'date_started', 'experiments'],
+  figures: ['figure_id', 'title', 'label', 'researcher', 'project', 'experiments', 'target', 'tools',
+    'date_started', 'date_final', 'status', 'tags', 'folder'],
 };
 
 const join = (items) => items.join(';');
@@ -48,6 +50,13 @@ export function buildIndex(vault) {
     projects: sortedById(vault.notes.project).map((p) => ({
       project_id: p.id, title: p.get('title'), lead: p.get('lead'), status: p.get('status'),
       date_started: p.get('date_started'), experiments: used(p.id),
+    })),
+    figures: sortedById(vault.notes.figure).map((f) => ({
+      figure_id: f.id, title: f.get('title'), label: f.get('label'), researcher: f.get('researcher'),
+      project: join(f.getList('project')), experiments: join(f.getList('experiments')),
+      target: f.get('target'), tools: join(f.getList('tools')), date_started: f.get('date_started'),
+      date_final: f.get('date_final'), status: f.get('status'), tags: join(f.getList('tags')),
+      folder: f.folder || dirname(f.path),
     })),
   };
 }

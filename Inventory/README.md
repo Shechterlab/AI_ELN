@@ -1,6 +1,6 @@
 # Inventory
 
-In a notebook, `Inventory/` holds the index: four tables that the tools
+In a notebook, `Inventory/` holds the index: five tables that the tools
 make from the notes. Do not edit them by hand. Edit the note instead. The
 tools rebuild the index each time they create or change a record; after
 editing a note in another program, run `python3 scripts/eln.py index`.
@@ -11,6 +11,7 @@ editing a note in another program, run `python3 scripts/eln.py index`.
 | `samples.csv` | sample | id, type, title, source, storage, date, status, **which experiments used it** |
 | `protocols.csv` | protocol | id, title, version, status, **which experiments used it** |
 | `projects.csv` | project | id, title, lead, status, date, **its experiments** |
+| `figures.csv` | figure | id, title, label, researcher, project, experiments, target, tools, dates, status, tags, folder |
 
 The "which experiments" columns are worked out from the experiment notes
 each time the index is rebuilt. Lists inside a cell are separated by `;`.

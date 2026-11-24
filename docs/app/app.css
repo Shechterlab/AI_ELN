@@ -36,7 +36,7 @@ main.app th { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-tr
 main.app th, main.app td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
 .pill.active, .pill.current { background: #dcfce7; color: #14532d; }
-.pill.complete { background: var(--teal-wash); color: var(--brand-ink); }
+.pill.complete, .pill.final, .pill.published { background: var(--teal-wash); color: var(--brand-ink); }
 .pill.paused, .pill.abandoned, .pill.depleted, .pill.retired, .pill.archived { background: #fef3c7; color: #713f12; }
 
 form.stack { max-width: 780px; }
@@ -61,6 +61,8 @@ textarea.text.tall { height: 68vh; font-size: 0.85rem; }
 .meta div { min-width: 0; overflow-wrap: anywhere; }
 /* a wide table in a note scrolls inside the note, not the page */
 .note table { display: block; max-width: 100%; overflow-x: auto; }
+/* a file path in a table cell may break across lines, so the table needs less width */
+.note td code { white-space: normal; overflow-wrap: anywhere; }
 .note p, .note li, .path { overflow-wrap: anywhere; }
 .card + .card, .card + h2 + .card { margin-top: 14px; }
 .card.note { margin-top: 14px; padding: 22px 26px; }

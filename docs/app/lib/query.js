@@ -5,7 +5,7 @@ import { sections, ciIn, sortedById } from './vault.js';
 import { cmp, isoDate, daysBefore, validDate, strip, rstrip, words, normpath, joinPath, dirname } from './text.js';
 
 /** Notes of one kind that match every filter given. Matching ignores case. */
-export function findNotes(vault, kind, { project, status, researcher, tag, sample, protocol, exp_type, text } = {}) {
+export function findNotes(vault, kind, { project, status, researcher, tag, sample, protocol, exp_type, text, experiment } = {}) {
   const out = [];
   for (const n of vault.notes[kind]) {
     if (!n.id) continue;
@@ -16,6 +16,7 @@ export function findNotes(vault, kind, { project, status, researcher, tag, sampl
     if (sample && !ciIn(sample, n.getList('samples'))) continue;
     if (protocol && !ciIn(protocol, n.getList('protocols'))) continue;
     if (exp_type && !ciIn(exp_type, n.getList('experiment_type'))) continue;
+    if (experiment && !ciIn(experiment, n.getList('experiments'))) continue;
     if (text) {
       /* every word must appear somewhere in the ID, the header, or the body */
       const hay = [n.id, ...Object.keys(n.fields).map((k) => n.get(k)), n.body].join('\n').toLowerCase();

@@ -1,6 +1,6 @@
 /* Names: slugs, IDs, folder and file names. Pure functions; the same rules as scripts/eln.py. */
 
-import { RE_EXP_ID, RE_SAMPLE_ID, RE_INITIALS } from './schema.js';
+import { RE_EXP_ID, RE_FIG_ID, RE_SAMPLE_ID, RE_INITIALS } from './schema.js';
 import { extname, stem, validDate, stripChars } from './text.js';
 
 /** 'SNRPB chromatin retention: KCl' -> 'SNRPB-chromatin-retention-KCl'. Case kept; cut on a word boundary. */
@@ -32,10 +32,11 @@ export function folderName(id, title) {
 /** Highest existing number for these initials (and sample letter), plus one. */
 export function nextNumber(existing, initials, letter = 'e') {
   let highest = 0;
-  const pattern = letter === 'e' ? RE_EXP_ID : RE_SAMPLE_ID;
+  const whole = letter === 'e' || letter === 'f'; // experiments and figures: the letter is part of the pattern
+  const pattern = letter === 'e' ? RE_EXP_ID : letter === 'f' ? RE_FIG_ID : RE_SAMPLE_ID;
   for (const candidate of existing) {
     const m = pattern.exec(candidate);
-    if (m && m[1] === initials && (letter === 'e' || m[2] === letter)) highest = Math.max(highest, parseInt(m[m.length - 1], 10));
+    if (m && m[1] === initials && (whole || m[2] === letter)) highest = Math.max(highest, parseInt(m[m.length - 1], 10));
   }
   return highest + 1;
 }

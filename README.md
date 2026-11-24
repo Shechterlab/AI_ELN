@@ -76,8 +76,8 @@ one for that notebook.
 
 A notebook is **one folder per person**. Keep it where you already keep
 your work: your Dropbox or OneDrive, a lab share, or a drive. It holds
-`notebook.md`, `Experiments/`, `Protocols/`, `Samples/`, `Projects/`, and
-`Inventory/`. Every file in it is plain text (Markdown with a small header,
+`notebook.md`, `Experiments/`, `Protocols/`, `Samples/`, `Projects/`,
+`Figures/`, and `Inventory/`. Every file in it is plain text (Markdown with a small header,
 CSV) or an ordinary data file, and the notes are complete and readable in
 any editor without the tools. There is no server, no database, and no
 central list of people or notebooks.
@@ -120,6 +120,12 @@ Experiments/
 Protocols/    P_WesternBlot.md          one file per protocol, edited in place
 Samples/      JSRp0001.md               plasmids, oligos, antibodies, cell lines, gels...
 Projects/     PRMT5-ChromatinRelease.md summary of a research project, citing experiment IDs
+Figures/
+└── JSRf0001_SNRPB-stays-on-chromatin/
+    ├── 1-notes/            JSRf0001.md: which experiment each panel came from, the legend, the versions
+    ├── 2-panels/           JSRf0001_a_blot.pdf, one file per panel
+    ├── 3-source/           the layout file: Illustrator, CanvasX, Prism, PowerPoint, R, Python
+    └── 4-exports/          JSRf0001_v1_20260915.pdf, the figure as it was sent out
 Inventory/    *.csv                     index of everything above, made from the notes; opens in Excel
 Exports/      export_.../               folders written by Export; copies, safe to delete
 notebook.md                             whose notebook this is, and the last ID given out for each kind of record
@@ -131,6 +137,11 @@ notebook.md                             whose notebook this is, and the last ID 
 | Sample | `JSRp0001` (p plasmid, i oligo, a antibody, c cell line, g gel, ...) | New sample |
 | Protocol | `P_WesternBlot` | New protocol |
 | Project | `PRMT5-ChromatinRelease` | New project |
+| Figure | `JSRf0001` | New figure |
+
+A figure record is for an assembled figure that goes into a paper, a grant
+or a talk and draws on one or more experiments. The result figure of a
+single experiment stays in that experiment's `5-figures/`.
 
 IDs start with your initials, so they cannot match anyone else's. An ID
 written anywhere in a note is shown as a link. The full rules are in
@@ -210,6 +221,7 @@ The same jobs from a terminal. The script needs only Python:
 python3 scripts/eln.py init                                  # once: initials, name, where files live
 python3 scripts/eln.py new experiment --title "..." --project PRMT5-ChromatinRelease --protocol P_WesternBlot
 python3 scripts/eln.py new sample --type plasmid --title "pcDNA3-FLAG-SNRPB"
+python3 scripts/eln.py new figure --title "..." --experiments JSRe0002,JSRe0005 --label "Figure 2"
 python3 scripts/eln.py validate --strict
 python3 scripts/eln.py find --status active --tag meeting
 python3 scripts/eln.py index                                 # regenerate Inventory/*.csv

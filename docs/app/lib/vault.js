@@ -1,6 +1,6 @@
 /* Reading the notebook: every note, parsed, plus what is wrong with the folder layout. */
 
-import { KINDS, KIND_DIR, ID_FIELD, RE_EXP_FOLDER, ElnError } from './schema.js';
+import { KINDS, KIND_DIR, ID_FIELD, FOLDER_KINDS, ElnError } from './schema.js';
 import { parseFrontMatter } from './frontmatter.js';
 import { cmp, decodeText, splitlines, strip } from './text.js';
 
@@ -42,7 +42,7 @@ export class Note {
 
 export class Vault {
   constructor() {
-    this.notes = { experiment: [], protocol: [], sample: [], project: [] };
+    this.notes = { experiment: [], protocol: [], sample: [], project: [], figure: [] };
     this.byId = new Map();
     this.folderIssues = []; // [path, message]
   }
@@ -86,14 +86,19 @@ export async function readNote(store, kind, path, folder = null) {
 export async function loadVault(store) {
   const vault = new Vault();
   const pending = [];
-  const expEntries = await store.list(KIND_DIR.experiment);
-  if (expEntries) {
-    const folders = expEntries.filter((e) => e.kind === 'dir' && !e.name.startsWith('.')).map((e) => e.name).sort(cmp);
+  for (const [kind, pattern] of Object.entries(FOLDER_KINDS)) {
+    const top = KIND_DIR[kind];
+    const entries = await store.list(top);
+    if (!entries) continue;
+    const unnamed = 'folder name does not match {ID}_{slug}' + (kind === 'experiment'
+      ? ' (an older folder? Adopt it: the tool gives it an ID and moves its files in)'
+      : ' (figure folders are made with New figure)');
+    const folders = entries.filter((e) => e.kind === 'dir' && !e.name.startsWith('.')).map((e) => e.name).sort(cmp);
     for (const name of folders) {
-      const folder = `${KIND_DIR.experiment}/${name}`;
-      const m = RE_EXP_FOLDER.exec(name);
+      const folder = `${top}/${name}`;
+      const m = pattern.exec(name);
       const folderId = m ? m[1] : null;
-      if (!m) vault.folderIssues.push([folder, 'folder name does not match {ID}_{slug} (an older folder? Adopt it: the tool gives it an ID and moves its files in)']);
+      if (!m) vault.folderIssues.push([folder, unnamed]);
       const notesDir = `${folder}/1-notes`;
       const listing = await store.list(notesDir);
       let noteName = folderId ? `${folderId}.md` : null;
@@ -108,7 +113,7 @@ export async function loadVault(store) {
         noteName = candidates[0];
         if (folderId) vault.folderIssues.push([folder, `note should be named 1-notes/${folderId}.md, found ${noteName}`]);
       }
-      pending.push(['experiment', readNote(store, 'experiment', `${notesDir}/${noteName}`, folder)]);
+      pending.push([kind, readNote(store, kind, `${notesDir}/${noteName}`, folder)]);
     }
   }
   for (const kind of ['protocol', 'sample', 'project']) {
@@ -122,6 +127,19 @@ export async function loadVault(store) {
     if (note.id && !vault.byId.has(note.id)) vault.byId.set(note.id, note);
   }
   return vault;
+}
+
+/** The rows of the table under '## Panels', as lists of cells, without the heading row and the rule. */
+export function panelRows(section) {
+  const rows = [];
+  for (const raw of splitlines(String(section || '').replace(/<!--[\s\S]*?-->/g, ''))) {
+    const line = strip(raw);
+    if (!line.startsWith('|')) continue;
+    const cells = line.replaceAll('\\|', '\x00').replace(/^\|+|\|+$/g, '').split('|').map((c) => strip(c).replaceAll('\x00', '|'));
+    if (cells.some(Boolean) && cells.filter(Boolean).every((c) => /^:?-+:?$/.test(c))) continue;
+    rows.push(cells);
+  }
+  return rows.slice(1);
 }
 
 /** Map of '## ' section title -> text, in order. */

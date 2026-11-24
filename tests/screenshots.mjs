@@ -78,6 +78,11 @@ const noteHeight = await page.evaluate(() => document.documentElement.scrollHeig
 await page.setViewportSize({ width: 1180, height: Math.min(noteHeight, 1760) });
 await shot('note.png', Math.min(noteHeight, 1760));
 await page.setViewportSize({ width: 1180, height: 1010 });
+await open('#/note/ALXf0001');
+const figHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+await page.setViewportSize({ width: 1180, height: Math.min(figHeight, 1900) });
+await shot('figure.png', Math.min(figHeight, 1900));
+await page.setViewportSize({ width: 1180, height: 1010 });
 await open('#/adopt');
 await shot('adopt.png', 640);
 console.log(errors.length ? 'errors: ' + errors.join(' | ') : 'ok', 'note height', noteHeight);

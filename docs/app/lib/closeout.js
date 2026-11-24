@@ -92,8 +92,9 @@ export async function renderSnapshotHtml(store, note, generated = isoDate(), lab
       const size = (await store.stat(p)).size;
       rows.push(`<tr><td>${esc(p.slice(note.folder.length + 1))}</td><td>${thousands(size)}</td></tr>`);
     }
-    filesHtml = '<h2>Files in this experiment folder</h2><table><tr><th>path</th><th>bytes</th></tr>' + rows.join('') + '</table>';
-    provenance.push(['Checksums of every file', `<code>1-notes/${esc(note.id)}_MANIFEST.sha256</code> (written when the experiment is marked complete)`]);
+    filesHtml = `<h2>Files in this ${note.kind} folder</h2><table>`
+      + '<tr><th>path</th><th>bytes</th></tr>' + rows.join('') + '</table>';
+    if (note.kind === 'experiment') provenance.push(['Checksums of every file', `<code>1-notes/${esc(note.id)}_MANIFEST.sha256</code> (written when the experiment is marked complete)`]);
   }
   const provHtml = '<h2>Provenance</h2><table class="meta prov">' + provenance.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') + '</table>';
   const signHtml = wantsSignatures(settings)

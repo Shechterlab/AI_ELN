@@ -178,6 +178,7 @@ the tiles **Check everything** and **Lab meeting brief**.
 | **New sample** | A record for a plasmid, oligo, antibody, cell line, mouse line, peptide, protein prep, slide, or gel. Gets an ID like `JSRp0001`. Tick it in the experiment form from then on. |
 | **New protocol** | One file per protocol, e.g. `Protocols/P_WesternBlot.md`. Edit it in place as it improves; change the `version` date and add a Change log line. |
 | **New project** | A summary of a research project. Conclusions cite experiment IDs. |
+| **New figure** | A record for a figure that goes into a paper, a grant, or a talk: a folder for the panels, the layout file, and the finished versions, and a note that says which experiment each panel came from. Any program. |
 | **Check** | Reads every note and folder and lists what does not follow the conventions. `ERROR` = fix it; `WARN` = advice. |
 | **Meeting brief** | The lab-meeting document from everything tagged `meeting`, plus the active-experiments table. In the browser page, **Save into Inventory** saves it in the notebook and **Download** saves it to your Downloads folder. |
 | **Export** | Puts a project (or all active experiments) into one file to paste into ChatGPT, or into a folder of plain files. See "Exports" below and [`ai-agents.md`](ai-agents.md). |
@@ -271,6 +272,36 @@ title or dates if they are wrong. Folders you do not adopt are left alone.
 The record is marked complete, with a snapshot and a list of checksums,
 unless you tick **Still in progress** (`--status active`). `eln.py find
 --tag adopted` lists every adopted experiment.
+
+## Figures for a paper, a grant, or a talk
+
+The result figure of one experiment stays in that experiment's `5-figures/`.
+A figure that goes out, with panels from one or more experiments, gets its
+own record. Click **New figure**, give it a title, and tick the experiments
+the panels come from. It gets an ID such as `JSRf0001` and a folder in
+`Figures/` with four subfolders:
+
+- `2-panels/`: one file per panel, as it goes into the figure. **Add files**
+  on the figure's page names each one with the figure ID. The file is a
+  copy; the original stays in its experiment.
+- `3-source/`: the file the figure is laid out in. Any program: Illustrator,
+  CanvasX, Prism, PowerPoint, Inkscape, an R or Python script.
+- `4-exports/`: the finished figure, one file per version you send to
+  anyone. Do not overwrite an old version.
+- `1-notes/`: the figure note.
+
+In the note, fill in the **Panels** table: for each panel, what it shows,
+the experiment ID it came from, the data file that was plotted, and the
+script or program that drew it. That table is what lets you, a co-author, or
+a reviewer get from a panel back to the experiment and its raw data. Each
+experiment's page then lists the figures that use it.
+
+![A figure record as the page shows it](img/figure.png)
+
+The `label` field holds what the figure is called where it is used
+(`Figure 2`). Change it when figures are renumbered; the ID stays the same.
+From the command line: `python3 scripts/eln.py new figure --title "..."
+--experiments JSRe0002,JSRe0005`.
 
 ## Exports
 

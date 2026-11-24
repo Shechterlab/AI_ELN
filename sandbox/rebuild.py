@@ -496,6 +496,54 @@ def build_alex() -> None:
     fill(project_page, "Reagents in use", "ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, ALXi0001; Jordan's plasmids JORp0001, JORp0002")
     fill(project_page, "Related protocols", "P_CellularFractionation, P_WesternBlot, P_RNAextraction, P_RTqPCR")
 
+    # A figure record: an assembled figure for the paper, drawing on three experiments, one of them Jordan's.
+    # The panels are copies of the result figures; the layout is a plain SVG that points at them.
+    fig = eln.create_figure(root, ALX[0], ALX[1], "PRMT5 inhibition keeps SNRPB on chromatin", project="PRMT5-ChromatinRelease",
+                            experiments="ALXe0002, ALXe0003, JORe0001", label="Figure 2", target="manuscript draft",
+                            tools="Python, Inkscape", index=False, today="2026-09-08")
+    ff = fig.path.parent.parent
+    panels = [
+        ("a", "ALXe0002", "5-figures/ALXe0002_R_SNRPB-chromatin-fraction_20260708.png", "SNRPB-blot-A549",
+         "SNRPB in cytoplasm, nucleoplasm and chromatin, DMSO vs PRMT5i, A549 (representative blot)",
+         "2-data_raw (replicate 1 scan)", "LI-COR Image Studio export"),
+        ("b", "ALXe0003", "5-figures/ALXe0003_R_SNRPB-chromatin-fraction-HeLa_20260725.png", "SNRPB-blot-HeLa",
+         "The same fractionation in HeLa", "2-data_raw (replicate 1 scan)", "LI-COR Image Studio export"),
+    ]
+    rows = ["| Panel | Shows | From | Data | Made with | File |", "|---|---|---|---|---|---|"]
+    for letter, exp, src, words, shows, data, made in panels:
+        name = f"{fig.id}_{letter}_{words}.png"
+        (ff / "2-panels" / name).write_bytes((folder_of(root, exp) / src).read_bytes())
+        rows.append(f"| {letter} | {shows} | {exp} | {data} | {made} | `{name}` |")
+    rows.append("| c | Chromatin-bound fraction of SNRPB, three replicates, paired | ALXe0002 | `4-data_processed/ALXe0002_chromatin-fraction.csv` "
+                "| `3-code/ALXe0002_paired-t-test.py` for the numbers; plot not drawn yet | |")
+    rows.append("| d | FLAG-SNRPB wild type vs R107K/R111K, chromatin fraction | JORe0001 | in Jordan's notebook | not received yet | |")
+    fill(fig.path, "Purpose", "Figure 2 of the manuscript draft: 48 h of PRMT5 inhibition raises the chromatin-bound fraction of "
+         "SNRPB in two cell lines, and the methylation-site mutant behaves the same way.")
+    fill(fig.path, "Panels", "\n".join(rows))
+    fill(fig.path, "Legend", "**Figure 2. PRMT5 inhibition keeps SNRPB on chromatin.** (a) Sub-cellular fractionation of A549 cells "
+         "after 48 h DMSO or EPZ015666 (1 uM), blotted for SNRPB. (b) As in (a), HeLa. (c) and (d): not written yet.\n\n"
+         "Draft. Panel d rests on one experiment (JORe0001, n = 1) and should not go out until it is repeated.")
+    fill(fig.path, "Size and format", "Two columns, 180 mm wide. Text no smaller than 6 pt after scaling. RGB, PDF for the submission; "
+         "PNG at 300 dpi for the draft that circulates.")
+    fill(fig.path, "Versions", "- 2026-09-15: `4-exports/" + fig.id + "_v1_20260915.png`, panels a and b only, to the PI for comments.")
+    set_field(fig.path, "width_mm", "180")
+    set_field(fig.path, "height_mm", "70")
+    eln.write_text_lf(ff / "3-source" / f"{fig.id}_layout.svg", f'''\
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="180mm" height="70mm" viewBox="0 0 180 70">
+  <!-- The panels are linked, not pasted in: replace a file in 2-panels/ and the layout shows the new one. -->
+  <image x="2" y="6" width="86" height="33" xlink:href="../2-panels/{fig.id}_a_SNRPB-blot-A549.png"/>
+  <image x="92" y="6" width="86" height="33" xlink:href="../2-panels/{fig.id}_b_SNRPB-blot-HeLa.png"/>
+  <text x="2" y="5" font-family="Helvetica, Arial, sans-serif" font-size="3.2" font-weight="bold">a</text>
+  <text x="92" y="5" font-family="Helvetica, Arial, sans-serif" font-size="3.2" font-weight="bold">b</text>
+  <text x="2" y="46" font-family="Helvetica, Arial, sans-serif" font-size="3.2" font-weight="bold">c</text>
+  <text x="92" y="46" font-family="Helvetica, Arial, sans-serif" font-size="3.2" font-weight="bold">d</text>
+</svg>
+''')
+    png(ff / "4-exports" / f"{fig.id}_v1_20260915.png",
+        [(x0 // 2 + dx, x1 // 2 + dx, y0, y1, d) for dx, darks in ((0, [70, 60, 30, 110]), (270, [65, 50, 35, 95]))
+         for x0, x1, y0, y1, d in lanes(darks, 60, 90)], width=540, height=200)
+    fill(project_page, "Figures", f"- {fig.id} - Figure 2, PRMT5 inhibition keeps SNRPB on chromatin - draft (panels a and b in place)")
+
     # An older folder, from before the notebook, adopted as it was: it becomes ALXe0006.
     # Growth is the same for every dose over the first two days and slows afterwards: the inhibitor acts late.
     rand = Rand(20251118)

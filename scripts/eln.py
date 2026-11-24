@@ -55,9 +55,13 @@ SUBFOLDERS = ["1-notes", "2-data_raw", "3-code", "4-data_processed", "5-figures"
 NAMED_SUBFOLDERS = ["1-notes", "3-code", "4-data_processed", "5-figures"]
 EXEMPT_FILENAMES = {"readme.md", "thumbs.db", "desktop.ini", "__pycache__"}
 
-KINDS = ("experiment", "protocol", "sample", "project")
-KIND_DIR = {"experiment": "Experiments", "protocol": "Protocols", "sample": "Samples", "project": "Projects"}
-ID_FIELD = {"experiment": "experiment_id", "protocol": "protocol_id", "sample": "sample_id", "project": "project_id"}
+KINDS = ("experiment", "protocol", "sample", "project", "figure")
+KIND_DIR = {"experiment": "Experiments", "protocol": "Protocols", "sample": "Samples", "project": "Projects",
+            "figure": "Figures"}
+ID_FIELD = {"experiment": "experiment_id", "protocol": "protocol_id", "sample": "sample_id", "project": "project_id",
+            "figure": "figure_id"}
+# A figure is a folder, like an experiment: the note, the panels, the layout file, the finished versions.
+FIGURE_SUBFOLDERS = ["1-notes", "2-panels", "3-source", "4-exports"]
 
 SAMPLE_LETTERS = {
     "p": "plasmid", "i": "oligo", "a": "antibody", "c": "cell-line", "m": "mouse-line",
@@ -70,6 +74,7 @@ STATUS = {
     "protocol": ("current", "archived"),
     "sample": ("active", "depleted", "retired"),
     "project": ("active", "complete", "paused"),
+    "figure": ("draft", "final", "published", "retired"),
 }
 
 INITIALS = r"[A-Z]{2,4}"
@@ -80,6 +85,9 @@ RE_PROTOCOL_ID = re.compile(r"^P_[A-Za-z0-9][A-Za-z0-9-]*$")
 RE_PROTOCOL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
 RE_PROJECT_ID = re.compile(r"^[A-Za-z][A-Za-z0-9-]*$")
 RE_EXP_FOLDER = re.compile(rf"^({INITIALS}e\d{{4}})(?:_([A-Za-z0-9-]+))?$")
+RE_FIG_ID = re.compile(rf"^({INITIALS})f(\d{{4}})$")
+RE_FIG_FOLDER = re.compile(rf"^({INITIALS}f\d{{4}})(?:_([A-Za-z0-9-]+))?$")
+RE_EXP_ID_IN_TEXT = re.compile(rf"\b{INITIALS}e\d{{4}}\b")
 RE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RE_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 RE_PLACEHOLDER = re.compile(r"\{\{([A-Z_]+)\}\}")
@@ -87,7 +95,7 @@ RE_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 ID_PATTERN = {
     "experiment": RE_EXP_ID, "protocol": RE_PROTOCOL_ID,
-    "sample": RE_SAMPLE_ID, "project": RE_PROJECT_ID,
+    "sample": RE_SAMPLE_ID, "project": RE_PROJECT_ID, "figure": RE_FIG_ID,
 }
 
 REQUIRED = {
@@ -95,6 +103,7 @@ REQUIRED = {
     "protocol": ["protocol_id", "title", "version", "status"],
     "sample": ["sample_id", "sample_type", "title", "date_created", "status"],
     "project": ["project_id", "title", "lead", "status", "date_started"],
+    "figure": ["figure_id", "title", "researcher", "date_started", "status"],
 }
 # "Should" fields: warn when empty.
 SHOULD = {
@@ -102,12 +111,14 @@ SHOULD = {
     "protocol": [],
     "sample": ["source", "storage_location"],
     "project": [],
+    "figure": ["experiments"],
 }
 DATE_FIELDS = {
     "experiment": ["date_started", "date_completed"],
     "protocol": ["version"],
     "sample": ["date_created"],
     "project": ["date_started"],
+    "figure": ["date_started", "date_final"],
 }
 # field -> kind of thing it references
 REF_FIELDS = {
@@ -116,6 +127,7 @@ REF_FIELDS = {
     "protocol": {"supersedes": "protocol"},
     "sample": {},
     "project": {},
+    "figure": {"project": "project", "experiments": "experiment"},
 }
 REQUIRED_SECTIONS = {
     "experiment": ["Objective", "Experimental design", "Methods", "Deviations from protocol",
@@ -124,6 +136,7 @@ REQUIRED_SECTIONS = {
     "sample": ["Description", "Provenance", "Validation", "Notes"],
     "project": ["Aim / hypothesis", "Current state", "Experiments", "Reagents in use", "Figures",
                 "Related protocols"],
+    "figure": ["Purpose", "Panels", "Legend", "Size and format", "Versions", "Files"],
 }
 MEETING_TAG = "meeting"
 
@@ -492,8 +505,8 @@ def _existing_ids(root: Path, kind: str) -> List[str]:
     d = root / KIND_DIR[kind]
     if not d.is_dir():
         return []
-    if kind == "experiment":
-        return sorted(m.group(1) for p in d.iterdir() if p.is_dir() for m in [RE_EXP_FOLDER.match(p.name)] if m)
+    if kind in FOLDER_KINDS:
+        return sorted(m.group(1) for p in d.iterdir() if p.is_dir() for m in [FOLDER_KINDS[kind].match(p.name)] if m)
     return sorted(p.stem for p in d.iterdir() if _is_note_file(p))
 
 
@@ -590,15 +603,23 @@ def _is_note_file(p: Path) -> bool:
         and p.name.lower() != "readme.md"
 
 
+FOLDER_KINDS = {"experiment": RE_EXP_FOLDER, "figure": RE_FIG_FOLDER}
+
+
 def load_vault(root: Path) -> Vault:
     vault = Vault(root)
-    exp_dir = root / KIND_DIR["experiment"]
-    if exp_dir.is_dir():
-        for folder in sorted((p for p in exp_dir.iterdir() if p.is_dir() and not p.name.startswith(".")), key=by_parts):
-            m = RE_EXP_FOLDER.match(folder.name)
+    for kind, pattern in FOLDER_KINDS.items():
+        top = root / KIND_DIR[kind]
+        if not top.is_dir():
+            continue
+        unnamed = "folder name does not match {ID}_{slug}" + (
+            " (an older folder? Adopt it: the tool gives it an ID and moves its files in)" if kind == "experiment" else
+            " (figure folders are made with New figure)")
+        for folder in sorted((p for p in top.iterdir() if p.is_dir() and not p.name.startswith(".")), key=by_parts):
+            m = pattern.match(folder.name)
             folder_id = m.group(1) if m else None
             if not m:
-                vault.folder_issues.append((folder, "folder name does not match {ID}_{slug} (an older folder? Adopt it: the tool gives it an ID and moves its files in)"))
+                vault.folder_issues.append((folder, unnamed))
             notes_dir = folder / "1-notes"
             note_path = notes_dir / f"{folder_id}.md" if folder_id else None
             if note_path is None or not note_path.exists():
@@ -613,8 +634,7 @@ def load_vault(root: Path) -> Vault:
                 note_path = candidates[0]
                 if folder_id:
                     vault.folder_issues.append((folder, f"note should be named 1-notes/{folder_id}.md, found {note_path.name}"))
-            note = read_note("experiment", note_path, folder)
-            vault.notes["experiment"].append(note)
+            vault.notes[kind].append(read_note(kind, note_path, folder))
     for kind in ("protocol", "sample", "project"):
         d = root / KIND_DIR[kind]
         if d.is_dir():
@@ -805,6 +825,8 @@ def validate_vault(vault: Vault) -> List[Issue]:
 
         if kind == "experiment":
             _validate_experiment(vault, note, secs, E, W)
+        elif kind == "figure":
+            _validate_figure(vault, note, secs, E, W)
         elif kind == "sample":
             m = RE_SAMPLE_ID.match(nid) if nid else None
             stype = note.get("sample_type")
@@ -853,6 +875,65 @@ def _validate_experiment(vault: Vault, note: Note, secs: Dict[str, str], E, W) -
                 W(rel, f"status is complete but the '## {name}' section is empty")
 
 
+def panel_rows(section: str) -> List[List[str]]:
+    """The rows of the table under '## Panels', as lists of cells, without the heading row and the rule."""
+    rows = []
+    for line in RE_HTML_COMMENT.sub("", section).splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip().replace("\x00", "|") for c in line.replace("\\|", "\x00").strip("|").split("|")]
+        if all(re.fullmatch(r":?-+:?", c) for c in cells if c) and any(cells):
+            continue
+        rows.append(cells)
+    return rows[1:]
+
+
+def _validate_figure(vault: Vault, note: Note, secs: Dict[str, str], E, W) -> None:
+    rel = vault.rel(note.path)
+    folder = note.folder
+    nid = note.id
+    if folder is None:
+        return
+    m = RE_FIG_FOLDER.match(folder.name)
+    folder_id = m.group(1) if m else None
+    if folder_id and nid and folder_id != nid:
+        E(rel, f"figure_id {nid} does not match folder {folder.name}")
+    missing = [s for s in FIGURE_SUBFOLDERS if not (folder / s).is_dir()]
+    if missing:
+        E(vault.rel(folder), f"missing subfolder(s): {', '.join(missing)} (still syncing? If not, create the empty folders)")
+    check_id = folder_id or nid
+    for sub in FIGURE_SUBFOLDERS if check_id else []:
+        d = folder / sub
+        if not d.is_dir():
+            continue
+        for f in sorted(d.iterdir(), key=by_parts):
+            name = f.name
+            if not f.is_file() or name.startswith((".", "~$")) or name.lower() in EXEMPT_FILENAMES:
+                continue
+            if not (name.startswith(check_id + "_") or name.startswith(check_id + ".")):
+                W(vault.rel(f), f"filename should start with {check_id}_ (see CONVENTIONS.md section 3)")
+    # the Panels table: every experiment it names is in the header, every file it names is in 2-panels/
+    listed = note.get_list("experiments")
+    named: List[str] = []
+    for cells in panel_rows(secs.get("Panels", "")):
+        for x in RE_EXP_ID_IN_TEXT.findall(" ".join(cells)):
+            if x not in listed and x not in named:
+                named.append(x)
+        file_cell = cells[-1].strip("`").strip() if len(cells) >= 6 else ""
+        if file_cell and not (folder / "2-panels" / file_cell.split("/")[-1]).is_file():
+            W(rel, f"panel {cells[0] or '?'}: {file_cell} is not in 2-panels/")
+    for x in named:
+        W(rel, f"the Panels table names {x}, which is not in 'experiments' in the header")
+    if note.get("status") in ("final", "published"):
+        if not note.get("date_final"):
+            W(rel, f"status is {note.get('status')} but date_final is empty")
+        exports = folder / "4-exports"
+        if not (exports.is_dir() and any(f.is_file() and f.name.lower() not in EXEMPT_FILENAMES and not is_litter(f.name)
+                                          for f in exports.iterdir())):
+            W(rel, f"status is {note.get('status')} but 4-exports/ holds no finished figure")
+
+
 def print_issues(vault: Vault, issues: List[Issue], strict: bool) -> int:
     by_path: Dict[str, List[Issue]] = {}
     for i in issues:
@@ -881,6 +962,8 @@ INDEX_COLUMNS = {
                 "used_in_experiments"],
     "protocols": ["protocol_id", "title", "version", "status", "used_in_experiments"],
     "projects": ["project_id", "title", "lead", "status", "date_started", "experiments"],
+    "figures": ["figure_id", "title", "label", "researcher", "project", "experiments", "target", "tools",
+                "date_started", "date_final", "status", "tags", "folder"],
 }
 
 
@@ -923,6 +1006,14 @@ def build_index(vault: Vault) -> Dict[str, List[Dict[str, str]]]:
         rows["projects"].append({
             "project_id": p.id, "title": p.get("title"), "lead": p.get("lead"), "status": p.get("status"),
             "date_started": p.get("date_started"), "experiments": _join(used_by.get(p.id, [])),
+        })
+    for f in sorted((n for n in vault.notes["figure"] if n.id), key=lambda n: n.id):
+        rows["figures"].append({
+            "figure_id": f.id, "title": f.get("title"), "label": f.get("label"), "researcher": f.get("researcher"),
+            "project": _join(f.get_list("project")), "experiments": _join(f.get_list("experiments")),
+            "target": f.get("target"), "tools": _join(f.get_list("tools")), "date_started": f.get("date_started"),
+            "date_final": f.get("date_final"), "status": f.get("status"), "tags": _join(f.get_list("tags")),
+            "folder": vault.rel(f.folder) if f.folder else vault.rel(f.path.parent),
         })
     return rows
 
@@ -990,7 +1081,8 @@ NOTEBOOK_BODY = """
 
 This folder is a plain-text lab notebook. Each experiment is a folder in
 `Experiments/` with a Markdown note. Protocols, samples, and projects are
-Markdown notes in their own folders. `Inventory/` is an index made from them.
+Markdown notes in their own folders. A figure that goes into a paper, a grant
+or a talk is a folder in `Figures/`. `Inventory/` is an index made from them.
 
 The lines at the top are kept by the notebook tools. `owner` and `initials`
 say whose notebook this is; correct them if they are wrong. `last_ids` holds
@@ -1060,9 +1152,11 @@ def highest_ids(ids: Iterable[str]) -> List[str]:
 def ids_in_folders(root: Path) -> List[str]:
     """The experiment and sample IDs that the folder and file names show."""
     out: List[str] = []
-    exp, samples = Path(root) / "Experiments", Path(root) / "Samples"
+    exp, samples, figs = Path(root) / "Experiments", Path(root) / "Samples", Path(root) / "Figures"
     if exp.is_dir():
         out += [m.group(1) for p in exp.iterdir() if p.is_dir() for m in [RE_EXP_FOLDER.match(p.name)] if m]
+    if figs.is_dir():
+        out += [m.group(1) for p in figs.iterdir() if p.is_dir() for m in [RE_FIG_FOLDER.match(p.name)] if m]
     if samples.is_dir():
         out += [p.stem for p in samples.iterdir() if p.suffix == ".md" and initials_of(p.stem)]
     return out
@@ -1162,8 +1256,8 @@ class notebook_lock:
 
 
 def initials_of(record_id: str) -> str:
-    """'JSRe0002' -> 'JSR'; '' for anything that is not an experiment or sample ID."""
-    m = RE_EXP_ID.match(record_id or "") or RE_SAMPLE_ID.match(record_id or "")
+    """'JSRe0002' -> 'JSR'; '' for anything that is not an experiment, sample, or figure ID."""
+    m = RE_EXP_ID.match(record_id or "") or RE_SAMPLE_ID.match(record_id or "") or RE_FIG_ID.match(record_id or "")
     return m.group(1) if m else ""
 
 
@@ -1173,9 +1267,11 @@ def known_initials(root: Path) -> set:
     owner = read_notebook(root).get("initials")
     if isinstance(owner, str) and RE_INITIALS.match(owner):
         out.add(owner)
-    exp, samples = root / "Experiments", root / "Samples"
+    exp, samples, figs = root / "Experiments", root / "Samples", root / "Figures"
     if exp.is_dir():
         out.update(m.group(1)[:-5] for p in exp.iterdir() if p.is_dir() for m in [RE_EXP_FOLDER.match(p.name)] if m)
+    if figs.is_dir():
+        out.update(m.group(1)[:-5] for p in figs.iterdir() if p.is_dir() for m in [RE_FIG_FOLDER.match(p.name)] if m)
     if samples.is_dir():
         out.update(initials_of(p.stem) for p in samples.iterdir() if p.suffix == ".md")
     out.discard("")
@@ -1204,6 +1300,12 @@ def next_experiment_id(root: Path, initials: str) -> str:
                     if isinstance(v, str):
                         seen.append(v)
     return f"{initials}e{max(next_number(seen, RE_EXP_ID, initials), last_issued(root, initials, 'e') + 1):04d}"
+
+
+def next_figure_id(root: Path, initials: str) -> str:
+    d = root / "Figures"
+    seen = [m.group(1) for p in d.iterdir() if p.is_dir() for m in [RE_FIG_FOLDER.match(p.name)] if m] if d.is_dir() else []
+    return f"{initials}f{max(next_number(seen, RE_FIG_ID, initials), last_issued(root, initials, 'f') + 1):04d}"
 
 
 def next_sample_id(root: Path, initials: str, letter: str) -> str:
@@ -1258,10 +1360,22 @@ SUBFOLDER_READMES = {
 }
 
 
-def write_subfolder_readmes(folder: Path, exp_id: str) -> None:
+FIGURE_READMES = {
+    "1-notes": "The figure note `{ID}.md` is here. Legend drafts and comments from co-authors can go here too;\n"
+               "name them `{ID}_something.md`.\n",
+    "2-panels": "One file per panel, as it goes into the figure: `{ID}_a_what-it-shows.pdf`, `{ID}_b_...`.\n"
+                "Copy each from the experiment that made it, and name that experiment in the Panels table of the note.\n",
+    "3-source": "The file the figure is laid out in, whatever the program: Illustrator, CanvasX, Prism, PowerPoint,\n"
+                "an R or Python script. Name it `{ID}_layout.ai`, `{ID}_assemble.R`, and so on.\n",
+    "4-exports": "The finished figure as it was sent out, one file per version: `{ID}_v1_{YYYYMMDD}.pdf`.\n"
+                 "Do not overwrite an old version. Add a new file, and a line under Versions in the note.\n",
+}
+
+
+def write_subfolder_readmes(folder: Path, exp_id: str, readmes: Optional[Dict[str, str]] = None) -> None:
     """A one-paragraph README in each subfolder: tells people what goes there, and keeps the
     folder alive in git, which does not track empty directories."""
-    for sub, text in SUBFOLDER_READMES.items():
+    for sub, text in (readmes or SUBFOLDER_READMES).items():
         p = folder / sub / "README.md"
         if not p.exists():
             write_text_lf(p, f"# {sub}\n\n{text.replace('{ID}', exp_id)}")
@@ -1386,6 +1500,54 @@ def _create_experiment_locked(root, initials, researcher, title, project, exp_ty
         shutil.copyfile(src, dst)
         result.extra.append(dst)
 
+    if index:
+        index_after_create(root, result)
+    return result
+
+
+def create_figure(root: Path, initials: str, researcher: str, title: str, project: str = "", experiments: str = "",
+                  label: str = "", target: str = "", tools: str = "", tags: str = "", index: bool = True,
+                  today: Optional[str] = None) -> Created:
+    """A figure record: a folder for the panels, the layout file, and the finished versions, with a note that
+    says which experiment each panel came from. It does not matter what program the figure is made in."""
+    title = (title or "").strip()
+    if not title:
+        raise ElnError("a figure needs a title")
+    if not RE_INITIALS.match(initials or ""):
+        raise ElnError(f"initials must be 2-4 letters, e.g. JSR (got {initials!r})")
+    require_folder(root)
+    for p in csv_items(project):
+        if not RE_PROJECT_ID.match(p):
+            raise ElnError(f"project ID {p!r} is not valid: letters, digits, and hyphens only, starting with a letter, "
+                           "no spaces (e.g. PRMT5-ChromatinRelease)")
+    today = today or date.today().isoformat()
+    with notebook_lock(root):
+        fig_id = next_figure_id(root, initials)
+        slug = slugify(title)
+        folder = root / "Figures" / (f"{fig_id}_{slug}" if slug else fig_id)
+        if folder.exists():
+            raise ElnError(f"{folder} already exists. Aborting.")
+        ensure_vault_dirs(root)
+        for sub in FIGURE_SUBFOLDERS:
+            (folder / sub).mkdir(parents=True, exist_ok=True)
+        write_subfolder_readmes(folder, fig_id, FIGURE_READMES)
+        note_path = folder / "1-notes" / f"{fig_id}.md"
+        write_text_lf(note_path, render_template("figure", {
+            "FIGURE_ID": fig_id, "TITLE": title, "RESEARCHER": researcher or initials, "PROJECT": project or "",
+            "EXPERIMENTS": experiments or "", "LABEL": label or "", "TARGET": target or "", "TOOLS": tools or "",
+            "DATE": today, "TAGS": tags or "",
+        }))
+        result = Created(fig_id, note_path)
+        record_id(root, fig_id)
+    for p in csv_items(project):
+        if not (root / "Projects" / f"{p}.md").exists():
+            result.warnings.append(f"project {p} has no page in Projects/ yet (create it with New project)")
+    known = known_initials(root)
+    exp_dir = root / "Experiments"
+    there = {m.group(1) for q in exp_dir.iterdir() if q.is_dir() for m in [RE_EXP_FOLDER.match(q.name)] if m} if exp_dir.is_dir() else set()
+    for x in csv_items(experiments):
+        if x not in there and not in_another_notebook(x, known):
+            result.warnings.append(f"experiment {x} is not in Experiments/ (check the ID)")
     if index:
         index_after_create(root, result)
     return result
@@ -1579,6 +1741,36 @@ def cmd_new_protocol(args) -> int:
     return 0
 
 
+def cmd_new_figure(args) -> int:
+    config = load_config()
+    root = resolve_root(args.root, config)
+    interactive = bool(args.interactive)
+    if interactive:
+        print("New figure record (an assembled figure for a paper, a grant, or a talk).\n")
+        while not (args.title or "").strip():
+            args.title = _prompt("  Title, e.g. PRMT5 inhibition keeps SNRPB on chromatin")
+        args.experiments = args.experiments or _prompt("  Experiment IDs the panels come from, comma-separated"
+                                                       + _hint(_existing_ids(root, "experiment")))
+        args.project = args.project or _prompt("  Project ID" + _hint(_existing_ids(root, "project")))
+        args.label = args.label or _prompt("  What it is called where it is used (e.g. Figure 2)", "")
+        print()
+    if not (args.title or "").strip():
+        raise ElnError("give a title with --title \"...\", or run with --interactive to be asked")
+    initials, researcher = resolve_person(args, config, interactive=interactive)
+    if args.dry_run:
+        fig_id = next_figure_id(root, initials)
+        print(f"Root:   {root}\nWould create {fig_id}:\n  Figures/{fig_id}_{slugify(args.title)}/{{{','.join(FIGURE_SUBFOLDERS)}}}")
+        return 0
+    result = create_figure(root, initials, researcher, args.title, project=args.project or "",
+                           experiments=args.experiments or "", label=args.label or "", target=args.target or "",
+                           tools=args.tools or "", tags=args.tags or "", index=not args.no_index)
+    _report_created(root, result)
+    if args.open:
+        open_path(result.path)
+    print("Put each panel in 2-panels/ and fill in the Panels table: which experiment each panel came from.")
+    return 0
+
+
 def cmd_new_project(args) -> int:
     config = load_config()
     root = resolve_root(args.root, config)
@@ -1618,7 +1810,7 @@ def _ci_in(needle: str, items: List[str]) -> bool:
 def find_notes(vault: Vault, kind: str, project: Optional[str] = None, status: Optional[str] = None,
                researcher: Optional[str] = None, tag: Optional[str] = None, sample: Optional[str] = None,
                protocol: Optional[str] = None, exp_type: Optional[str] = None,
-               text: Optional[str] = None) -> List[Note]:
+               text: Optional[str] = None, experiment: Optional[str] = None) -> List[Note]:
     out = []
     for n in vault.notes[kind]:
         if not n.id:
@@ -1637,6 +1829,8 @@ def find_notes(vault: Vault, kind: str, project: Optional[str] = None, status: O
             continue
         if exp_type and not _ci_in(exp_type, n.get_list("experiment_type")):
             continue
+        if experiment and not _ci_in(experiment, n.get_list("experiments")):
+            continue
         if text:
             hay = "\n".join([n.id] + [n.get(k) for k in n.fields] + [n.body]).lower()
             if not all(word in hay for word in text.lower().split()):
@@ -1648,7 +1842,7 @@ def find_notes(vault: Vault, kind: str, project: Optional[str] = None, status: O
 def cmd_find(args) -> int:
     vault = load_vault(resolve_root(args.root))
     hits = find_notes(vault, args.kind, args.project, args.status, args.researcher, args.tag,
-                      args.sample, args.protocol, args.exp_type, args.text)
+                      args.sample, args.protocol, args.exp_type, args.text, args.experiment)
     if args.json:
         print(json.dumps([dict(n.fields, path=vault.rel(n.path)) for n in hits], indent=2))
         return 0
@@ -2268,8 +2462,9 @@ def render_snapshot_html(vault: Vault, note: Note, generated: Optional[str] = No
             if own.match(rel):
                 continue  # the snapshot and the manifest describe the folder; they are not listed in it
             rows.append(f"<tr><td>{esc(rel)}</td><td>{p.stat().st_size:,}</td></tr>")
-        files_html = "<h2>Files in this experiment folder</h2><table><tr><th>path</th><th>bytes</th></tr>" + "".join(rows) + "</table>"
-        provenance.append(("Checksums of every file", f"<code>1-notes/{esc(note.id)}_MANIFEST.sha256</code> (written when the experiment is marked complete)"))
+        files_html = f"<h2>Files in this {note.kind} folder</h2><table><tr><th>path</th><th>bytes</th></tr>" + "".join(rows) + "</table>"
+        if note.kind == "experiment":
+            provenance.append(("Checksums of every file", f"<code>1-notes/{esc(note.id)}_MANIFEST.sha256</code> (written when the experiment is marked complete)"))
     prov_html = "<h2>Provenance</h2><table class=\"meta prov\">" + "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in provenance) + "</table>"
     sign_html = ""
     if lab["print_signatures"].strip().lower() not in ("no", "false", "0", "off", ""):
@@ -2936,6 +3131,19 @@ def build_parser() -> argparse.ArgumentParser:
     pj.add_argument("--tags")
     pj.set_defaults(func=cmd_new_project)
 
+    fg = nsub.add_parser("figure", parents=[common, wizard],
+                         help="new figure record: an assembled figure for a paper, grant, or talk, and where its panels came from")
+    fg.add_argument("--title")
+    fg.add_argument("--initials", help="override the initials from init")
+    fg.add_argument("--researcher", help="override the name from init")
+    fg.add_argument("--project", help="project ID(s), comma-separated")
+    fg.add_argument("--experiments", help="the experiment ID(s) the panels come from, comma-separated")
+    fg.add_argument("--label", help="what it is called where it is used, e.g. \"Figure 2\"")
+    fg.add_argument("--target", help="where it is going: a journal, a grant, a talk")
+    fg.add_argument("--tools", help="what it is made with, comma-separated: R, Prism, Illustrator, ...")
+    fg.add_argument("--tags")
+    fg.set_defaults(func=cmd_new_figure)
+
     v = sub.add_parser("validate", parents=[common], help="check every note and folder against docs/CONVENTIONS.md")
     v.add_argument("--strict", action="store_true", help="treat warnings as errors")
     v.set_defaults(func=cmd_validate)
@@ -2953,6 +3161,7 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--sample", help="experiments that used this sample ID")
     f.add_argument("--protocol", help="experiments that used this protocol ID")
     f.add_argument("--type", dest="exp_type", help="experiment type")
+    f.add_argument("--experiment", help="with --kind figure: figures that use this experiment ID")
     f.add_argument("--text", help="substring in title or body, case-insensitive")
     f.add_argument("--ids", action="store_true", help="print IDs only")
     f.add_argument("--json", action="store_true", help="print full header fields as JSON")

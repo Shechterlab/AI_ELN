@@ -17,6 +17,7 @@ Write with **Edit here**. To practise first: **Open the practice notebook** on t
 | Sample | `INITIALS` + letter + 4 digits | `JSRp0001` |
 | Protocol | `P_` + Name | `P_WesternBlot` |
 | Project | Name | `PRMT5-ChromatinRelease` |
+| Figure | `INITIALS` + `f` + 4 digits | `JSRf0001` |
 
 Sample letters: **p** plasmid · **i** oligo · **a** antibody · **c** cell line ·
 **m** mouse line · **t** peptide · **r** protein prep · **s** slide · **g** gel
@@ -34,6 +35,17 @@ Experiments/JSRe0002_short-title/
   3-code/            JSRe0002_analysis.R
   4-data_processed/  JSRe0002_quantification.csv
   5-figures/         JSRe0002_R_what-it-shows_20260904.png   (R = the results figure)
+```
+
+A figure for a paper, a grant or a talk gets its own record, whatever program
+it is made in. The note lists which experiment each panel came from.
+
+```
+Figures/JSRf0001_short-title/
+  1-notes/    JSRf0001.md  (Panels table, legend, versions)
+  2-panels/   JSRf0001_a_blot.pdf, one file per panel
+  3-source/   JSRf0001_layout.ai  (or .cvx, .pzfx, .pptx, .R, .py)
+  4-exports/  JSRf0001_v1_20260915.pdf, one file per version sent out
 ```
 
 Each person has one notebook folder. `notebook.md` at its top says whose it
@@ -68,7 +80,7 @@ Results · Interpretation · Decision · Follow-up experiments · Files
 
 ## Buttons on the page (and the matching double-clicks in `launchers/`)
 
-**New experiment** · **New sample** · **New protocol** · **New project** ·
+**New experiment** · **New sample** · **New protocol** · **New project** · **New figure** ·
 **Check** · **Meeting brief** · **Export** (one file for ChatGPT, or a folder of plain files) · **Adopt older folders** ·
 on a note: **Edit here** · **Add files** · **Repeat this experiment** · **Print / save as PDF** · **Mark complete** · **Verify files**
 

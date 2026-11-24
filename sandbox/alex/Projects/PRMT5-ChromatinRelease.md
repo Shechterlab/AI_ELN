@@ -53,6 +53,8 @@ ALXc0001, ALXc0002, ALXa0001, ALXa0002, ALXa0003, ALXi0001; Jordan's plasmids JO
 
 ## Figures
 
+- ALXf0001 - Figure 2, PRMT5 inhibition keeps SNRPB on chromatin - draft (panels a and b in place)
+
 ## Related protocols
 
 P_CellularFractionation, P_WesternBlot, P_RNAextraction, P_RTqPCR

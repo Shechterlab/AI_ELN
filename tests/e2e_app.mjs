@@ -166,6 +166,28 @@ await click('Flag for lab meeting');
 await click('Refresh snapshot & manifest');
 await shot('note-complete');
 
+await open('#/new/figure');
+await page.fill('#n-title', 'SNRPB stays on chromatin');
+await page.check('input[name="experiments"][value="JSRe0001"]');
+await page.fill('#n-other', 'XYZe0003');
+await page.fill('#n-label', 'Figure 2');
+await page.fill('#n-tools', 'Prism, Illustrator');
+await click('Create figure');
+body = await text();
+check('figure record created with its own ID and folder', (await text('h1')).includes('JSRf0001')
+  && body.includes('Figures/JSRf0001_SNRPB-stays-on-chromatin/1-notes/JSRf0001.md') && body.includes('2-panels/') && body.includes('4-exports/'), body.slice(0, 300));
+check('the figure lists the experiments its panels come from', body.includes('Experiments the panels come from') && body.includes('XYZe0003 is not in this notebook')
+  && (await page.locator('#main table a[href="#/note/JSRe0001"]').count()) >= 1);
+await page.setInputFiles('input[name="files"]', { name: 'blot for fig.png', mimeType: 'image/png', buffer: png });
+await page.fill('input[name="description"]', 'a blot');
+await click('Add');
+check('a panel added to a figure is named with the figure ID', (await text()).includes('2-panels/JSRf0001_a-blot.png'), (await text()).slice(0, 300));
+await shot('figure');
+await open('#/note/JSRe0001');
+check('an experiment shows the figures that use it', (await text()).includes('Used in figures') && (await text()).includes('JSRf0001'));
+await open('#/figures');
+check('figure list', (await text()).includes('JSRf0001') && (await text()).includes('Figure 2') && (await text()).includes('draft'));
+
 await open('#/check');
 check('Check finds no problems', (await text()).includes('0 errors') && (await text()).includes('0 warnings'), (await text()).slice(0, 400));
 await open('#/experiments');

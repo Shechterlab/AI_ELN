@@ -79,11 +79,11 @@ class TestWeb(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("Shechter Lab research record", body)
         self.assertIn("Web Person (WEB)", body)
-        for path in ("/new/experiment", "/new/sample", "/new/protocol", "/new/project", "/setup", "/export"):
+        for path in ("/new/experiment", "/new/sample", "/new/protocol", "/new/project", "/new/figure", "/setup", "/export"):
             code, body, _ = self.get(path)
             self.assertEqual(code, 200, path)
             self.assertIn("<form", body, path)
-        for path in ("/experiments", "/samples", "/protocols", "/projects", "/validate", "/report", "/ai"):
+        for path in ("/experiments", "/samples", "/protocols", "/projects", "/figures", "/validate", "/report", "/ai"):
             code, body, _ = self.get(path)
             self.assertEqual(code, 200, path)
             self.assertIn("<h1>", body, path)
@@ -125,6 +125,18 @@ class TestWeb(unittest.TestCase):
         code, body, _ = self.get("/note/WEBa0001")
         self.assertIn("Used in", body)
         self.assertIn("WEBe0001", body)
+        # a figure record, and the experiment page says it is used in one
+        code, _, h = self.post("/new/figure", {"title": "Form-made figure", "experiments": "WEBe0001", "label": "Figure 1", "tools": "Prism"})
+        self.assertEqual(code, 303)
+        self.assertEqual(h["Location"], "/note/WEBf0001?created=1")
+        code, body, _ = self.get("/note/WEBf0001")
+        self.assertIn("Experiments the panels come from", body)
+        self.assertIn("<b>2-panels/</b>", body)
+        self.assertIn("Used in figures", self.get("/note/WEBe0001")[1])
+        self.assertIn("WEBf0001", self.get("/figures")[1])
+        code, body, _ = self.post("/new/figure", {"title": ""})
+        self.assertEqual(code, 400)
+        self.assertIn("a figure needs a title", body)
 
     def test_03_form_errors_come_back_to_the_form(self):
         code, body, _ = self.post("/new/experiment", {"title": "   "})

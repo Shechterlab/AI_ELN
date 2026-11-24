@@ -155,7 +155,7 @@ by `init` (in `~/.ai_eln.json`), then the tools folder itself.
 | `new experiment/sample/protocol/project` | assigns the ID, fills in the template, copies the protocols as run, rebuilds the index; `--interactive` asks questions (used by the launchers), `--open` opens the note |
 | `adopt [FOLDER]` | makes an experiment record from an older folder and moves the folder, unchanged, into its `2-data_raw/`; with no folder, lists the folders in the notebook that are not records; `--copy` leaves the original in place |
 | `validate [--strict]` | Check: every rule in `CONVENTIONS.md` §6; errors fail, warnings advise |
-| `index` | regenerates the four CSV files from the notes, including which experiments used each sample and protocol |
+| `index` | regenerates the five CSV files from the notes, including which experiments used each sample and protocol |
 | `find` | filters by project, status, researcher, tag, sample, protocol, type, or free text; `--ids`, `--json` |
 | `report` | the lab-meeting brief in Markdown: experiments flagged with `tags: [meeting]`, active experiments by project, recently completed, paused or abandoned |
 | `export` | the chosen experiments and the records they refer to: one Markdown file with a short explanation for the AI (default), `--format folder` for a folder of plain files in `Exports/`, `--format eln` for a `.eln` archive that other electronic notebooks import |

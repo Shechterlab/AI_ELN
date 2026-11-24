@@ -36,6 +36,7 @@ In a notebook folder:
 ```
 Experiments/{ID}_{short-title}/{1-notes,2-data_raw,3-code,4-data_processed,5-figures}/
 Protocols/P_{Name}.md   Samples/{ID}.md   Projects/{ID}.md
+Figures/{ID}_{short-title}/{1-notes,2-panels,3-source,4-exports}/   an assembled figure for a paper, grant, or talk
 Inventory/*.csv         index made by `eln.py index`; never edit by hand
 notebook.md             whose notebook this is and the last ID given out per kind; kept by the tools
 Exports/                folders written by `export --format folder`: copies, never cite or edit them
@@ -80,9 +81,10 @@ the sandbox (`--root sandbox/alex` or `--root sandbox/jordan`).
 ## The tool
 
 ```bash
-python3 scripts/eln.py find [--project X] [--status s] [--researcher r] [--tag t] [--sample ID] [--protocol ID] [--type T] [--text q] [--kind sample|protocol|project] [--ids|--json]
+python3 scripts/eln.py find [--project X] [--status s] [--researcher r] [--tag t] [--sample ID] [--protocol ID] [--type T] [--text q] [--kind sample|protocol|project|figure] [--experiment ID] [--ids|--json]
 python3 scripts/eln.py new experiment --title "..." [--project ID] [--type T] [--protocol P_X] [--samples ID,ID] [--notebook NB..] [--tags meeting]
 python3 scripts/eln.py new sample --type plasmid --title "..."   |  new protocol --name X  |  new project --id X
+python3 scripts/eln.py new figure --title "..." [--experiments ID,ID] [--project ID] [--label "Figure 2"] [--target T] [--tools R,Illustrator]
 python3 scripts/eln.py adopt ["/path/to/old folder"]   # an older folder becomes an experiment; with no folder, lists the candidates
 python3 scripts/eln.py validate [--strict]      # Check: every rule in CONVENTIONS.md; ERROR fails, WARN advises
 python3 scripts/eln.py index                    # regenerate Inventory/*.csv

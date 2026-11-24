@@ -63,7 +63,7 @@ form.stack .hint,.hint{color:var(--muted);font-size:13px;margin-top:3px}form.sta
 .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:4px 16px;margin-top:6px}.checks label{font-weight:400;margin:0;display:flex;gap:8px;align-items:baseline}
 table{border-collapse:collapse;width:100%;margin:8px 0 14px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#eef2f6;color:var(--muted)}
-.pill.active{background:#dcfce7;color:var(--ok)}.pill.complete{background:var(--teal-wash);color:var(--teal)}.pill.paused,.pill.abandoned{background:#fef3c7;color:var(--warn)}
+.pill.active{background:#dcfce7;color:var(--ok)}.pill.complete,.pill.final,.pill.published{background:var(--teal-wash);color:var(--teal)}.pill.paused,.pill.abandoned,.pill.retired{background:#fef3c7;color:var(--warn)}
 .msg{padding:12px 14px;border-radius:.5rem;margin:0 0 16px}.msg.ok{background:#dcfce7;color:#14532d}.msg.err{background:#fee4e2;color:var(--err)}.msg.warn{background:#fef3c7;color:#713f12}
 .issue{font-family:var(--font-mono);font-size:13px;margin:2px 0}.issue .lvl{display:inline-block;width:56px;font-weight:700}.lvl.ERROR{color:var(--err)}.lvl.WARN{color:var(--warn)}
 .note img{max-width:100%;border:1px solid var(--line);border-radius:6px}.note pre{background:var(--code-bg);padding:10px;border-radius:6px;overflow-x:auto}code{font-family:var(--font-mono);font-size:.9em}.note code,p code,td code,.hint code{background:var(--code-bg);padding:1px 5px;border-radius:4px}
@@ -77,7 +77,7 @@ footer{max-width:1080px;margin:0 auto;padding:14px 20px 30px;color:var(--muted);
 """
 
 NAV = [("/", "Home"), ("/experiments", "Experiments"), ("/samples", "Samples"), ("/protocols", "Protocols"),
-       ("/projects", "Projects"), ("/validate", "Check"), ("/report", "Meeting brief"), ("/export", "Export"),
+       ("/projects", "Projects"), ("/figures", "Figures"), ("/validate", "Check"), ("/report", "Meeting brief"), ("/export", "Export"),
        ("/ai", "Ask the AI")]
 
 ASKS = [
@@ -173,6 +173,7 @@ class App:
             ("/new/sample", "New sample", "Plasmid, oligo, antibody, cell line, gel..."),
             ("/new/protocol", "New protocol", "A reusable procedure, one file each."),
             ("/new/project", "New project", "A summary page for a research project."),
+            ("/new/figure", "New figure", "An assembled figure for a paper, a grant, or a talk."),
             ("/validate", "Check everything", "Lists naming and metadata problems."),
             ("/report", "Lab meeting brief", "Summary of experiments flagged for the meeting."),
             ("/export", "Export", "One file to paste into a chat, or a .eln archive."),
@@ -214,6 +215,41 @@ class App:
                (self.exp_table(v, hits) if hits else "<p>No matches.</p>")
         return page("Experiments", body, "/experiments", self.root)
 
+    def fig_table(self, figs) -> str:
+        rows = "".join(
+            f"<tr><td><a href='/note/{esc(f.id)}'>{esc(f.id)}</a></td><td>{esc(f.get('label'))}</td><td>{esc(f.get('title'))}</td>"
+            f"<td>{esc(', '.join(f.get_list('experiments')))}</td><td>{esc(f.get('target'))}</td>"
+            f"<td>{self.status_pill(f.get('status'))}</td></tr>" for f in figs)
+        return ("<table><tr><th>ID</th><th>Label</th><th>Title</th><th>Panels from</th><th>For</th><th>Status</th></tr>"
+                f"{rows}</table>")
+
+    def figures(self) -> str:
+        v = eln.load_vault(self.root)
+        figs = sorted((n for n in v.notes["figure"] if n.id), key=lambda n: n.id)
+        body = ("<h1>Figures</h1><p class=hint>An assembled figure that goes out: a paper, a grant, a talk. Each one records which "
+                "experiment every panel came from. The result figure of a single experiment is not listed here. It stays in that "
+                "experiment's <code>5-figures</code>.</p><div class=actions><a class=btn href='/new/figure'>New figure</a></div>"
+                + (self.fig_table(figs) if figs else "<p>None yet.</p>"))
+        return page("Figures", body, "/figures", self.root)
+
+    def form_figure(self, err: str = "", vals: Optional[Dict[str, str]] = None) -> str:
+        vals = vals or {}
+        body = f"""
+        <h1>New figure</h1>{self.need_setup() or ''}{f"<div class='msg err'>{esc(err)}</div>" if err else ''}
+        <p class=hint>For an assembled figure that goes out: a paper, a grant, a talk. It gets a folder for the panels, the layout file
+        and the finished versions, and a note that says which experiment each panel came from. It does not matter what program you make it in.</p>
+        <form class=stack method=post>
+          <label>Title</label><input type=text name=title required autofocus value='{esc(vals.get('title'))}' placeholder='e.g. PRMT5 inhibition keeps SNRPB on chromatin'>
+          <label>Experiments the panels come from</label><input type=text name=experiments value='{esc(vals.get('experiments'))}' placeholder='JSRe0002, JSRe0004'>
+          <div class=hint>Experiment IDs, separated by commas. You can add more later in the header.</div>
+          <div class=row><div><label>Project</label><input type=text name=project value='{esc(vals.get('project'))}'></div>
+          <div><label>Label</label><input type=text name=label value='{esc(vals.get('label'))}' placeholder='Figure 2'></div></div>
+          <div class=row><div><label>Where it is going</label><input type=text name=target value='{esc(vals.get('target'))}' placeholder='a journal, a grant, a talk'></div>
+          <div><label>Made with</label><input type=text name=tools value='{esc(vals.get('tools'))}' placeholder='R, Prism, Illustrator'></div></div>
+          <div class=actions style='margin-top:18px'><button class=btn>Create figure</button><a href='/figures' class='btn secondary'>Cancel</a></div>
+        </form>"""
+        return page("New figure", body, "/figures", self.root)
+
     def simple_list(self, kind: str, title: str, cols: List[Tuple[str, str]]) -> str:
         v = eln.load_vault(self.root)
         notes = sorted((n for n in v.notes[kind] if n.id), key=lambda n: n.id)
@@ -239,9 +275,9 @@ class App:
                        for k, val in n.fields.items() if k != "type")
         folder = n.folder if n.folder else n.path.parent
         files_html = ""
-        if n.kind == "experiment" and n.folder:
+        if n.kind in ("experiment", "figure") and n.folder:
             parts = []
-            for sub in eln.SUBFOLDERS:
+            for sub in (eln.FIGURE_SUBFOLDERS if n.kind == "figure" else eln.SUBFOLDERS):
                 d = n.folder / sub
                 # files in folders below (an adopted folder in 2-data_raw, for one) are listed with their path
                 found = [p.relative_to(d) for p in d.rglob("*") if p.is_file()] if d.is_dir() else []
@@ -254,6 +290,16 @@ class App:
             key = {"sample": "sample", "protocol": "protocol", "project": "project"}[n.kind]
             used = eln.find_notes(v, "experiment", **{key: n.id})
             usage = "<h2>Used in</h2>" + (self.exp_table(v, used) if used else "<p>No experiment yet.</p>")
+        if n.kind in ("experiment", "project"):
+            figs = eln.find_notes(v, "figure", **({"experiment": n.id} if n.kind == "experiment" else {"project": n.id}))
+            if figs:
+                usage += ("<h2>Used in figures</h2>" if n.kind == "experiment" else "<h2>Figures</h2>") + self.fig_table(figs)
+        if n.kind == "figure":
+            here = [v.by_id[x] for x in n.get_list("experiments") if x in v.by_id and v.by_id[x].kind == "experiment"]
+            usage = "<h2>Experiments the panels come from</h2>" + (self.exp_table(v, here) if here else "") + "".join(
+                f"<p class=path>{esc(x)} is not in this notebook.</p>" for x in n.get_list("experiments") if x not in v.by_id)
+            if not n.get_list("experiments"):
+                usage += "<p>None listed yet. Add the experiment IDs to <code>experiments</code> in the header.</p>"
         actions = (f"<form class=actions method=post action='/open'>"
                    f"<a class=btn href='/edit/{esc(n.id)}'>Edit here</a>"
                    f"<input type=hidden name=p value='{esc(self.rel(n.path))}'>"
@@ -586,6 +632,8 @@ def make_handler(app: App):
                     return self.send_html(app.simple_list("protocol", "Protocols", [("id", "ID"), ("title", "Title"), ("version", "Version"), ("status", "Status")]))
                 if path == "/projects":
                     return self.send_html(app.simple_list("project", "Projects", [("id", "ID"), ("title", "Title"), ("lead", "Lead"), ("status", "Status")]))
+                if path == "/figures":
+                    return self.send_html(app.figures())
                 if path.startswith("/note/"):
                     nid = path[len("/note/"):]
                     msg = ""
@@ -612,6 +660,8 @@ def make_handler(app: App):
                     return self.send_html(app.form_protocol())
                 if path == "/new/project":
                     return self.send_html(app.form_project())
+                if path == "/new/figure":
+                    return self.send_html(app.form_figure())
                 if path == "/setup":
                     return self.send_html(app.form_setup(saved=bool(q.get("saved"))))
                 if path == "/validate":
@@ -694,6 +744,17 @@ def make_handler(app: App):
                     except eln.ElnError as e:
                         return self.send_html(app.form_project(str(e), {k: g(k) for k in ("project_id", "title", "lead")}), 400)
                     return self.redirect(f"/note/{r.id}?created=1")
+                if path == "/new/figure":
+                    initials, researcher = app.person()
+                    if not initials:
+                        return self.redirect("/setup")
+                    keys = ("title", "experiments", "project", "label", "target", "tools")
+                    try:
+                        r = eln.create_figure(app.root, initials, researcher, g("title"), **{k: g(k) for k in keys[1:]})
+                    except eln.ElnError as e:
+                        return self.send_html(app.form_figure(str(e), {k: g(k) for k in keys}), 400)
+                    warn = "&warn=" + quote(" ".join(r.warnings)) if r.warnings else ""
+                    return self.redirect(f"/note/{r.id}?created=1{warn}")
                 if path.startswith("/edit/"):
                     nid = path[len("/edit/"):]
                     error, redirect = app.save_edit(nid, g("text"))

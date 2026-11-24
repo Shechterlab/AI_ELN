@@ -7,8 +7,8 @@ disagree, this page is right and the tool has a bug.
 ## 0. Summary
 
 1. **One folder per experiment**, five fixed subfolders, same shape every time.
-2. **One Markdown note** per experiment, protocol, sample, and project, with a
-   small YAML header on top.
+2. **One Markdown note** per experiment, protocol, sample, project, and figure,
+   with a small YAML header on top.
 3. **IDs are assigned by the tool**, never typed by hand, never reused.
 4. **Filenames start with the ID they belong to.** Raw instrument output is
    never renamed.
@@ -22,6 +22,7 @@ disagree, this page is right and the tool has a bug.
 | Sample | `{INITIALS}{letter}{NNNN}` | `JSRp0001` | `eln.py new sample` |
 | Protocol | `P_{Name}` | `P_WesternBlot` | `eln.py new protocol` |
 | Project | `{Name}` | `PRMT5-ChromatinRelease` | `eln.py new project` |
+| Figure | `{INITIALS}f{NNNN}` | `JSRf0001` | `eln.py new figure` |
 
 - **`INITIALS`**: uppercase letters, one set per researcher (`JSR`, `DSL`).
   Use three: first, middle, and last initial. Two to four are accepted, but
@@ -79,7 +80,13 @@ reports any that match no record.
 ├── Protocols/    P_{Name}.md
 ├── Samples/      {SAMPLE_ID}.md
 ├── Projects/     {PROJECT_ID}.md
-├── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv  (generated)
+├── Figures/
+│   └── {FIGURE_ID}_{slug}/
+│       ├── 1-notes/            {FIGURE_ID}.md lives here
+│       ├── 2-panels/           one file per panel, as it goes into the figure
+│       ├── 3-source/           the file the figure is laid out in, whatever the program
+│       └── 4-exports/          the finished figure, one file per version sent out
+├── Inventory/    experiments.csv, samples.csv, protocols.csv, projects.csv, figures.csv  (generated)
 ├── AGENTS.md     the rules in short, for AI tools opened in this folder; written at setup
 ├── Exports/      folders written by Export: copies, safe to delete
 ├── notebook.md   whose notebook this is and the last IDs given out; kept by the tool
@@ -341,6 +348,56 @@ conclusions*, *Open questions / conflicting observations*, *Experiments
 needing replication*; every conclusion cites experiment IDs) **·
 Experiments · Reagents in use · Figures · Related protocols.**
 
+### 4.5 Figure
+
+A figure record is for an assembled figure that goes out: into a paper, a
+grant, a talk, a thesis. It draws on one or more experiments and says which
+experiment each panel came from. The result figure of a single experiment is
+not a figure record; it stays in that experiment's `5-figures/`.
+
+The record does not depend on the program the figure is made in. Panels can
+come from R, Python, Prism, or an instrument's own software, and the layout
+can be an Illustrator, CanvasX, PowerPoint, or Inkscape file, or a script.
+The record holds the files and says where each one came from.
+
+| field | required | type / allowed values |
+|---|---|---|
+| `type` | yes | `figure` |
+| `figure_id` | yes | matches the folder name |
+| `title` | yes | |
+| `researcher` | yes | |
+| `project` | no | list of project IDs |
+| `experiments` | should | list of experiment IDs the panels come from |
+| `label` | no | what it is called where it is used: `Figure 2`, `Fig. S3` |
+| `target` | no | where it is going: a journal, a grant, a talk |
+| `tools` | no | list: `R`, `Prism`, `Illustrator`, ... |
+| `width_mm`, `height_mm` | no | the finished size |
+| `date_started` | yes | date |
+| `date_final` | when final | date |
+| `status` | yes | `draft` · `final` · `published` · `retired` |
+| `tags` | no | list |
+
+The ID does not change. The `label` does, whenever figures are renumbered,
+so refer to a figure by its ID in notes and by its label in the manuscript.
+
+Body sections: **Purpose · Panels · Legend · Size and format · Versions ·
+Files.** *Panels* is a table with one row per panel:
+
+```
+| Panel | Shows | From | Data | Made with | File |
+|---|---|---|---|---|---|
+| a | SNRPB in each fraction, DMSO vs PRMT5i | JSRe0002 | 2-data_raw (replicate 1 scan) | Image Studio export | `JSRf0001_a_blot.png` |
+| b | chromatin-bound fraction, n = 3 | JSRe0002 | `4-data_processed/JSRe0002_quantification.csv` | `3-code/JSRe0002_plot.R` | `JSRf0001_b_quantification.pdf` |
+```
+
+*From* is the experiment ID. *Data* is the file that was plotted and *Made
+with* is the script or program that drew it, both as paths inside that
+experiment. *File* is the panel as it sits in `2-panels/`. A panel file is a
+copy; the original stays in its experiment. Every file in a figure folder
+starts with the figure ID. In `4-exports/` keep one file per version that
+was sent to anyone (`JSRf0001_v2_20260930.pdf`), do not overwrite an old
+one, and add a line under *Versions* saying who got it and what changed.
+
 ## 5. Dates and statuses
 
 - Dates in headers: `YYYY-MM-DD`. Dates in filenames: `YYYYMMDD`, which
@@ -371,6 +428,7 @@ advice, unless you pass `--strict`.
 - Experiment folder name doesn't match `{ID}_{slug}`; a subfolder is
   missing; there's no `1-notes/{ID}.md`; the note's `experiment_id`
   doesn't match the folder.
+- The same four for a figure folder under `Figures/`.
 - A header that doesn't parse, a missing required field, a `status` or
   `sample_type` outside the allowed set, a date that isn't `YYYY-MM-DD`.
 - A protocol / sample / project whose filename doesn't match its ID, or a
@@ -381,8 +439,8 @@ advice, unless you pass `--strict`.
 
 **Warnings**, which are worth fixing soon:
 
-- An ID in `project`, `protocols`, `samples`, `related_experiments`, or
-  `supersedes` that matches no record (an experiment or sample ID with
+- An ID in `project`, `protocols`, `samples`, `related_experiments`,
+  `supersedes`, or a figure's `experiments` that matches no record (an experiment or sample ID with
   someone else's initials is not reported; see §1).
 - Something wrong with `notebook.md` (see §2).
 - `project`, `protocols`, or `raw_data_path` still empty (not reported for
@@ -391,6 +449,10 @@ advice, unless you pass `--strict`.
   that doesn't start with the experiment ID.
 - An experiment marked `complete` with an empty Results or Interpretation
   section, or no `date_completed`.
+- In a figure: a file that doesn't start with the figure ID; an experiment
+  named in the Panels table but not in `experiments`; a panel file named in
+  the table that is not in `2-panels/`; `final` or `published` with no
+  `date_final` or nothing in `4-exports/`.
 - A required body section missing, or a header key that isn't in the
   template (usually a typo).
 

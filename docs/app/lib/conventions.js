@@ -15,6 +15,11 @@ Layout
   Protocols/P_{Name}.md      one file per protocol, edited in place, with a version date
   Samples/{ID}.md            plasmids, oligos, antibodies, cell lines, gels and so on
   Projects/{Name}.md         summary of a research project; conclusions cite experiment IDs
+  Figures/{ID}_{short-title}/
+    1-notes/           {ID}.md is the figure note: a Panels table says which experiment each panel came from
+    2-panels/          one file per panel, as it goes into the figure
+    3-source/          the file the figure is laid out in (Illustrator, CanvasX, Prism, PowerPoint, R, Python)
+    4-exports/         the finished figure, one file per version that was sent out
   Inventory/*.csv            index generated from the note headers; do not edit by hand
   notebook.md                whose notebook this is and the last IDs given out; kept by the tools
   Exports/                   folders written by Export: copies, never cite or edit them
@@ -25,6 +30,7 @@ IDs
   Experiment  {INITIALS}e{NNNN}        JSRe0002
   Sample      {INITIALS}{letter}{NNNN} JSRp0001  (p plasmid, i oligo, a antibody, c cell-line, m mouse-line,
                                                   t peptide, r protein-prep, s slide, g gel)
+  Figure      {INITIALS}f{NNNN}        JSRf0001
   Protocol    P_{Name}                 P_WesternBlot
   Project     {Name}                   PRMT5-ChromatinRelease
   An ID written anywhere is a reference to that record. Numbers are never reused.
@@ -38,15 +44,21 @@ File names
 Header
   One "key: value" per line, lists as [a, b], dates as YYYY-MM-DD, no nesting.
   Experiment status: active | complete | paused | abandoned. tags: [meeting] flags it for lab meeting.
+  Figure status: draft | final | published | retired.
 
 Experiment sections, always in this order
   Objective, Experimental design, Methods, Deviations from protocol, Results, Interpretation, Decision,
   Follow-up experiments, Files
 
+Figures
+  The result figure of one experiment stays in that experiment's 5-figures/. A figure record is for an assembled
+  figure that goes out (a paper, a grant, a talk) and draws on one or more experiments. Its header lists them in
+  'experiments'; its Panels table has one row per panel: Panel, Shows, From (experiment ID), Data, Made with, File.
+
 Rules for an AI assistant
   1. Cite the experiment ID for every factual claim about a result.
   2. If the notes do not contain the answer, say so. Never invent data, numbers, figures, or experiments.
-  3. Create experiments, samples, protocols, and projects with the tools, not by making files by hand.
+  3. Create experiments, samples, protocols, projects, and figures with the tools, not by making files by hand.
   4. Never change anything in 2-data_raw.
   5. Write into Results or Interpretation only what the researcher gave you or what the data files show.
   6. Treat a single experiment as preliminary unless a note says it was replicated.

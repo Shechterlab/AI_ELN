@@ -2,14 +2,15 @@
 type: notebook
 owner: Alex Example
 initials: ALX
-last_ids: [ALXa0003, ALXc0002, ALXe0006, ALXi0001]
+last_ids: [ALXa0003, ALXc0002, ALXe0006, ALXf0001, ALXi0001]
 ---
 
 # Lab notebook
 
 This folder is a plain-text lab notebook. Each experiment is a folder in
 `Experiments/` with a Markdown note. Protocols, samples, and projects are
-Markdown notes in their own folders. `Inventory/` is an index made from them.
+Markdown notes in their own folders. A figure that goes into a paper, a grant
+or a talk is a folder in `Figures/`. `Inventory/` is an index made from them.
 
 The lines at the top are kept by the notebook tools. `owner` and `initials`
 say whose notebook this is; correct them if they are wrong. `last_ids` holds

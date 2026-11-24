@@ -811,6 +811,78 @@ class TestCloseOutAndArchive(TempVault):
 # The repo's own example vault must satisfy its own rules
 # ---------------------------------------------------------------------------
 
+class TestFigures(TempVault):
+    """A figure record: an assembled figure for a paper, a grant, or a talk, whatever program made it."""
+
+    def test_new_figure_and_what_check_says_about_it(self):
+        self.make_clean_vault()
+        out, _ = self.ok("new", "figure", "--title", "X stays on chromatin", "--experiments", "TSTe0001, ABCe0004",
+                         "--project", "Proj-A", "--label", "Figure 2", "--target", "a journal", "--tools", "Prism, Illustrator")
+        self.assertIn("Created TSTf0001", out)
+        folder = self.root / "Figures" / "TSTf0001_X-stays-on-chromatin"
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), eln.FIGURE_SUBFOLDERS)
+        note = folder / "1-notes" / "TSTf0001.md"
+        fields, body, problems = eln.parse_front_matter(note.read_text(encoding="utf-8"))
+        self.assertEqual(problems, [])
+        self.assertEqual((fields["figure_id"], fields["experiments"], fields["label"], fields["tools"], fields["status"]),
+                         ("TSTf0001", ["TSTe0001", "ABCe0004"], "Figure 2", ["Prism", "Illustrator"], "draft"))
+        self.assertIn("| Panel | Shows | From | Data | Made with | File |", body)
+        self.assertIn("TSTf0001", (self.root / "notebook.md").read_text(encoding="utf-8"))
+        code, out = self.issues()
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 figure: 0 errors, 0 warnings", out, "an experiment in someone else's notebook is not a problem")
+
+        out, _ = self.ok("find", "--kind", "figure", "--experiment", "TSTe0001", "--ids")
+        self.assertEqual(out.split(), ["TSTf0001"])
+        out, _ = self.ok("find", "--kind", "figure", "--experiment", "TSTe0002", "--ids")
+        self.assertEqual(out.split(), [])
+        rows = (self.root / "Inventory" / "figures.csv").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[1].startswith("TSTf0001,X stays on chromatin,Figure 2,Test Person,Proj-A,TSTe0001;ABCe0004,a journal,Prism;Illustrator,"))
+
+        # the second figure gets the next number, also after the first folder is deleted
+        shutil.rmtree(folder)
+        out, _ = self.ok("new", "figure", "--title", "Another")
+        self.assertIn("Created TSTf0002", out)
+        out, _ = self.ok("new", "figure", "--title", "Dry", "--dry-run")
+        self.assertIn("Would create TSTf0003", out)
+        self.assertFalse((self.root / "Figures" / "TSTf0003_Dry").exists())
+        _, err = self.fail("new", "figure")
+        self.assertIn("give a title", err)
+
+    def test_the_panels_table_is_checked_against_the_header_and_the_files(self):
+        self.make_clean_vault()
+        self.ok("new", "figure", "--title", "Fig", "--experiments", "TSTe0001")
+        folder = self.root / "Figures" / "TSTf0001_Fig"
+        note = folder / "1-notes" / "TSTf0001.md"
+        self.edit(note, "| a | | | | | |", "| a | blot | TSTe0001 | raw | Prism | `TSTf0001_a_blot.pdf` |\n"
+                                           "| b | quantification | TSTe0002 | csv | R | |")
+        code, out = self.issues()
+        self.assertEqual(code, 0, out)
+        self.assertIn("panel a: TSTf0001_a_blot.pdf is not in 2-panels/", out)
+        self.assertIn("the Panels table names TSTe0002, which is not in 'experiments' in the header", out)
+        (folder / "2-panels" / "TSTf0001_a_blot.pdf").write_bytes(b"%PDF")
+        self.edit(note, "experiments: [TSTe0001]", "experiments: [TSTe0001, TSTe0002]")
+        code, out = self.issues()
+        self.assertNotIn("panel a", out)
+        self.assertIn("'experiments' refers to TSTe0002, which does not exist in Experiments/", out)
+        self.edit(note, "experiments: [TSTe0001, TSTe0002]", "experiments: [TSTe0001]")
+        self.edit(note, "| b | quantification | TSTe0002 | csv | R | |", "| b | quantification | TSTe0001 | csv | R | |")
+
+        self.edit(note, "status: draft", "status: final")
+        code, out = self.issues()
+        self.assertIn("status is final but date_final is empty", out)
+        self.assertIn("status is final but 4-exports/ holds no finished figure", out)
+        (folder / "4-exports" / "TSTf0001_v1_20260915.pdf").write_bytes(b"%PDF")
+        self.edit(note, "date_final:", "date_final: 2026-09-15")
+        code, out = self.issues()
+        self.assertIn("1 figure: 0 errors, 0 warnings", out)
+        self.edit(note, "status: final", "status: submitted")
+        code, out = self.issues()
+        self.assertEqual(code, 1)
+        self.assertIn("status 'submitted' is not one of draft | final | published | retired", out)
+
+
 class TestNotebookAdoptExport(TempVault):
     """notebook.md, adopting an older folder, and the export as a folder of plain files."""
 

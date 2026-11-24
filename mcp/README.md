@@ -24,7 +24,7 @@ port. It reads and writes only inside the notebook folder.
 - Read: `get_conventions`, `notebook_overview`, `find_notes`, `read_note`,
   `read_file`, `check_notebook`, `verify_files`
 - Create: `create_experiment`, `create_sample`, `create_protocol`,
-  `create_project`, `adopt_folder` (an older folder becomes an experiment;
+  `create_project`, `create_figure`, `adopt_folder` (an older folder becomes an experiment;
   with no folder it lists the candidates)
 - Edit: `write_section`, `set_field` (with `mode` add or remove for one
   tag), `update_note`, `add_file`

@@ -13,7 +13,7 @@ import { labReady } from '../assets/brand.js';
 import { cleanInitials } from './lib/names.js';
 import { guessMime } from './lib/mime.js';
 import { AGENTS_MD } from './lib/conventions.js';
-import { ElnError, KIND_DIR, SUBFOLDERS, STATUS, SAMPLE_LETTERS, EXPERIMENT_TYPES, MEETING_TAG } from './lib/schema.js';
+import { ElnError, KIND_DIR, SUBFOLDERS, FIGURE_SUBFOLDERS, STATUS, SAMPLE_LETTERS, EXPERIMENT_TYPES, MEETING_TAG } from './lib/schema.js';
 import { esc, cmp, dirname, isoDate } from './lib/text.js';
 import { exists, isDir, writeText, SubStore } from './store/base.js';
 import { MemoryStore } from './store/memory.js';
@@ -27,7 +27,7 @@ const state = {
 };
 
 const NAV = [['#/', 'Home'], ['#/experiments', 'Experiments'], ['#/samples', 'Samples'], ['#/protocols', 'Protocols'],
-  ['#/projects', 'Projects'], ['#/check', 'Check'], ['#/brief', 'Meeting brief'], ['#/export', 'Export'], ['#/ai', 'Ask the AI']];
+  ['#/projects', 'Projects'], ['#/figures', 'Figures'], ['#/check', 'Check'], ['#/brief', 'Meeting brief'], ['#/export', 'Export'], ['#/ai', 'Ask the AI']];
 
 const ASKS = [
   ['Check that a Results section matches its data', 'Re-analyse 4-data_processed/JSRe0007_quant.csv the way the note describes and tell me whether the numbers in Results match.', 'Codex / Claude Code'],
@@ -240,7 +240,7 @@ async function viewConnect() {
       <p>A practice notebook with two example experiments. It is kept in this tab's memory and is gone when you close the tab.</p>
       <div class="actions"><button class="btn" data-act="practice">Open the practice notebook</button></div></div>
     <div class="card"><h2>What this page does</h2>
-      <ul><li>Creates experiments, samples, protocols, and projects with the right IDs, folders, and file names.</li>
+      <ul><li>Creates experiments, samples, protocols, projects, and figures with the right IDs, folders, and file names.</li>
       <li>Shows and edits notes, adds files under the right names, checks the conventions.</li>
       <li>Adopts older folders as experiments, without changing what is in them.</li>
       <li>Writes the lab-meeting brief and exports: one file for ChatGPT, or a folder of plain files.</li>
@@ -270,7 +270,8 @@ async function viewHome() {
     ...(canWrite() ? [['#/new/experiment', 'New experiment', 'Creates the folder, the note, and the protocol copy.'],
       ['#/new/sample', 'New sample', 'Plasmid, oligo, antibody, cell line, gel...'],
       ['#/new/protocol', 'New protocol', 'A reusable procedure, one file each.'],
-      ['#/new/project', 'New project', 'A summary page for a research project.']] : []),
+      ['#/new/project', 'New project', 'A summary page for a research project.'],
+      ['#/new/figure', 'New figure', 'An assembled figure for a paper, a grant, or a talk.']] : []),
     ['#/check', 'Check everything', 'Lists naming and metadata problems.'],
     ['#/brief', 'Lab meeting brief', 'Summary of experiments flagged for the meeting.'],
     ['#/export', 'Export', 'One file to paste into a chat, or a folder of plain files.'],
@@ -309,6 +310,42 @@ function viewList(kind, title, cols) {
     ${notes.length ? `<div class="table-wrap"><table><tr>${head}</tr>${rows}</table></div>` : '<p>None yet.</p>'}`;
 }
 
+function figTable(figs) {
+  const rows = figs.map((f) => `<tr><td>${noteLink(f.id)}</td><td>${esc(f.get('label'))}</td><td>${esc(f.get('title'))}</td>`
+    + `<td>${f.getList('experiments').map((x) => (state.vault.get(x) ? noteLink(x) : esc(x))).join(', ')}</td><td>${esc(f.get('target'))}</td><td>${pill(f.get('status'))}</td></tr>`).join('');
+  return `<div class="table-wrap"><table><tr><th>ID</th><th>Label</th><th>Title</th><th>Panels from</th><th>For</th><th>Status</th></tr>${rows}</table></div>`;
+}
+
+function viewFigures() {
+  const figs = sortedById(state.vault.notes.figure);
+  return `<h1>Figures</h1>
+    <p class="hint">An assembled figure that goes out: a paper, a grant, a talk. Each one records which experiment every panel came from.
+      The result figure of a single experiment is not listed here. It stays in that experiment's <code>5-figures</code>.</p>
+    ${canWrite() ? '<div class="actions"><a class="btn primary" href="#/new/figure">New figure</a></div>' : ''}
+    ${figs.length ? figTable(figs) : '<p>None yet.</p>'}`;
+}
+
+/** The files of an experiment or a figure, by subfolder, with the form that adds more. */
+async function filesCard(n, w) {
+  const figure = n.kind === 'figure';
+  const subs = figure ? FIGURE_SUBFOLDERS : SUBFOLDERS;
+  const files = await experimentFiles(state.store, n);
+  return `<h2>Files</h2><div class="card files">${subs.map((sub) => `<div><b>${esc(sub)}/</b> `
+    + (files[sub].length ? files[sub].map((name) => `<a href="#" data-act="open-file" data-path="${esc(`${n.folder}/${sub}/${name}`)}">${esc(name)}</a>`).join(', ') : '<i class="hint">empty</i>')
+    + '</div>').join('')}
+    ${w ? `<form class="drop" data-form="add-files" data-id="${esc(n.id)}">
+      <div class="inline"><b>Add files</b><input type="file" name="files" multiple required aria-label="Files to add">
+        <select name="subfolder" aria-label="Subfolder">${options(subs, figure ? '2-panels' : '5-figures')}</select></div>
+      <div class="inline" style="margin-top:8px"><input type="text" name="description" placeholder="${figure ? 'e.g. a western-quantification (optional, one file)' : 'what it shows (optional, one file)'}" size="34" aria-label="Description">
+        ${figure ? '' : '<label><input type="checkbox" name="result"> result (adds <code>_R</code>)</label>'}
+        <label><input type="checkbox" name="dated"> add today's date</label>
+        <button class="btn small">Add</button></div>
+      <div class="hint" style="margin-top:6px">Files are named <code>${esc(n.id)}_description.ext</code> for you. ${figure
+    ? 'For a panel, start the description with its letter. The original file stays where it is in its experiment; this is a copy.'
+    : 'Files added to <code>2-data_raw</code> keep their original names.'} You can also drop files here.</div>
+    </form>` : ''}</div>`;
+}
+
 async function viewNote(id) {
   const v = state.vault;
   const n = v.get(id);
@@ -339,22 +376,23 @@ async function viewNote(id) {
     if (w) actions += `<a class="btn" href="#/new/experiment?from=${encodeURIComponent(n.id)}">Repeat this experiment</a>`;
     actions += `<button class="btn" data-act="print" data-id="${esc(n.id)}">Print / save as PDF</button>`;
     if (w) actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
-    const files = await experimentFiles(state.store, n);
-    filesHtml = `<h2>Files</h2><div class="card files">${SUBFOLDERS.map((sub) => `<div><b>${esc(sub)}/</b> `
-      + (files[sub].length ? files[sub].map((name) => `<a href="#" data-act="open-file" data-path="${esc(`${n.folder}/${sub}/${name}`)}">${esc(name)}</a>`).join(', ') : '<i class="hint">empty</i>')
-      + '</div>').join('')}
-      ${w ? `<form class="drop" data-form="add-files" data-id="${esc(n.id)}">
-        <div class="inline"><b>Add files</b><input type="file" name="files" multiple required aria-label="Files to add">
-          <select name="subfolder" aria-label="Subfolder">${options(SUBFOLDERS, '5-figures')}</select></div>
-        <div class="inline" style="margin-top:8px"><input type="text" name="description" placeholder="what it shows (optional, one file)" size="34" aria-label="Description">
-          <label><input type="checkbox" name="result"> result (adds <code>_R</code>)</label>
-          <label><input type="checkbox" name="dated"> add today's date</label>
-          <button class="btn small">Add</button></div>
-        <div class="hint" style="margin-top:6px">Files are named <code>${esc(n.id)}_description.ext</code> for you. Files added to <code>2-data_raw</code> keep their original names. You can also drop files here.</div>
-      </form>` : ''}</div>`;
+    filesHtml = await filesCard(n, w);
+    const figs = findNotes(v, 'figure', { experiment: n.id });
+    if (figs.length) usage = `<h2>Used in figures</h2>${figTable(figs)}`;
   } else {
-    const used = findNotes(v, 'experiment', { [n.kind]: n.id });
-    usage = `<h2>Used in</h2>${used.length ? expTable(used) : '<p>No experiment yet.</p>'}`;
+    if (n.kind === 'figure' && n.folder) {
+      filesHtml = await filesCard(n, w);
+      const from = n.getList('experiments');
+      usage = `<h2>Experiments the panels come from</h2>${from.length
+        ? expTable(from.map((x) => v.get(x)).filter((e) => e && e.kind === 'experiment'))
+          + from.filter((x) => !v.get(x)).map((x) => `<p class="hint">${esc(x)} is not in this notebook.</p>`).join('')
+        : '<p>None listed yet. Add the experiment IDs to <code>experiments</code> in the header.</p>'}`;
+    } else {
+      const used = findNotes(v, 'experiment', { [n.kind]: n.id });
+      usage = `<h2>Used in</h2>${used.length ? expTable(used) : '<p>No experiment yet.</p>'}`;
+      const figs = n.kind === 'project' ? findNotes(v, 'figure', { project: n.id }) : [];
+      if (figs.length) usage += `<h2>Figures</h2>${figTable(figs)}`;
+    }
     actions += `<button class="btn" data-act="print" data-id="${esc(n.id)}">Print / save as PDF</button>`;
     if (w) actions += `<button class="btn" data-act="snapshot" data-id="${esc(n.id)}">Save HTML snapshot</button>`;
   }
@@ -427,6 +465,27 @@ function viewNew(kind, q = new URLSearchParams()) {
         <div class="hint">Letters, digits, hyphens. Becomes <b>P_Name</b>. One file per protocol; update its version date when the procedure changes.</div>
         <label for="n-title">Full title</label><input type="text" id="n-title" name="title" placeholder="Western blot (wet transfer, PVDF)">
         <div class="actions" style="margin-top:18px"><button class="btn primary">Create protocol</button><a href="#/protocols" class="btn">Cancel</a></div></form>`;
+  }
+  if (kind === 'figure') {
+    const projects = sortedById(v.notes.project).map((n) => n.id);
+    const exps = sortedById(v.notes.experiment).reverse();
+    const chosen = new Set((q.get('experiments') || '').split(',').map((x) => x.trim()).filter(Boolean));
+    return `<h1>New figure</h1>${needSetup()}
+      <p class="hint">For an assembled figure that goes out: a paper, a grant, a talk. It gets a folder for the panels, the layout file and the
+        finished versions, and a note that says which experiment each panel came from. It does not matter what program you make it in.</p>
+      <form class="stack" data-form="new-figure">
+        <label for="n-title">Title <span class="hint">(the only required field)</span></label>
+        <input type="text" id="n-title" name="title" required autofocus placeholder="e.g. PRMT5 inhibition keeps SNRPB on chromatin">
+        <label>Experiments the panels come from</label>
+        ${exps.length ? `<div class="checks">${exps.map((e) => `<label><input type="checkbox" name="experiments" value="${esc(e.id)}"${chosen.has(e.id) ? ' checked' : ''}> ${esc(e.id)} <span class="path">${esc(e.get('title'))}</span></label>`).join('')}</div>` : '<div class="hint">No experiments in this notebook yet.</div>'}
+        <label for="n-other">From someone else's notebook</label><input type="text" id="n-other" name="other" placeholder="JORe0001, JORe0004">
+        <div class="hint">Experiment IDs with other initials, separated by commas. You can add more later in the header.</div>
+        <div class="row"><div><label for="n-project">Project</label><input type="text" id="n-project" name="project" list="projects">${datalist('projects', projects)}</div>
+          <div><label for="n-label">Label</label><input type="text" id="n-label" name="label" placeholder="Figure 2">
+            <div class="hint">What it is called where it is used. It can change; the ID does not.</div></div></div>
+        <div class="row"><div><label for="n-target">Where it is going</label><input type="text" id="n-target" name="target" placeholder="a journal, a grant, a talk"></div>
+          <div><label for="n-tools">Made with</label><input type="text" id="n-tools" name="tools" placeholder="R, Prism, Illustrator"></div></div>
+        <div class="actions" style="margin-top:18px"><button class="btn primary">Create figure</button><a href="#/figures" class="btn">Cancel</a></div></form>`;
   }
   return `<h1>New project</h1>
     <form class="stack" data-form="new-project">
@@ -606,6 +665,7 @@ async function render() {
         samples: () => viewList('sample', 'Samples', [['id', 'ID'], ['sample_type', 'Type'], ['title', 'Title'], ['storage_location', 'Storage'], ['status', 'Status']]),
         protocols: () => viewList('protocol', 'Protocols', [['id', 'ID'], ['title', 'Title'], ['version', 'Version'], ['status', 'Status']]),
         projects: () => viewList('project', 'Projects', [['id', 'ID'], ['title', 'Title'], ['lead', 'Lead'], ['status', 'Status']]),
+        figures: () => viewFigures(),
         note: () => viewNote(arg),
         edit: () => viewEdit(arg),
         new: () => viewNew(arg, q),
@@ -713,6 +773,13 @@ const FORMS = {
   'new-project': async (d) => {
     const r = await run('create_project', d);
     state.flash = created(r, 'project');
+    await go(`#/note/${r.id}`);
+  },
+  'new-figure': async (d) => {
+    const { other, ...args } = d;
+    const experiments = [...[].concat(d.experiments || []), ...String(other || '').split(',').map((x) => x.trim()).filter(Boolean)].join(', ');
+    const r = await run('create_figure', { ...args, experiments });
+    state.flash = created(r, 'figure') + msg('ok', 'Put each panel in <code>2-panels</code> with Add files below, and fill in the Panels table: which experiment each panel came from.');
     await go(`#/note/${r.id}`);
   },
   edit: async (d, form) => {
