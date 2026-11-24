@@ -541,7 +541,7 @@ function viewAi() {
   return `<h1>Ask the AI</h1>
     <div class="card"><p><b>ChatGPT:</b> click <a href="#/export">Export</a>, copy, and paste into a chat. Once, paste
       <a href="../guide.html?d=ai-briefing">the briefing</a> as the chat's instructions. It can reason about the notes but cannot see data files or run anything.</p>
-      <p><b>Codex, Claude Code, Cowork:</b> open the tool in the notebook folder. It reads the lab's rules and skills itself, and can read files and run analyses.</p>
+      <p><b>Codex, Claude Code, Cowork:</b> open the tool in the tools folder (the AI_ELN folder with <code>scripts/</code> in it), after naming your notebook once with <code>python3 scripts/eln.py init --root</code>. It reads the lab's rules and skills there, and can read files and run analyses. Opened in the notebook folder itself, it finds a short <code>AGENTS.md</code> with the rules, but not the skills.</p>
       <p><b>MCP clients:</b> the notebook's own operations (create, find, check, complete, export) are available as tools through <code>node mcp/server.mjs</code>. See <a href="../guide.html?d=ai-agents">Using AI</a>.</p>
       <p>None of these needs an API key. Every factual claim an assistant makes should carry an experiment ID. If it does not, ask for one.</p></div>
     <div class="table-wrap"><table><tr><th>You want</th><th>Say something like</th><th>Works in</th></tr>

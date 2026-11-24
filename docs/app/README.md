@@ -2,12 +2,12 @@
 
 Open <https://shechterlab.github.io/AI_ELN/app/> in Chrome or Edge, click
 **Open notebook folder**, and choose the folder. The page reads and writes
-the files in that folder. It uploads nothing, needs no installation, and
-works without a connection after the first visit.
+the files in that folder. Nothing is uploaded and nothing is installed.
+After the first visit the page works without a connection.
 
-It does everything `scripts/eln.py` and the Python page do, on the same
-folders and with the same results: tests run each operation through both and
-compare the files byte for byte.
+It does everything that `scripts/eln.py` and the launcher page
+(`scripts/eln_web.py`) do, on the same folders and with the same results.
+Tests run each operation through both and compare the files byte for byte.
 
 ## Layout
 
@@ -19,8 +19,8 @@ app/
   lib/                  the notebook logic; no browser and no Node code in here
     schema.js           the conventions as data (folders, ID patterns, required fields)
     text.js             text, path, date helpers
-    frontmatter.js      the note header (flat YAML subset): parse, format, set a field
-    names.js            slugs, IDs, file names
+    frontmatter.js      the note header (the `key: value` lines): read, write, set a field
+    names.js            short titles for folder names, IDs, file names
     templates.js        note templates (the notebook's templates/ folder, or the built-in copy)
     vault.js            read every note in the notebook
     validate.js         Check
@@ -30,17 +30,19 @@ app/
     query.js            find, lab-meeting brief, Markdown export
     exportfolder.js     export as a folder of plain files
     markdown.js         Markdown to HTML
-    closeout.js         mark complete, HTML snapshot, sha256 manifest, verify
-    elnfile.js, zip.js  the .eln archive (RO-Crate in a ZIP)
-    sha256.js, mime.js  hashing, media types
+    closeout.js         mark complete; the snapshot (the experiment as one HTML file, for printing);
+                        the list of checksums (a number computed from each file's content,
+                        used to detect changes); verify
+    elnfile.js, zip.js  the .eln archive for other electronic notebooks (a ZIP in the RO-Crate format)
+    sha256.js, mime.js  checksums, file types
     lab.js              lab.yaml: lab name and house style for snapshots, printouts, exports
     conventions.js      the rules as one page of text, given to AI clients
-    tools.js            every operation as a named tool with a JSON Schema
+    tools.js            every operation as a named tool with a list of its arguments (JSON Schema)
   store/                where the files are
     base.js             what a store is (five methods) and helpers
     fsaccess.js         a folder picked in the browser (File System Access API)
-    memory.js           in memory, for practice mode and tests
-    node.js             Node's fs, for mcp/server.mjs and mcp/call.mjs
+    memory.js           in memory, for the practice notebook and tests
+    node.js             files on disk through Node, for mcp/server.mjs and mcp/call.mjs
 ```
 
 ## One folder per person
@@ -48,8 +50,8 @@ app/
 A notebook is one folder with a `notebook.md` at its top (owner, initials,
 the last IDs given out). The page opens that folder. If the folder you pick
 is not a notebook but holds notebooks, the page lists them, opens the one you
-choose, and can start a new one next to them. There is no list of people
-anywhere else.
+choose, and can start a new one next to them. No list of people is kept
+anywhere.
 
 ## Viewing, printing, repeating
 
@@ -64,8 +66,9 @@ anywhere else.
 ## Extending it
 
 - **A new operation:** write the function in `lib/`, add one entry to `TOOLS`
-  in `lib/tools.js` (name, description, argument schema, handler). The MCP
-  server and `mcp/call.mjs` pick it up with no other change. Add a button in
+  in `lib/tools.js` (name, description, list of arguments, handler). The
+  MCP server (`mcp/server.mjs`, through which AI programs call the tools)
+  and `mcp/call.mjs` pick it up with no other change. Add a button in
   `ui.js` if people need it.
 - **A new place to keep files** (a WebDAV share, a sync service's API): one
   file in `store/` with `list`, `stat`, `readBytes`, `writeBytes`, `mkdir`.
@@ -84,10 +87,11 @@ browser loads.
 ## Browser support
 
 Opening a folder needs the File System Access API, which Chrome and Edge
-have on Windows, macOS, and Linux. Safari and Firefox do not; there the page
-offers the practice notebook only, and the notebook itself runs from the
-Python launcher. Dropbox and OneDrive both work, because the page writes
-ordinary files into the folder that their desktop apps sync.
+have on Windows, macOS, and Linux. Safari and Firefox do not. There the page
+offers the practice notebook only, and a real notebook is opened with
+`launchers/Open ELN` (the launcher page). Dropbox and OneDrive both work,
+because the page writes ordinary files into the folder that their desktop
+apps sync.
 
 ## Tests
 

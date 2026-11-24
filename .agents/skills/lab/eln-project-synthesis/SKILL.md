@@ -5,9 +5,9 @@ description: Rewrite a project page's "Current state" section from the experimen
 
 # Synthesizing a project page
 
-A project page (`Projects/{ID}.md`) is the rolled-up, always-current state
-of one research thread. It is *derived* from experiment notes - it never
-contains a claim that isn't backed by an experiment ID.
+A project page (`Projects/{ID}.md` in the notebook folder) is the summary
+of one research project as it stands now. It is written from the
+experiment notes, and every claim in it is followed by an experiment ID.
 
 ## 1. Gather
 
@@ -20,30 +20,38 @@ Read `Projects/{PROJECT_ID}.md` and every matching experiment note in full
 (`Experiments/{ID}_*/1-notes/{ID}.md`), paying most attention to
 `## Results`, `## Interpretation`, and `## Decision`.
 
+The commands work on one notebook: the one named with `eln.py init --root`,
+with `AI_ELN_ROOT`, or with `--root` on the command (for practice,
+`--root sandbox/alex` or `--root sandbox/jordan`). An experiment ID with
+someone else's initials is a record in that person's notebook. Read it
+there if you can reach that folder. If you cannot, say in *Open questions*
+that you have not read it, and do not count it as support.
+
 ## 2. Rewrite "Current state" in place
 
 Replace the contents of the three subsections under `## Current state`.
-Do not append a dated copy below the old one; the page is the current
-state, and git history keeps the old versions.
+Do not append a dated copy below the old one: the page holds the current
+state only. The notebook keeps no earlier versions of a note, so the old
+text is gone once you save.
 
-**Supported conclusions** - one line each, only where at least one
+**Supported conclusions**: one line each, only where at least one
 `complete` experiment supports it, citing every supporting ID:
 
 ```
 - PRMT5 inhibition increases SNRPB chromatin retention in A549 cells (JSRe0002, JSRe0007).
 ```
 
-**Open questions / conflicting observations** - where experiments disagree,
+**Open questions / conflicting observations**: where experiments disagree,
 where an `active` experiment is still running, or where an interpretation
 is explicitly hedged. Cite IDs on both sides.
 
-**Experiments needing replication** - every conclusion that rests on a
+**Experiments needing replication**: every conclusion that rests on a
 single experiment. Name the experiment.
 
 ## 3. Keep the rest short
 
-- `## Experiments`: one line per key experiment (ID - title - status).
-  The exhaustive list is `Inventory/projects.csv`; don't duplicate it.
+- `## Experiments`: one line per key experiment (ID, title, status).
+  The full list is `Inventory/projects.csv`; don't duplicate it.
 - `## Reagents in use`: sample IDs the project depends on, from the
   experiments' `samples` fields.
 - `## Related protocols`: protocol IDs from the experiments' `protocols`.
@@ -61,3 +69,5 @@ single-experiment.
 - Don't promote an `active` or `paused` experiment's early observations to
   a supported conclusion.
 - Don't write a conclusion without an ID after it.
+- Don't read from or cite `Exports/`. Those folders are copies written by
+  Export.

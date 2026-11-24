@@ -1,19 +1,21 @@
 # mcp/: the notebook as tools for AI clients
 
-The notebook's operations (create an experiment, find notes, read a note,
-check the conventions, mark complete, export) are defined once, in
-[`docs/app/lib/tools.js`](../docs/app/lib/tools.js), each with a name, a
-description, and a JSON Schema for its arguments. Three things use that list:
+MCP (the [Model Context Protocol](https://modelcontextprotocol.io)) is a way
+for AI programs to call tools. The notebook's operations (create an
+experiment, find notes, read a note, check the conventions, mark complete,
+export) are defined once, in
+[`docs/app/lib/tools.js`](../docs/app/lib/tools.js). Each has a name, a
+description, and a list of its arguments (a JSON Schema). Three things use
+that list:
 
 | | what it is | needs |
 |---|---|---|
 | the notebook page (`docs/app/`) | the buttons and forms call the tools | Chrome or Edge |
-| `mcp/server.mjs` | an [MCP](https://modelcontextprotocol.io) server over stdio | Node 18 or later |
+| `mcp/server.mjs` | an MCP server that the AI program starts and talks to directly (stdio) | Node 18 or later |
 | `mcp/call.mjs` | runs one tool from a terminal or a script | Node 18 or later |
 
-There are no dependencies and nothing to install besides Node. The server
-does not open a network port. It reads and writes only inside the notebook
-folder.
+Nothing is installed besides Node. The server does not open a network
+port. It reads and writes only inside the notebook folder.
 
 ## The tools
 
@@ -21,11 +23,14 @@ folder.
 
 - Read: `get_conventions`, `notebook_overview`, `find_notes`, `read_note`,
   `read_file`, `check_notebook`, `verify_files`
-- Create: `create_experiment`, `create_sample`, `create_protocol`, `create_project`,
-  `adopt_folder` (an older folder becomes an experiment; with no folder it lists the candidates)
-- Edit: `write_section`, `set_field` (with `mode` add or remove for one tag), `update_note`, `add_file`
+- Create: `create_experiment`, `create_sample`, `create_protocol`,
+  `create_project`, `adopt_folder` (an older folder becomes an experiment;
+  with no folder it lists the candidates)
+- Edit: `write_section`, `set_field` (with `mode` add or remove for one
+  tag), `update_note`, `add_file`
 - Finish and export: `complete_experiment`, `render_snapshot`,
-  `meeting_brief`, `export_notes` (one Markdown file, a folder of plain files, or `.eln`), `rebuild_index`
+  `meeting_brief`, `export_notes` (one Markdown file, a folder of plain
+  files, or `.eln`), `rebuild_index`
 
 While a record is being created the server holds the notebook's lock (an
 empty `.eln-lock` folder, shared with `scripts/eln.py`), so two programs
@@ -36,12 +41,19 @@ result, never touch `2-data_raw`) to the client as its instructions.
 
 ## Connecting a client
 
-The server takes `--root DIR` (the notebook folder; default: the one saved by
-`python3 scripts/eln.py init --root`, or else the folder this repository is in),
-`--initials` and `--researcher` (default: what `python3 scripts/eln.py init`
-saved, or the environment variables `AI_ELN_INITIALS` and
-`AI_ELN_RESEARCHER`, or else the owner named in the notebook's `notebook.md`), and `--read-only` (offer only the tools that change
-nothing; the brief and the export are included and refuse to save).
+The server takes three kinds of option:
+
+- `--root DIR`: the notebook folder. Without it, the server uses the
+  environment variable `AI_ELN_ROOT`, then the folder saved by
+  `python3 scripts/eln.py init --root`, then the folder this repository is
+  in.
+- `--initials` and `--researcher`: the person new records are made for.
+  Without them, the server uses the owner named in the notebook's
+  `notebook.md`. If the notebook names no owner, it uses the environment
+  variables `AI_ELN_INITIALS` and `AI_ELN_RESEARCHER`, then what
+  `python3 scripts/eln.py init` saved.
+- `--read-only`: offer only the tools that change nothing. The brief, the
+  export, and `adopt_folder` are included; they refuse to save or to adopt.
 
 In the examples, `/path/to/AI_ELN` is the tools folder (this repository) and
 `/path/to/notebook` is your own notebook folder.
@@ -69,8 +81,9 @@ command = "node"
 args = ["/path/to/AI_ELN/mcp/server.mjs", "--root", "/path/to/notebook"]
 ```
 
-**Any other MCP client.** The command is `node /path/to/notebook/mcp/server.mjs`,
-transport stdio.
+**Any other MCP client.** The command is
+`node /path/to/AI_ELN/mcp/server.mjs --root /path/to/notebook`, and the
+transport is stdio.
 
 **ChatGPT on the web** connects only to MCP servers that are reachable over
 the internet. This one runs on your computer, so for ChatGPT use
@@ -79,17 +92,13 @@ the internet. This one runs on your computer, so for ChatGPT use
 
 ## What the server will not do
 
-- Read or write outside the notebook folder, including through a symbolic
-  link that points outside it.
-- Overwrite a file with `add_file`, or accept a file name that carries a
-  path.
+- Read or write outside the notebook folder, including through a link
+  (symbolic link) that points outside it.
+- Overwrite a file with `add_file`, or put a file anywhere but the
+  subfolder named. A path in front of the file name is dropped.
 - Save a note whose header is broken, whose ID or type changed, or whose
   status or dates are not valid.
 - Put a line break into a header value. It becomes a space.
-
-Two servers started on the same folder at the same moment can give two new
-experiments the same ID. Check reports that as an error. Run one server per
-notebook folder.
 
 ## Without MCP
 

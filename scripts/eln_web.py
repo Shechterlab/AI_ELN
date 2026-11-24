@@ -175,7 +175,7 @@ class App:
             ("/new/project", "New project", "A summary page for a research project."),
             ("/validate", "Check everything", "Lists naming and metadata problems."),
             ("/report", "Lab meeting brief", "Summary of experiments flagged for the meeting."),
-            ("/export", "Export for ChatGPT", "A single file to paste into a chat."),
+            ("/export", "Export", "One file to paste into a chat, or a .eln archive."),
         ]
         body = [self.need_setup() or "", f"<h1>{esc(eln.record_title(eln.load_lab(self.root)))}</h1>",
                 f"<p>You are <b>{who}</b> &middot; {len(exps)} experiments, {len(active)} active, "
@@ -423,7 +423,7 @@ class App:
         <div class=card>
           <p>Three ways, none needs an API key. <b>ChatGPT:</b> click <a href='/export'>Export</a>, copy, paste into a chat
           (once, paste <code>docs/ai-briefing.md</code> as the chat's instructions). It can reason about the notes but cannot see
-          data files or run anything. <b>Codex, Claude Code, Cowork:</b> open the tool in this folder; it reads the lab's rules
+          data files or run anything. <b>Codex, Claude Code, Cowork:</b> open the tool in the tools folder (the folder the launchers are in); it reads the lab's rules
           and skills itself, and can read files and run analyses.</p>
           <p><b>MCP clients:</b> <code>node mcp/server.mjs</code> offers the notebook's own operations (create, find, check, complete, export) as tools. See <code>mcp/README.md</code>.</p>
           <p>You do not need to name a skill. Describe the task and the assistant chooses the method. Every factual claim it makes should carry
@@ -493,7 +493,7 @@ class App:
             except eln.ElnError as e:
                 err = str(e)
         body = f"""
-        <h1>Export for ChatGPT</h1>{f"<div class='msg err'>{esc(err)}</div>" if err else ''}
+        <h1>Export</h1>{f"<div class='msg err'>{esc(err)}</div>" if err else ''}
         <form class=stack method=get>
           <label><input type=radio name=scope value=active {'checked' if scope in ('', 'active') else ''}> Every active experiment</label>
           <label><input type=radio name=scope value=project {'checked' if scope == 'project' else ''}> One project:

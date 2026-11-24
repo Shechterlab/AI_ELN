@@ -1,12 +1,13 @@
 # AI_ELN cheat sheet
 
-**One experiment = one ID = one folder = one note.** Never make the folder by hand.
+Each experiment has an ID, a folder named with that ID, and one note in that
+folder. **New experiment** makes them; never make the folder by hand.
 
 ## Start
 
-Chrome or Edge: **shechterlab.github.io/AI_ELN/app** → **Open notebook folder**. Otherwise double-click **`launchers/Open ELN`**.
+Chrome or Edge: **shechterlab.github.io/AI_ELN/app** → **Open notebook folder**. Safari or Firefox: double-click **`launchers/Open ELN`**.
 Then **New experiment** → title → **Create**.
-Write with **Edit here**. Practice first on **`launchers/Try the Sandbox`**.
+Write with **Edit here**. To practise first: **Open the practice notebook** on the page, or **`launchers/Try the Sandbox`**.
 
 ## IDs
 
@@ -20,7 +21,9 @@ Write with **Edit here**. Practice first on **`launchers/Try the Sandbox`**.
 Sample letters: **p** plasmid · **i** oligo · **a** antibody · **c** cell line ·
 **m** mouse line · **t** peptide · **r** protein prep · **s** slide · **g** gel
 
-Write an ID anywhere and it's a link. Never reuse a number.
+Use three initials (first, middle, last). An ID written in a note is shown
+as a link. A number is never used again. An ID with someone else's initials
+is a record in that person's notebook.
 
 ## The folder
 
@@ -33,9 +36,9 @@ Experiments/JSRe0002_short-title/
   5-figures/         JSRe0002_R_what-it-shows_20260904.png   (R = the results figure)
 ```
 
-One notebook folder per person. `notebook.md` at its top says whose it is and
-remembers the last IDs. An older folder becomes an experiment with **Adopt**;
-its files go into `2-data_raw/` unchanged.
+Each person has one notebook folder. `notebook.md` at its top says whose it
+is and remembers the last IDs. **Adopt older folders** makes an experiment
+from an older folder and moves it into `2-data_raw/` unchanged.
 
 ## Filenames
 
@@ -69,19 +72,23 @@ Results · Interpretation · Decision · Follow-up experiments · Files
 **Check** · **Meeting brief** · **Export** (one file for ChatGPT, or a folder of plain files) · **Adopt older folders** ·
 on a note: **Edit here** · **Add files** · **Repeat this experiment** · **Print / save as PDF** · **Mark complete** · **Verify files**
 
-Same from a terminal: `python3 scripts/eln.py new experiment --title "..."`,
-`validate`, `find`, `report`, `export`, `adopt`, `index`, `init`; `python3 scripts/eln_web.py` for the page.
+Adopt, Add files, Repeat, Print, and the folder export are in the Chrome or
+Edge page only. From a terminal: `python3 scripts/eln.py new experiment
+--title "..."`, `validate`, `find`, `report`, `export`, `adopt`, `complete`,
+`verify`, `index`, `init`; `python3 scripts/eln_web.py` for the launcher page.
 
 ## When you finish
 
-Results and Interpretation written, `raw_data_path` points at backed-up
-storage, then **Mark complete** on the note's page. It sets the status and
-date and writes `{ID}_snapshot_{date}.html` (print to PDF) and
-`{ID}_MANIFEST.sha256` (checksums; **Verify files** shows later changes).
+Write Results and Interpretation, point `raw_data_path` at backed-up
+storage, then click **Mark complete** on the note's page. It sets the status
+and date and writes `{ID}_snapshot_{date}.html` (prints to PDF) and
+`{ID}_MANIFEST.sha256` (for each file, a number computed from its content;
+**Verify files** uses them to show later changes).
 
 ## With AI
 
-Codex / Claude Code / Cowork: open it in this folder; it already knows the rules.
+Codex / Claude Code / Cowork: open it in the tools folder, which has the
+rules. It works on the notebook named with `eln.py init --root`.
 ChatGPT: **Export**, paste, ask. Every claim it makes should cite an ID.
 
 Example questions: *do the numbers in JSRe0007's Results match its data file?* ·
@@ -91,8 +98,8 @@ Example questions: *do the numbers in JSRe0007's Results match its data file?* �
 
 ## Leaving, or sending to another ELN
 
-The notebook is already plain files; copy the folder. **Export → Save as a
-folder of plain files** makes a copy of part of it with a README and an
+The notebook is plain files; to take all of it, copy the folder. **Export →
+Save as a folder of plain files** copies part of it, with a README and an
 index. **Export → For another electronic notebook** makes a `.eln` archive: a
-standard RO-Crate ZIP that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB,
-OpenSemanticLab, and SciLog import.
+ZIP file in a standard format that eLabFTW, RSpace, Kadi4Mat, PASTA,
+SampleDB, OpenSemanticLab, and SciLog import.

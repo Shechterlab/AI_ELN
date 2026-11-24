@@ -1,7 +1,7 @@
 # Sandbox
 
-Two small, **entirely fictional** notebooks to practice on. Nothing here is
-real data: every number was made up by `rebuild.py`.
+Two small, **fictional** notebooks to practice on. Nothing here is real
+data: every number was made up by `rebuild.py`.
 
 | Folder | Whose | What is in it |
 |---|---|---|
@@ -28,15 +28,16 @@ Use it to:
   adopt` lists the one that is waiting;
 - try the AI features: `python3 scripts/eln.py export --root sandbox/alex
   --project PRMT5-ChromatinRelease`, or open Codex / Claude Code / Cowork
-  here and ask "what do we know about SNRPB chromatin retention?" with
-  `AI_ELN_ROOT=sandbox/alex` set. [`PILOT.md`](PILOT.md) shows what that
-  produced when the sandbox was a single notebook.
+  in the tools folder with `AI_ELN_ROOT=sandbox/alex` set and ask "what do
+  we know about SNRPB chromatin retention?". [`PILOT.md`](PILOT.md) shows
+  what that produced when the sandbox was a single notebook.
 
-Make a mess, then put it back:
+Change anything you like. This command puts both notebooks back as they
+were:
 
 ```bash
 python3 sandbox/rebuild.py
 ```
 
-Both notebooks are checked in CI, so they always follow
-`docs/CONVENTIONS.md`.
+Both notebooks are checked automatically each time the tools change, so
+they follow `docs/CONVENTIONS.md`.

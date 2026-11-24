@@ -5,13 +5,14 @@ description: Answer questions about the lab's results from its Markdown research
 
 # Searching the record and citing what you find
 
-Every experiment, protocol, sample, and project is one Markdown file with a
-YAML header. Filter on the header first, then read, then answer with IDs.
+Every experiment, protocol, sample, and project is one Markdown file that
+starts with a header of `key: value` lines. Filter on the header first,
+then read, then answer with IDs.
 
 ## 1. Filter before reading
 
-The vault will outgrow what fits in one context window. Use the tool's
-filters and the generated CSV index before opening files:
+A notebook grows larger than an AI tool can read at once. Use the tool's
+filters and the CSV index before opening files:
 
 ```bash
 python3 scripts/eln.py find --project PRMT5-ChromatinRelease         # by project
@@ -24,13 +25,19 @@ python3 scripts/eln.py find ... --ids                                # IDs only,
 python3 scripts/eln.py find ... --json                               # full headers as JSON
 ```
 
-`Inventory/experiments.csv`, `samples.csv`, `protocols.csv`, `projects.csv`
-are regenerated from the notes and are safe to read directly (lists inside a
-cell are `;`-separated).
+The search covers one notebook: the one named with `eln.py init --root`,
+with `AI_ELN_ROOT`, or with `--root` on the command. That is one person's
+records. To search another person's notebook, run the command again with
+`--root` set to that folder.
 
-Then open only the notes that matched: `Experiments/{ID}_*/1-notes/{ID}.md`.
-Grep is fine too - the section headers are fixed (`## Results`,
-`## Interpretation`), so `grep -A20 "## Results"` across notes works.
+`Inventory/experiments.csv`, `samples.csv`, `protocols.csv`, `projects.csv`
+in the notebook folder are regenerated from the notes and can be read
+directly (lists inside a cell are separated by `;`).
+
+Then open only the notes that matched:
+`Experiments/{ID}_*/1-notes/{ID}.md` in the notebook folder. Grep works
+too. The section headings are fixed (`## Results`, `## Interpretation`),
+so `grep -A20 "## Results"` across notes works.
 
 ## 2. Answer with IDs
 
@@ -42,9 +49,9 @@ Grep is fine too - the section headers are fixed (`## Results`,
 - One experiment is preliminary. Say so unless a note records replication
   (`related_experiments`, or a project page listing it under *Supported
   conclusions* with multiple IDs).
-- If the notes don't contain the answer, say exactly that. Do not fill the
-  gap with what would be plausible. "Nothing in the record addresses X" is
-  a correct and useful answer.
+- If the notes don't contain the answer, say that. Do not fill the gap
+  with what would be plausible. "Nothing in the record addresses X" is a
+  correct and useful answer.
 - Where it helps, give the path so the person can open the note.
 
 ## 3. Things to know about the IDs
@@ -53,16 +60,25 @@ Grep is fine too - the section headers are fixed (`## Results`,
   antibody, `JSRc` cell line, `JSRm` mouse line, `JSRt` peptide, `JSRr`
   protein prep, `JSRs` slide, `JSRg` gel; `P_WesternBlot` = protocol;
   projects are named. The initials are the researcher.
-- A bare ID anywhere in a note is a reference to that thing.
+- An ID written anywhere in a note is a reference to that record.
+- An experiment or sample ID with initials other than the notebook
+  owner's (`ALXc0001` in a note of `JOR`) is a record in that person's
+  notebook. It is not in this folder and it is not missing. If you cannot
+  read that notebook, say that the record is in the other person's
+  notebook and that you have not read it.
 - `status` is `active | complete | paused | abandoned`. Weight `complete`
   notes over `active` ones when summarizing what is known.
 
 ## Don'ts
 
-- Don't search or cite `sandbox/`. It is fictional practice data; `eln.py
-  find` never looks there, and neither should a grep, unless the person
-  explicitly asked to work in the sandbox.
+- Don't search or cite `sandbox/`. It holds two fictional practice
+  notebooks (`sandbox/alex`, `sandbox/jordan`). `eln.py find` does not
+  look there unless `--root` points at one of them, and a grep should not
+  either, unless the person asked to work in the sandbox.
+- Don't search or cite `Exports/` in a notebook. Those folders are copies
+  written by Export; cite the notes they were copied from. `eln.py find`
+  does not look there. A grep does, so leave `Exports/` out of it.
 - Don't modify notes while answering a question. Searching is read-only.
 - Don't invent an experiment, number, figure, or reagent that isn't in a note.
 - Don't summarize from the CSV alone when the question is about *what was
-  found* - the CSV has metadata, the note has the result.
+  found*. The CSV has the header fields; the note has the result.

@@ -1,14 +1,10 @@
-# Conventions — IDs, folders, filenames, metadata
+# Conventions: IDs, folders, filenames, metadata
 
-This is the contract. Everything else in the repo (the `eln.py` tool, the
-templates, the validator, the AI instructions) implements what's written
-here. If the tool and this page ever disagree, this page wins and the tool
-has a bug.
+These are the rules. The `eln.py` tool, the templates, Check, and the
+instructions for AI tools all follow this page. If a tool and this page
+disagree, this page is right and the tool has a bug.
 
-It is deliberately short. A convention people can hold in their head is one
-they'll follow.
-
-## 0. The whole system in five lines
+## 0. Summary
 
 1. **One folder per experiment**, five fixed subfolders, same shape every time.
 2. **One Markdown note** per experiment, protocol, sample, and project, with a
@@ -23,25 +19,26 @@ they'll follow.
 | Thing | Pattern | Example | Who assigns it |
 |---|---|---|---|
 | Experiment | `{INITIALS}e{NNNN}` | `JSRe0002` | `eln.py new experiment` |
-| Sample | `{INITIALS}{t}{NNNN}` | `JSRp0001` | `eln.py new sample` |
+| Sample | `{INITIALS}{letter}{NNNN}` | `JSRp0001` | `eln.py new sample` |
 | Protocol | `P_{Name}` | `P_WesternBlot` | `eln.py new protocol` |
 | Project | `{Name}` | `PRMT5-ChromatinRelease` | `eln.py new project` |
 
-- **`INITIALS`** — uppercase letters, one set per researcher (`JSR`,
-  `DSL`). Use three: first, middle, and last initial. Two to four are
-  accepted, but two-letter initials are more likely to be the same as
-  someone else's, and the tools say so when you set them. Your initials are
-  your namespace: your numbering never collides with anyone else's, so no
-  central counter is needed.
+- **`INITIALS`**: uppercase letters, one set per researcher (`JSR`, `DSL`).
+  Use three: first, middle, and last initial. Two to four are accepted, but
+  two-letter initials are more likely to be the same as someone else's, and
+  the tools say so when you set them. Because your IDs start with your
+  initials, nobody else's IDs can match yours, and no shared counter is
+  needed.
 - **An ID with someone else's initials** refers to a record in that person's
   notebook (`samples: [ALXc0001]` in a note of `JOR`). Check cannot see that
   record and does not report it as missing. It does report a missing record
   whose initials are the notebook's own. A mistyped set of initials therefore
   goes unnoticed; read them once when you write them.
-- **`NNNN`** — four digits, zero-padded, sequential *per researcher and per
-  type*. `JSRe0002` and `JSRp0002` are unrelated. Numbers are never reused,
-  even if an experiment is abandoned.
-- **`e`** marks an experiment. The sample type letter `t` is one of:
+- **`NNNN`**: four digits with leading zeros, counted separately for each
+  researcher and each kind of record. `JSRe0002` and `JSRp0002` have nothing
+  to do with each other. A number is never used again, even if the
+  experiment is abandoned.
+- **`e`** marks an experiment. For a sample, the letter says what kind:
 
   | letter | `sample_type` | letter | `sample_type` |
   |---|---|---|---|
@@ -51,21 +48,22 @@ they'll follow.
   | `c` | cell-line | `s` | slide |
   | `g` | gel / blot | | |
 
-  A gel is a "sample" here in the sense that matters: a durable physical
-  thing with its own ID that several experiments may refer to.
+  A gel gets a sample ID because it is a physical thing that is kept, and
+  several experiments can refer to the same gel.
 
-- **Protocol names** are PascalCase or kebab-case, letters/digits/hyphens
-  only (`P_WesternBlot`, `P_Cellular-Fractionation`). The `P_` prefix makes
-  every protocol findable with one search. There is **one file per
-  protocol**, edited in place; the `version` date in its header is bumped
-  when the procedure changes (see §4).
+- **Protocol names** are written as words run together with a capital at the
+  start of each (`WesternBlot`), or joined with hyphens
+  (`Cellular-Fractionation`). Letters, digits, and hyphens only. Every
+  protocol ID starts with `P_`, so a search for `P_` finds them all. There
+  is **one file per protocol**, edited in place. When the procedure changes,
+  the `version` date in its header is changed too (see §4).
 - **Project IDs** are a short name: letters, digits, hyphens; starts with a
   letter.
 
-An ID is the link. To refer to something, write its bare ID —
-`JSRe0002`, `P_WesternBlot`, `DSLp0003` — in the relevant header field or
-in prose. No wiki-link syntax, no paths. The validator resolves every
-reference and tells you if one points nowhere.
+To refer to a record, write its ID (`JSRe0002`, `P_WesternBlot`, `DSLp0003`)
+in the header field for it, or in the text. Nothing else is needed: no link
+syntax and no path. Check looks up every ID written in a header field and
+reports any that match no record.
 
 ## 2. Folders
 
@@ -91,19 +89,21 @@ reference and tells you if one points nowhere.
 - The **slug** is the title with accents removed (`Résumé` becomes
   `Resume`) and anything that still isn't a letter or digit turned into
   `-`, trimmed to 60 characters. Case is kept so gene names stay
-  readable (`SNRPB-chromatin-retention`). The tool makes it; you don't.
-- The five subfolders are created by the tool and are never renamed,
-  reordered, or added to per experiment. The value of the system is that
-  every experiment looks the same.
+  readable (`SNRPB-chromatin-retention`). The tool makes the slug.
+- The five subfolders are created by the tool. Do not rename them, reorder
+  them, or add others to one experiment: search, Check, and the index
+  rely on every experiment having the same five.
 - `<root>` is the notebook folder: one per person, kept wherever that
   person keeps their work (Dropbox, OneDrive, a lab share, a drive). There
   is no server, no central copy, and no list of people. The browser page
   works on the folder you open; the Python tools work on the folder named
   with `eln.py init --root`, or on the folder the tools sit in if none is
-  named. Other folders may sit in `<root>` next to these; the tools leave
-  them alone.
-- `Inventory/` is **generated** by `eln.py index` from the notes. Never
-  hand-edit it; edit the note and re-index.
+  named. Other folders may sit in `<root>` next to these, and the tools
+  leave them alone. A folder inside `Experiments/` without an ID in its name
+  is different: Check reports it, and it should be adopted or moved out.
+- `Inventory/` holds the index tables, which the tool makes from the notes.
+  Do not edit them by hand; edit the note and the index follows. The meeting
+  brief and single-file exports are saved in `Inventory/` too.
 
 ### notebook.md and lab.yaml
 
@@ -154,8 +154,8 @@ are read from the folder name where it holds a date (`2019-03-04_PRMT5
 western`), otherwise from the oldest file date; `date_completed` is the
 newest file date. Links inside the folder are moved as links and never
 followed. A folder that is itself a link, is named `README.md`, or has a
-line break in its name is refused: rename it or adopt the real folder. Results and Interpretation say "Not written" until someone writes
-them.
+line break in its name is refused: rename it or adopt the real folder.
+Results and Interpretation say "Not written" until someone writes them.
 
 `lab.yaml` (optional, at the top of the notebook folder) holds the lab's
 name, institution, and house style in the same flat `key: value` form. It
@@ -173,14 +173,14 @@ The full grammar:
 
 - Fields are separated by `_`. Words *inside* a field are joined with `-`.
 - `{KIND}` is optional and is one uppercase letter:
-  - **`R`** — the results summary: the one figure or document you'd pull up
-    in lab meeting. Searching `JSRe0002_R` jumps straight to it.
-  - **`P`** — a snapshot of a protocol as it was actually run. The tool
-    writes these for you when you pass `--protocol`.
-- `{YYYYMMDD}` is optional; use it when a file gets regenerated over time.
-- Everything else (Illustrator, Prism, notebooks, tables) is just
-  `{EXPERIMENT_ID}_{description}.{ext}` — the extension already says what
-  it is.
+  - **`R`**: the result summary, the one figure or document you would show
+    in lab meeting. A search for `JSRe0002_R` finds it.
+  - **`P`**: a copy of a protocol as it was run. The tool writes these when
+    an experiment is created with a protocol.
+- `{YYYYMMDD}` is optional. Use it when a file is made again later.
+- Every other file (Illustrator, Prism, notebooks, tables) is
+  `{EXPERIMENT_ID}_{description}.{ext}`. The extension says what kind of
+  file it is.
 
 Examples:
 
@@ -194,10 +194,9 @@ JSRe0002_snapshot_20230210.html      written by the tool at completion: the note
 JSRe0002_MANIFEST.sha256             written by the tool at completion: every file's checksum
 ```
 
-**The one exemption: `2-data_raw/`.** Instrument output keeps whatever name
-the instrument gave it. Renaming raw data breaks the chain back to the
-acquisition and is exactly the kind of "cleanup" that later can't be
-undone. If the raw data is too big to live here (microscopy, sequencing,
+**The one exception: `2-data_raw/`.** Instrument output keeps the name the
+instrument gave it. A renamed raw file can no longer be matched to the
+instrument's own records, and that cannot be undone later. If the raw data is too big to live here (microscopy, sequencing,
 mass spec), it stays on institutional storage and the note's
 `raw_data_path` points at it; a short `README.md` in `2-data_raw/` saying
 where it went is welcome.
@@ -212,10 +211,10 @@ export, so a file outside the notebook cannot end up in one by accident.
 
 ## 4. The YAML header (front matter)
 
-Every note starts with a header between two `---` lines. It uses a **flat
-subset** of YAML on purpose, so that it's parseable by `grep`, by a
-ten-line function in R or Python, by every YAML library, and by any AI
-model reading the file cold:
+Every note starts with a header between two `---` lines. It uses a small,
+**flat** part of the YAML format, so that it can be read by `grep`, by a
+short function in R or Python, by any YAML library, and by an AI model that
+has never seen the file before:
 
 ```yaml
 ---
@@ -229,8 +228,8 @@ Rules:
 
 - One `key: value` per line. Keys are `snake_case`.
 - Lists are always the inline `[a, b]` form. Never the `- item` block form.
-- No nesting, no multi-line values, no anchors. If you feel the need for
-  any of those, the information belongs in the note body instead.
+- No nesting, no values that run over several lines, no anchors. Anything
+  that needs those belongs in the body of the note.
 - Dates are `YYYY-MM-DD`. Booleans are `true` / `false`.
 - A `# comment` after a value is allowed (the templates use them as hints).
 - Quotes are only needed if a value contains `:` or `#` or starts with `[`.
@@ -247,7 +246,7 @@ Rules:
 | `date_started` | yes | date |
 | `date_completed` | when complete | date |
 | `status` | yes | `active` · `complete` · `paused` · `abandoned` |
-| `experiment_type` | no | list; free vocabulary — see suggestions below |
+| `experiment_type` | no | list; any words, see the suggestions below |
 | `protocols` | should | list of protocol IDs |
 | `samples` | no | list of sample IDs |
 | `notebook_reference` | no | physical notebook page, e.g. `NB02-153` |
@@ -255,7 +254,7 @@ Rules:
 | `related_experiments` | no | list of experiment IDs |
 | `tags` | no | list. `meeting` = flag for the next lab meeting |
 
-"Should" means the validator warns if it's empty; it's required by the SOP
+"Should" means Check warns if it is empty; it is required by the SOP
 by the time the experiment is complete, but you don't have to know it on
 day one.
 
@@ -292,12 +291,12 @@ same header keys and section titles; only the hints change.
 | `references` | no | list (DOIs, URLs, paper IDs) |
 | `tags` | no | list |
 
-One living file per protocol. When you change the *procedure*, bump
-`version` and add a line to the **Change log** section. When an experiment
-uses a protocol, the tool copies the current file into the experiment's
-`1-notes/` as `{EXPERIMENT_ID}_P_{Name}_{YYYYMMDD}.md` — that copy is the
-permanent record of what was actually followed. Deviations on the day go in
-the experiment note, never in the living protocol.
+One file per protocol, edited in place. When you change the *procedure*,
+change `version` to the date and add a line to the **Change log** section.
+When an experiment uses a protocol, the tool copies the current file into
+the experiment's `1-notes/` as `{EXPERIMENT_ID}_P_{Name}_{YYYYMMDD}.md`.
+That copy is the record of what was followed. Deviations on the day go in
+the experiment note, not in the protocol file.
 
 Body sections: **Purpose · Materials · Procedure · Known failure modes /
 troubleshooting · Change log.**
@@ -316,9 +315,9 @@ troubleshooting · Change log.**
 | `status` | yes | `active` · `depleted` · `retired` |
 | `tags` | no | list |
 
-Which experiments used a sample is **derived** — it's in
-`Inventory/samples.csv` and from `eln.py find --sample ID` — not stored in
-the sample note, so it can't go stale.
+Which experiments used a sample is not written in the sample note. It is
+worked out from the experiment notes each time: see `Inventory/samples.csv`
+or `eln.py find --sample ID`. So it is always current.
 
 Body sections: **Description · Provenance · Validation · Notes.**
 
@@ -339,14 +338,14 @@ Body sections: **Description · Provenance · Validation · Notes.**
 
 Body sections: **Aim / hypothesis · Current state** (with *Supported
 conclusions*, *Open questions / conflicting observations*, *Experiments
-needing replication* — every conclusion cites experiment IDs) **·
+needing replication*; every conclusion cites experiment IDs) **·
 Experiments · Reagents in use · Figures · Related protocols.**
 
 ## 5. Dates and statuses
 
-- Dates in headers: `YYYY-MM-DD`. Dates in filenames: `YYYYMMDD` (sorts
-  correctly, no separators to argue about).
-- `status` is the one field you're expected to keep current. An experiment
+- Dates in headers: `YYYY-MM-DD`. Dates in filenames: `YYYYMMDD`, which
+  sorts in date order.
+- Keep `status` up to date; it is the one field that needs it. An experiment
   is `complete` when Results and Interpretation are written and
   `raw_data_path` points at backed-up storage. Set it with **Mark
   complete** on the page or `eln.py complete ID`: that refuses if Results
@@ -361,12 +360,13 @@ Experiments · Reagents in use · Figures · Related protocols.**
   changed since the last manifest. `paused` and `abandoned` both need one
   sentence in the note saying why.
 
-## 6. What the validator enforces
+## 6. What Check reports
 
-`eln.py validate` reads the whole vault and reports. Errors fail; warnings
-are advice unless you pass `--strict`.
+**Check** (`eln.py validate`) reads every note and folder in the notebook
+and lists what it finds. An error makes the command fail. A warning is
+advice, unless you pass `--strict`.
 
-**Errors** — things that break the system:
+**Errors**, which have to be fixed:
 
 - Experiment folder name doesn't match `{ID}_{slug}`; a subfolder is
   missing; there's no `1-notes/{ID}.md`; the note's `experiment_id`
@@ -379,11 +379,14 @@ are advice unless you pass `--strict`.
   a file is reported as a warning with what to do about it; see "Offline
   work and sync copies" in the getting-started guide.)
 
-**Warnings** — things worth fixing before you forget:
+**Warnings**, which are worth fixing soon:
 
-- A reference (`project`, `protocols`, `samples`, `related_experiments`,
-  `supersedes`) that points at nothing.
-- `project`, `protocols`, or `raw_data_path` still empty.
+- An ID in `project`, `protocols`, `samples`, `related_experiments`, or
+  `supersedes` that matches no record (an experiment or sample ID with
+  someone else's initials is not reported; see §1).
+- Something wrong with `notebook.md` (see §2).
+- `project`, `protocols`, or `raw_data_path` still empty (not reported for
+  `project` and `protocols` on a record adopted from an older folder).
 - A file in `1-notes/`, `3-code/`, `4-data_processed/`, or `5-figures/`
   that doesn't start with the experiment ID.
 - An experiment marked `complete` with an empty Results or Interpretation
@@ -391,5 +394,5 @@ are advice unless you pass `--strict`.
 - A required body section missing, or a header key that isn't in the
   template (usually a typo).
 
-Run it before lab meeting, before archiving anything, and any time you're
-about to hand a folder to someone else.
+Run it before lab meeting, before archiving anything, and before giving a
+folder to someone else.

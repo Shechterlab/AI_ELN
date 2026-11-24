@@ -1,15 +1,15 @@
 # AI_ELN: the Shechter Lab research record
 
-A lab notebook made of plain files in plain folders. Every experiment gets a
-stable ID, the same five subfolders, and one Markdown note with a short
-header. Because the structure never varies, a person can find anything in
-seconds, a spreadsheet can index it, and an AI assistant can read it and
-cite the exact experiment a claim came from.
+A lab notebook kept as plain files in ordinary folders. Each experiment has
+an ID, a folder with the same five subfolders, and one Markdown note with a
+short header. Every experiment is laid out the same way, so it can be
+searched by ID, listed in a spreadsheet, and read by an AI assistant that
+cites the experiment each statement comes from.
 
-It needs no accounts, plugins, database, or API keys. In Chrome or Edge it
-needs no installation: a page in the browser works directly on the folder.
-The same tools also exist as Python scripts with double-click launchers,
-and as an MCP server for AI clients.
+It needs no account, plugin, database, or API key. In Chrome or Edge nothing
+is installed: a page in the browser works on the folder directly. The same
+tools are also Python scripts with double-click launchers, and an MCP server
+for AI clients.
 
 Website: <https://shechterlab.github.io/AI_ELN/> (served from [`docs/`](docs/README.md)).
 
@@ -21,34 +21,46 @@ Website: <https://shechterlab.github.io/AI_ELN/> (served from [`docs/`](docs/REA
    uploaded. In Safari or Firefox, double-click `launchers/Open ELN`
    instead (needs Python).
 2. **Click New experiment, type a title, click Create.** The folder, the
-   note, the protocol snapshot, and the inventory row are made for you.
-3. **Click Edit here and write.** Objective before you start; Results,
-   Interpretation, Decision when you have them.
-4. **Drop files into the subfolders**, named with the experiment ID in
-   front: `JSRe0002_R_blot-quantification.png` into `5-figures/`. Raw
-   instrument files go into `2-data_raw/` untouched. **Show folder** opens it.
+   note, the protocol copy, and the index row are created.
+3. **Click Edit here and write.** Write the Objective before you start, and
+   Results, Interpretation, and Decision when you have them.
+4. **Add files.** In the browser page, **Add files** on the note puts a file
+   in the right subfolder under the right name. Otherwise copy files into
+   the subfolders with the experiment ID in front:
+   `JSRe0002_R_blot-quantification.png` into `5-figures/`. Raw instrument
+   files go into `2-data_raw/` with their original names.
 
-When the experiment is done, **Mark complete**
-checks it is written up, dates it, and drops a one-file HTML snapshot and
-a checksum list next to the note. **Check** tells you if anything is
-misnamed or missing; **Meeting brief** writes the summary for the next lab
-meeting from whatever you flagged. **Print / save as PDF** prints a note
-with page numbers and signature lines, **Repeat this experiment** starts the
-next run from the last one, **Adopt** takes in an older folder as an
-experiment without changing its files, and **View a notebook** opens
-someone's notebook without being able to change it. Practice first on fictional data with
-`launchers/Try the Sandbox`.
+When the experiment is done, click **Mark complete**. It checks that Results
+and Interpretation are written, sets the date, and writes two files next to
+the note: an HTML snapshot that prints to PDF, and a list of checksums.
+
+The other buttons:
+
+- **Check** lists files and folders that are misnamed or missing.
+- **Meeting brief** writes the summary for lab meeting from the experiments
+  you flagged.
+- **Print / save as PDF** prints a note with page numbers and signature lines.
+- **Repeat this experiment** starts a new experiment with the same title,
+  project, protocols, and samples.
+- **Adopt older folders** makes an experiment record from a folder you
+  already have, without changing its files.
+- **View a notebook (read-only)** opens someone's notebook so that nothing
+  in it can be changed.
+
+To practise on fictional data, click **Open the practice notebook** on the
+page's first screen, or open the [`sandbox`](sandbox/README.md) folder.
 
 ![The home page](docs/img/home.png)
 
-There are two versions of the page, and they write the same files (the
-launcher page has the core jobs; adopting, adding files, printing, and the
-folder export are in the browser page and the command line): one runs in the browser ([`docs/app/`](docs/app/README.md),
-JavaScript), one is started by a launcher (`scripts/eln_web.py`, Python).
-Tests compare their output byte for byte. Terminal-window launchers (`New
-Experiment`, `Check Everything`, ...) and a command line do the same
-things for people who prefer them. Mac users right-click → Open a launcher
-the first time; Windows needs Python installed once. See
+There are two versions of the page. One runs in the browser
+([`docs/app/`](docs/app/README.md), JavaScript). The other is started by a
+launcher (`scripts/eln_web.py`, Python) for Safari and Firefox, which cannot
+open folders. They write the same files, and tests compare their output byte
+for byte. The launcher page has the core jobs; adopting, adding files,
+printing, and the folder export are in the browser page and the command
+line. There are also terminal-window launchers (`New Experiment`, `Check
+Everything`, ...) and a command line. On a Mac, right-click a launcher and
+choose Open the first time; Windows needs Python installed once. See
 [`docs/getting-started.md`](docs/getting-started.md).
 
 ## Using it in another lab
@@ -57,8 +69,8 @@ Edit [`docs/lab.yaml`](docs/lab.yaml): lab name, institution, links,
 colours, fonts, and whether printouts carry signature lines. Replace the
 logo in `docs/assets/`. The website, the notebook page, snapshots,
 printouts, and exports all read that file; nothing else needs editing. A
-notebook folder can carry its own `lab.yaml`, which wins over this one.
-The layering follows `configs/lab.yaml` in the lab's pipelines repository.
+notebook folder can carry its own `lab.yaml`, which is used in place of this
+one for that notebook.
 
 ## Where it lives
 
@@ -104,11 +116,11 @@ Experiments/
     ├── 2-data_raw/         instrument output, never renamed, never edited
     ├── 3-code/             JSRe0002_analysis.R
     ├── 4-data_processed/   JSRe0002_quantification.csv
-    └── 5-figures/          JSRe0002_R_fractionation-KCl_20260904.png   <- the one you show in lab meeting
-Protocols/    P_WesternBlot.md          one living file per protocol
+    └── 5-figures/          JSRe0002_R_fractionation-KCl_20260904.png   the result figure
+Protocols/    P_WesternBlot.md          one file per protocol, edited in place
 Samples/      JSRp0001.md               plasmids, oligos, antibodies, cell lines, gels...
-Projects/     PRMT5-ChromatinRelease.md rolled-up state of a research thread, citing experiment IDs
-Inventory/    *.csv                     generated index of all of the above; open in Excel
+Projects/     PRMT5-ChromatinRelease.md summary of a research project, citing experiment IDs
+Inventory/    *.csv                     index of everything above, made from the notes; opens in Excel
 Exports/      export_.../               folders written by Export; copies, safe to delete
 notebook.md                             whose notebook this is, and the last ID given out for each kind of record
 ```
@@ -120,13 +132,13 @@ notebook.md                             whose notebook this is, and the last ID 
 | Protocol | `P_WesternBlot` | New protocol |
 | Project | `PRMT5-ChromatinRelease` | New project |
 
-The initials are yours, so your IDs never collide with anyone else's, in your folder or theirs. An
-ID written anywhere is a link. The complete rules fit on one page:
-[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). The one-page version to pin
-above your bench: [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md).
+IDs start with your initials, so they cannot match anyone else's. An ID
+written anywhere in a note is shown as a link. The full rules are in
+[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). A one-page version to print is
+[`docs/CHEATSHEET.md`](docs/CHEATSHEET.md).
 
-Every note starts with a header like this, which is what makes the record
-searchable and what the AI reads first:
+Every note starts with a header like this. Search, the index, and AI tools
+read it first:
 
 ```yaml
 ---
@@ -152,7 +164,7 @@ subscription. Nothing needs an API key.
 
 - **ChatGPT, copy and paste.** Click **Export**, pick a project (or all
   active experiments), click **Copy all**, paste into a chat. The export
-  contains the notes, everything they reference, and a short primer on
+  contains the notes, the records they refer to, and a short explanation of
   how to read them. Ask: *summarize what we know, citing experiment IDs*;
   *draft a results paragraph for JSRe0002*; *which experiments used
   JSRa0003?* Once, paste [`docs/ai-briefing.md`](docs/ai-briefing.md) as
@@ -182,17 +194,17 @@ when run against the fictional sandbox. Details and reasoning:
 ## Checking the record
 
 **Check** (or `python3 scripts/eln.py validate`) reads every note and
-folder and reports what breaks the conventions: a misnamed folder, a
-missing subfolder, a `status` that isn't one of the four, a sample ID that
-points at nothing, a figure without the experiment ID in front. Errors
-fail; warnings are advice. It also spots sync-conflict copies. Run it
-before lab meeting and before handing a folder to anyone. Every change to
-the tools is tested on macOS, Windows, and Linux, including a strict check
-of the sandbox record.
+folder and lists what does not follow the conventions: a misnamed folder, a
+missing subfolder, a `status` that is not one of the four, a sample ID that
+matches no sample, a figure without the experiment ID in front. An `ERROR`
+has to be fixed; a `WARN` is advice. It also lists copies made by a sync
+service. Run it before lab meeting and before giving a folder to anyone.
+Every change to the tools is tested on macOS, Windows, and Linux, including
+a strict check of the sandbox notebooks.
 
 ## Command line
 
-Everything the page does is one script with no dependencies:
+The same jobs from a terminal. The script needs only Python:
 
 ```bash
 python3 scripts/eln.py init                                  # once: initials, name, where files live
@@ -204,7 +216,8 @@ python3 scripts/eln.py index                                 # regenerate Invent
 python3 scripts/eln.py report                                # Markdown brief for lab meeting
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --out brief.md
 python3 scripts/eln.py export --project PRMT5-ChromatinRelease --format eln --out prmt5.eln   # for eLabFTW/RSpace/...
-python3 scripts/eln.py complete JSRe0002                    # close out: snapshot + manifest
+python3 scripts/eln.py complete JSRe0002                    # mark complete: snapshot + checksums
+python3 scripts/eln.py adopt "/path/to/an old folder"        # make it an experiment record
 python3 scripts/eln.py verify                               # anything changed since completion?
 python3 scripts/eln_web.py                                   # the page, by hand
 ```
@@ -221,16 +234,16 @@ Tests: `python3 -m unittest discover -s tests` (the JavaScript tests run when No
 - [`docs/getting-started.md`](docs/getting-started.md): setup and first experiment, with screenshots
 - [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md): one printable page
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md): the rules, precisely
-- [`docs/SOP.md`](docs/SOP.md): what's required, what's flexible, what happens when an experiment is done
+- [`docs/SOP.md`](docs/SOP.md): what is required, what is flexible, and what happens when an experiment is done
 - [`docs/ai-agents.md`](docs/ai-agents.md) / [`docs/ai-briefing.md`](docs/ai-briefing.md): AI without API keys
 - [`sandbox/`](sandbox/README.md): two fictional notebooks to practice on (`alex/`, `jordan/`); [`sandbox/PILOT.md`](sandbox/PILOT.md) is the AI features run against it
-- [`docs/design-notes.md`](docs/design-notes.md): why it's shaped this way; where LabArchives fits
-- [`reference/jacob-original-system/`](reference/jacob-original-system/): the spreadsheet-and-folders system by Jacob Roth that this is a direct translation of
+- [`docs/design-notes.md`](docs/design-notes.md): the reasons for the design, and where LabArchives fits
+- [`reference/jacob-original-system/`](reference/jacob-original-system/): the spreadsheet-and-folders system by Jacob Roth that this is based on
 
 ## Credits
 
-The information architecture (one ID per experiment, five fixed
-subfolders, IDs for every gel and plasmid, a results file you can find in
-one search) is Jacob Roth's. This repo turns it into plain Markdown with a
-header, adds a tool that enforces the conventions and a page that makes it
-point-and-click, and makes the whole thing readable by AI.
+The design (one ID per experiment, five fixed subfolders, an ID for every
+gel and plasmid, a result file that one search finds) is Jacob Roth's. This
+repository keeps that design as Markdown notes with a header. It adds a tool
+that creates the records and checks the naming, a page for doing the same by
+clicking, and instructions for AI tools.

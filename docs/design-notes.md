@@ -1,19 +1,21 @@
 # Design notes: why this is shaped the way it is
 
-This explains the reasoning behind the system in this repo. If you just
-want to use it, see [`getting-started.md`](getting-started.md) instead;
-this document is for when you're curious, or deciding whether to change
-something.
+This page gives the reasons for the design. To use the notebook, read
+[`getting-started.md`](getting-started.md). Read this page before changing
+how the system works.
 
 ## The decision this repo makes
 
-There were three tempting, wrong defaults: adopt an ELN app or an editor
-plugin wholesale, keep using LabArchives as the daily working tool, or
-"just use folders" with no conventions. This repo does none of them:
+Three other options were considered: adopting an ELN app or an editor
+plugin as it comes, keeping LabArchives as the daily working tool, and
+using folders with no conventions. This repository uses none of them. It
+combines five parts:
 
-> **Jacob's experiment-centric model + plain Markdown files with a small
-> header + a tool that enforces the naming + institutional storage for
-> data + LabArchives as the archival record.**
+- Jacob's model, in which the experiment is the unit of the record;
+- plain Markdown files with a small header;
+- a tool that creates the records and checks the naming;
+- institutional storage for large data;
+- LabArchives as the archival record.
 
 ```mermaid
 flowchart LR
@@ -21,7 +23,7 @@ flowchart LR
         A["Experiment note<br/>(Markdown + header)"]
         B["Raw / processed data<br/>(institutional storage)"]
         C["Protocols, Samples,<br/>Projects (Markdown)"]
-        V["eln.py validate<br/>(keeps the conventions honest)"]
+        V["eln.py validate<br/>(checks the conventions)"]
     end
     subgraph Archive["At completion"]
         D["Rendered snapshot<br/>(PDF/HTML)"]
@@ -35,209 +37,244 @@ flowchart LR
 
 ## What Jacob's system already solved
 
-Every experiment gets, from the start: a unique ID, a standardized folder
-(`1-notes / 2-data_raw / 3-code / 4-data_processed / 5-figures`), explicit
-separation of raw vs. processed data, stable IDs for recurring physical
-objects (gels, plasmids, oligos, slides), and a short results summary
-written while the experiment is still fresh and findable with one search
-(`JSRe####-R`). That's the hard part of an ELN — the information
-architecture — and it was solved with a spreadsheet and a folder-naming
-convention, not software. See
+In Jacob's system every experiment has, from the start: a unique ID, a
+standard folder (`1-notes / 2-data_raw / 3-code / 4-data_processed /
+5-figures`), raw data kept apart from processed data, stable IDs for
+physical objects that are used again (gels, plasmids, oligos, slides), and
+a short results summary that is written soon after the experiment and found
+with one search (`JSRe0002_R` here; `JSRe0002-R` in his original). Deciding
+what is recorded and where it goes is the hard part of an electronic
+notebook. He did it with a spreadsheet and a folder-naming convention,
+without software. See
 [`reference/jacob-original-system/`](../reference/jacob-original-system/).
 
-This repo's job is narrower than it sounds: **represent that structure in
-Markdown with a header, and enforce it with a tool**, so it becomes
-searchable, linkable, and AI-readable without asking anyone to give up
-the parts that already work.
+This repository does two things with that structure. It writes it as
+Markdown notes with a header, and it checks it with a tool. The notes can
+then be searched, can refer to each other by ID, and can be read by an AI.
+The parts of Jacob's system that already work stay as they are.
 
-## Conventions are the product
+## The conventions
 
-The metadata and the naming grammar are what everything else hangs on.
-Three decisions follow from taking that seriously:
+Everything else depends on the header fields and the naming rules. Three
+decisions follow from that:
 
-- **The header is a flat YAML subset** (`key: value`, `key: [a, b]`,
-  nothing nested). It's parseable by `grep`, by ten lines of R or Python,
-  by every YAML library, and by a language model reading a file cold.
-  Every "we'll just add a nested field" would cost that.
-- **IDs are the links.** A bare `JSRe0002` anywhere means that experiment.
-  No wiki-link syntax, no paths, no editor feature required; the validator
-  resolves them.
-- **The tool assigns IDs and enforces the rules; it doesn't own the
-  files.** `eln.py` is a few hundred lines of dependency-free Python. If it
-  vanished, the files would still be a complete, readable record, and the
-  one-page [`CONVENTIONS.md`](CONVENTIONS.md) is enough to rewrite it.
+- **The header is flat.** It is the `key: value` lines at the top of a
+  note, with lists written as `key: [a, b]` and nothing nested (a small
+  part of the YAML format). It can be read by `grep`, by ten lines of R or
+  Python, by every YAML library, and by an AI model that has never seen the
+  file before. A nested field would end that.
+- **IDs are the links.** An ID written anywhere, such as `JSRe0002`, refers
+  to that experiment. No link syntax, path, or editor feature is needed.
+  Check looks up the IDs in the header fields and reports any that match no
+  record.
+- **The tool assigns IDs and checks the rules. The files do not depend on
+  it.** `eln.py` is one Python file with no dependencies. If it were lost,
+  the files would still be a complete, readable record, and
+  [`CONVENTIONS.md`](CONVENTIONS.md) describes the rules well enough to
+  write the tool again.
 
-The validator (`eln.py validate`) is where "convention" becomes
-"enforcement" — but as advice, run when you choose, with errors reserved
-for things that actually break the system (a misnamed folder, a duplicate
-ID) and warnings for everything else. Nothing blocks you from writing.
+Check (`eln.py validate`) reports what does not follow the conventions. It
+runs when you choose. An error is given for something that breaks the
+system (a misnamed folder, a duplicate ID), and everything else is a
+warning. It never stops you from writing.
 
 ## What was borrowed from the mature ELNs, and what was not
 
 The institutional ELNs (eLabFTW, RSpace, SciNote, openBIS, Chemotion) and
-the plain-text notebooks that preceded this one were each read for one
-question: what do they do that a folder of Markdown cannot, and does it
-survive the filter of *standard files, no lock-in, easy*?
+the plain-text notebooks that came before this one were each examined for
+what they do that a folder of Markdown files cannot. A practice was taken
+over if it could be done with standard files, without tying the record to
+one program, and without making daily use harder.
 
 | practice | where it comes from | what this record does |
 |---|---|---|
-| Lock and timestamp an entry when it is finished | every institutional ELN; eLabFTW's "timestamp" | **Mark complete** writes a `sha256sum`-format manifest and a dated HTML snapshot; `verify` shows later drift. Records the state without locking anything. |
-| Export a finished entry as a document | eLabFTW/RSpace PDF export; mdlabbook's HTML and PDF | `render` and the snapshot: one self-contained HTML file, images embedded, printable to PDF anywhere. |
-| Exchange records between ELN systems | [the `.eln` format](https://github.com/TheELNConsortium/TheELNFileFormat), an RO-Crate ZIP that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import | `export --format eln`. The lock-in escape hatch: any of those systems can import this record whole, including the files and checksums. Validated with the reference RO-Crate library. |
-| Templates per experiment type | eLabFTW experiment templates | `templates/experiment.{Type}.md`, optional, same header keys, only the prompts differ. |
-| Link entries to items and resources | eLabFTW items, RSpace inventory, openBIS objects | The header fields `samples`, `protocols`, `project`, resolved by the validator; derived usage in the CSVs. |
-| One root per project, dated and sortable, README in each directory | [Noble 2009](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1000424) | The five subfolders, `YYYYMMDD` in filenames, and the README each subfolder starts with. Jacob's system was this, independently. |
-| Fit the discipline; meet the technical requirements; plan the rollout | [Ten simple rules for implementing ELNs](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1012170) (Vandendorpe et al., 2024; the three rules that could be read through this session's proxy) | Templates and sample types are molecular-biology-shaped; requirements are a browser and Python; the SOP and the sandbox are the rollout plan. |
-| Keep tentative and confirmed claims apart so an AI does not conflate them | [Notes2Skills](https://arxiv.org/abs/2606.11897) (2026) | The Interpretation prompt asks for "Preliminary:" marks; the search skill and the ChatGPT briefing forbid upgrading hedges; the pilot showed it holding. |
-| Dashboards over structured notes | Obsidian ELN's Dataview tables | The web page's lists and filters, and the CSVs for Excel. No plugin. |
+| Lock and timestamp an entry when it is finished | every institutional ELN; eLabFTW's "timestamp" | **Mark complete** writes a list of checksums in `sha256sum` format (a checksum is a number computed from a file's content, used to detect changes) and a dated snapshot (one HTML file with the whole experiment, for printing). `verify` shows later changes. The state is recorded and nothing is locked. |
+| Export a finished entry as a document | eLabFTW/RSpace PDF export; mdlabbook's HTML and PDF | `render` and the snapshot: one HTML file with the images embedded, which prints to PDF from any browser. |
+| Exchange records between ELN systems | [the `.eln` format](https://github.com/TheELNConsortium/TheELNFileFormat), a ZIP archive with a standard description of its contents (RO-Crate) that eLabFTW, RSpace, Kadi4Mat, PASTA, SampleDB, OpenSemanticLab, and SciLog import | `export --format eln`. Any of those systems can import the record, including the files and their checksums, so the lab is not tied to these tools. Checked with the reference RO-Crate library. |
+| Templates per experiment type | eLabFTW experiment templates | `templates/experiment.{Type}.md`, optional. The header keys are the same; only the hints differ. |
+| Link entries to items and resources | eLabFTW items, RSpace inventory, openBIS objects | The header fields `samples`, `protocols`, and `project`, which Check looks up. Which experiments used a sample is worked out from the notes and listed in the CSV files. |
+| One root per project, dated and sortable, README in each directory | [Noble 2009](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1000424) | The five subfolders, `YYYYMMDD` in filenames, and the README each subfolder starts with. Jacob's system arrived at the same layout independently. |
+| Fit the discipline; meet the technical requirements; plan the rollout | [Ten simple rules for implementing ELNs](https://journals.plos.org/ploscompbiol/article?id=10.1371%2Fjournal.pcbi.1012170) (Vandendorpe et al., 2024; three of its rules) | The templates and sample types are those of molecular biology. The requirements are a browser, or Python. The SOP and the sandbox are the rollout plan. |
+| Keep tentative and confirmed claims apart so an AI does not conflate them | [Notes2Skills](https://arxiv.org/abs/2606.11897) (2026) | The hint under Interpretation asks for "Preliminary:" marks. The search skill and the ChatGPT briefing tell the AI to keep them. In the pilot (`sandbox/PILOT.md`) it kept them. |
+| Dashboards over structured notes | Obsidian ELN's Dataview tables | The page's lists and filters, and the CSV files, which open in Excel. No plugin is needed. |
 
-Left out on purpose: user accounts and permissions (the sync service and
-the filesystem already have them), electronic signatures and audit trails
-that would need a server to be meaningful, a database, and any feature
-that would make the Markdown file not the whole truth.
+Left out: user accounts and permissions (the sync service and the
+filesystem already have them), electronic signatures and audit trails
+(they would need a server to mean anything), a database, and any feature
+that would put part of the record somewhere other than the Markdown file.
 
 ## Two implementations, one behaviour
 
 The tools exist twice: `scripts/eln.py` in Python and `docs/app/lib/` in
 JavaScript. The Python one runs from a terminal or a launcher. The
-JavaScript one runs in a browser on a folder the person picks, which
-removes the need to install anything, and in Node, where it backs the MCP
-server. Both read and write the same notebook folders, so they have to
-agree exactly. `tests/test_js_parity.py` runs each operation through both
-and compares the files, the validator messages, the index, the brief, the
-export, the snapshot, and the manifest.
+JavaScript one runs in a browser on a folder the person picks, so nothing
+has to be installed. It also runs in Node, where the MCP server uses it
+(MCP is a way for AI programs to call tools). Both read and write the same
+notebook folders, so they have to produce the same files.
+`tests/test_js_parity.py` runs each operation through both and compares
+the files, the Check messages, the index, the brief, the export, the
+snapshot, and the list of checksums.
 
-The JavaScript side is split so that later changes stay small: `lib/` has
-the notebook logic with no browser or Node code in it, `store/` has one
-file per place the files can live, and `lib/tools.js` lists every
-operation with a name and an argument schema. The page, the MCP server,
-and the command line are thin layers over that list. A different AI
-interface later is another thin layer.
+The JavaScript side is split so that later changes stay small. `lib/` has
+the notebook logic with no browser or Node code in it. `store/` has one
+file per place the files can live. `lib/tools.js` lists every operation
+with a name and a description of its arguments. The page, the MCP server,
+and the command line each call that list and add little of their own.
+Another AI interface can be added later in the same way.
 
 ## Why flat files and not an app
 
-Friction is the enemy. Every ELN the lab has tried was abandoned not
-because it couldn't store things but because putting things in it felt
-like work. Plain files in plain folders are the lowest-friction store
-there is: Finder and Explorer are the interface, any text editor writes
-the notes, and there is nothing to log into, update, or migrate. An editor
-that renders Markdown nicely (VS Code, Typora, Obsidian if someone likes
-it) is a view on the same files, not a requirement, and this repo avoids
-editor-specific syntax so nobody is locked to one.
+The electronic notebooks the lab tried before were abandoned. They could
+store the work, but entering it took too much effort. Plain files in
+ordinary folders ask the least of the person: Finder or Explorer shows
+them, any text editor writes the notes, and there is nothing to log into,
+update, or migrate. An editor that displays Markdown well (VS Code, Typora,
+Obsidian) shows the same files and is not required. This repository avoids
+syntax that only one editor understands, so nobody is tied to one.
 
-The cost of flat files is that nothing stops you from misnaming a folder,
-and that "open the .md file" is a real barrier for some people. That's
-exactly what the local web page (a form; you don't name anything; the tool
-does; you can write the note on the page) and the validator (it tells you
-when something's off) are for. The page owns nothing: stop it and the files
-are exactly as they were.
+Flat files have two costs. Nothing stops a person from misnaming a folder,
+and opening a `.md` file is a barrier for some people. The notebook page
+and Check are there for these. On the page you fill in a form, the tool
+names everything, and you can write the note there. Check tells you when
+something is misnamed. The page keeps no records of its own: what it shows
+is read from the files, and closing it changes nothing in the folder.
 
 ## Data lives outside the notebook
 
 The record should contain Markdown, small tables, compressed
-representative images, protocol snapshots, and analysis code. It should
-not contain microscopy datasets, sequencing files, mass spec output, or
-Illustrator/Prism source files duplicated across locations. Text and code
-belong in files people sync and diff; large binaries belong on
-institutionally backed-up storage, with the experiment note recording the
-canonical path (`raw_data_path`).
+representative images, protocol copies, and analysis code. It should not
+contain microscopy datasets, sequencing files, mass spec output, or
+Illustrator and Prism source files duplicated across locations. Text and
+code belong in files that people sync and compare. Large binary files
+belong on storage the institution backs up, and the experiment note
+records where they are (`raw_data_path`).
 
-A per-experiment manifest (which raw file produced which processed file
-produced which figure, with checksums) is what makes "what data supports
-this figure" answerable later. This repo doesn't build it yet (Phase 4).
+**Mark complete** writes a list of checksums for every file in the
+experiment folder (`{ID}_MANIFEST.sha256`), and `eln.py verify` uses it to
+show whether a file changed afterwards. The list does not say which raw
+file produced which processed file or which figure. That record is what
+would answer "what data supports this figure" later, and this repository
+does not build it yet (Phase 4).
 
 ## The role of LabArchives
 
-LabArchives is kept, but demoted from working environment to archival
-layer. What it provides — institutional authentication, controlled
-permissions, audit trails, timestamps, a defensible record — has nothing
-to do with day-to-day usability, and its interface cost shouldn't be paid
-for every note. Intended flow:
+LabArchives is kept as the archive and is no longer where daily work is
+written. It provides institutional authentication, controlled permissions,
+audit trails, timestamps, and a defensible record. None of these is needed
+while a note is being written, so its interface is not used for daily
+notes. The intended flow:
 
-1. Work happens in Markdown, all week, with zero LabArchives interaction.
+1. Work is written in Markdown all week, without opening LabArchives.
 2. When an experiment is `status: complete`, its note is rendered to
    PDF/HTML and deposited in LabArchives under the same experiment ID.
-3. LabArchives is a timestamped snapshot; Markdown stays the actively
-   edited source of truth.
+3. The LabArchives entry is a timestamped copy. The Markdown note stays the
+   version that is edited.
 
-One-directional by design (Markdown → LabArchives, never back).
-Bidirectional sync creates ambiguity about which copy is authoritative; a
-snapshot doesn't. The bridge isn't built yet: it needs institutional API
-access enabled first. When it is, the vendored `labarchive-integration`
-skill (`.agents/skills/vendor/`) already documents the signed-request
-flow, regional endpoints, and the ELN vs. Inventory API split.
+Copies go one way only (Markdown → LabArchives, never back). Syncing in
+both directions would leave it unclear which copy is authoritative. The
+automatic bridge is not built yet, because it needs institutional API
+access to be enabled first. Until then, print the snapshot that Mark
+complete writes to PDF and upload it by hand. The vendored
+`labarchive-integration` skill (`.agents/skills/vendor/`) already
+documents the signed-request flow, the regional endpoints, and the split
+between the ELN and Inventory APIs.
 
-## Collaboration model: one synced folder, nothing central
+## Collaboration model: one folder per person, nothing central
 
-The deployment is one folder in the lab's Dropbox or OneDrive containing
-everything: these tools, the templates, and `Experiments/`, `Protocols/`,
-`Samples/`, `Projects/`. Everyone who syncs it has the whole record and
-the whole toolset. There is no server, no database, no git repository, and
-no central copy that is more authoritative than the one on your laptop;
-the sync service is the only shared component, and it is one the lab
-already pays for and already trusts with its files.
+A notebook is one folder per person. Each person keeps theirs where they
+already keep their work: Dropbox, OneDrive, a lab share, or a drive. The
+folder holds `notebook.md`, `Experiments/`, `Protocols/`, `Samples/`,
+`Projects/`, and `Inventory/`. `notebook.md` says whose notebook it is
+(`owner`, `initials`) and remembers the last ID given out for each kind of
+record. There is no shared lab notebook, no server, no database, no git
+repository, and no central list of people or notebooks. The only shared
+component is the sync service or the lab share, which the lab already pays
+for and already trusts with its files.
 
-Three properties make that safe:
+The tools are separate from the notebooks. The browser page works on
+whichever folder is opened. The Python tools work on the folder named once
+with `eln.py init --root`, or with `--root` on one command. With neither,
+they work on the tools folder itself.
 
-- **Per-researcher initials** mean two people creating experiments at the
-  same moment cannot collide; there is no counter to coordinate.
-- **Every file is plain text or a standard image**, so a sync conflict is
-  two readable copies, never a corrupted database. Dropbox names them
-  "conflicted copy"; OneDrive appends the computer name. The checker
-  flags both (the first by name, the second because it no longer starts
-  with the experiment ID), and the fix is to read both and keep one.
-- **The inventory is derived**, so a conflicted CSV is noise: delete it and
-  re-index.
+People who want to read each other's work keep their folders side by side
+in a shared folder. When the shared folder is opened, the browser page
+lists the notebooks in it, and **View a notebook (read-only)** opens any of
+them without being able to change it. A note can cite a record in another
+person's notebook by its ID. The initials in the ID say whose notebook it
+is in, and Check does not report it as missing.
 
-This GitHub repository is where the tools are developed, not where the
-record lives; nobody in the lab needs it day to day, and a `.git` folder
-should never be inside the synced record (git and sync services corrupt
-each other). `eln.py init --root` supports the unusual case of keeping the
-notes in a different location from the tools.
+This is safe for these reasons:
+
+- **IDs start with the owner's initials**, so two notebooks with different
+  initials cannot give out the same ID, and there is no counter to share.
+  Inside one notebook, the tools hold a lock while a record is created (an
+  empty `.eln-lock` folder, there for a moment), so two programs working in
+  it at once cannot give out the same number.
+- **Every file is plain text or an ordinary data file**, so a sync conflict
+  leaves two readable copies and cannot corrupt a database. Dropbox names
+  the second one "conflicted copy"; OneDrive adds the computer name. Check
+  lists both, and the fix is to read both and keep one.
+- **The inventory is made from the notes**, so a conflicting copy of a CSV
+  file can be deleted and the index made again.
+
+This GitHub repository is where the tools are developed. The record is not
+kept in it, and nobody in the lab needs it day to day. A `.git` folder
+should never be inside a synced folder, because git and sync services
+corrupt each other.
 
 ## AI integration, in stages
 
-AI is valuable here because the header is structured enough to filter
-before reading, the sections are fixed enough to ask precise questions
-about, and every claim can cite an experiment ID instead of floating free.
-The rule throughout: **AI retrieves and cites; people conclude.**
+An AI is useful here because the header has enough structure to filter
+notes before reading them, the sections are the same in every note so a
+question can name one, and every claim can cite an experiment ID. The rule
+in every stage is that the AI finds and cites what the notes say, and
+people draw the conclusions.
 
-1. **Grounded assistants, no infrastructure** — *built.* `AGENTS.md` gives
-   any coding agent (Codex, Claude Code, Cowork, Gemini CLI) the lab's
-   rules the moment it's opened in the folder; `.agents/skills/lab/` teaches
-   the three recurring tasks (record, search-and-cite, synthesize); `eln.py
-   export` plus `docs/ai-briefing.md` do the same for plain ChatGPT by copy
-   and paste. No API keys — everything runs on subscriptions the lab has.
-   Pinned methodology skills from K-Dense add design, statistics, writing,
-   and citation guidance; see [`ai-agents.md`](ai-agents.md).
-2. **Lab-wide search** — `eln.py find` and the CSV index cover filtering
-   by every header field plus free text today. A semantic index only earns
-   its keep when keyword search starts missing things; revisit at a few
-   hundred notes.
-3. **Automated project synthesis** — the `eln-project-synthesis` skill
-   drafts *Current state*; a person reviews before it lands. Scheduling it
-   (nightly, per project) is a small step once the pilot has notes.
-4. **Instrument/data ingestion** — scripts that watch a drop folder,
-   checksum and rename files by experiment ID, and write the manifest.
-   Start with Western blots or microscopy.
+1. **Assistants that cite the notes** (built).
+   `AGENTS.md` gives any coding agent (Codex, Claude Code, Cowork, Gemini
+   CLI) the lab's rules when it is opened in the tools folder; it works on
+   the notebook named with `init --root`. `.agents/skills/lab/` teaches the
+   three recurring tasks: record an experiment, search and cite, and
+   summarize a project. `eln.py export` plus `docs/ai-briefing.md` do the
+   same for ChatGPT by copy and paste. The MCP server offers the
+   notebook's operations to AI programs that support it. None of this
+   needs an API key; it runs on subscriptions the lab has. Pinned
+   methodology skills from K-Dense add guidance on design, statistics,
+   writing, and citation; see [`ai-agents.md`](ai-agents.md).
+2. **Lab-wide search.** `eln.py find` and the CSV index filter by every
+   header field and by free text today. An index that searches by meaning
+   is worth adding only when keyword search starts missing things. Look
+   again at a few hundred notes.
+3. **Automated project synthesis.** The `eln-project-synthesis` skill
+   drafts *Current state*, and a person reviews it before it is saved.
+   Running it on a schedule (nightly, per project) can be added once the
+   pilot has notes.
+4. **Instrument/data ingestion.** Scripts that watch a drop folder, compute
+   checksums, name files by experiment ID, and record which file came
+   from which. Start with Western blots or microscopy.
 
-Deliberately in that order: AI can't fix inconsistent IDs or missing
-metadata, only compound them, so the conventions and the validator came
-first.
+The stages are in this order because an AI cannot repair inconsistent IDs
+or missing header fields, and it repeats the errors it reads. The
+conventions and Check therefore came first.
 
 ## What this repo builds now vs. later
 
-**Now (Phase 1):** conventions, the templates, `scripts/eln.py` (create,
-validate, index, find, report, export as Markdown or `.eln`, complete,
-verify, render), a local web page (`scripts/eln_web.py`) so nobody needs a
-terminal or a Markdown editor, the double-click launchers, a fictional
-sandbox to practice on, the agent instruction files and fifteen vendored
-skills, tests on three operating systems. Enough for a pilot to run on.
+**Now (Phase 1):** the conventions; the templates; `scripts/eln.py`
+(create, adopt an older folder, validate, index, find, report, export as
+one Markdown file, as a folder of plain files, or as `.eln`, complete,
+verify, render); `notebook.md` in each notebook; the browser page
+(`docs/app/`), which needs nothing installed in Chrome or Edge and can open
+a notebook view-only; the launcher page (`scripts/eln_web.py`) for Safari
+and Firefox; the double-click launchers; the MCP server; two fictional
+sandbox notebooks to practice on; the agent instruction files and fifteen
+vendored skills; tests on three operating systems. With these, nobody
+needs a terminal or a Markdown editor, and a pilot can run.
 
-**Later:** *Phase 2* — lab-wide rollout with the SOP once the pilot's kinks
-are out. *Phase 3* — the LabArchives bridge (needs institutional API
-access). *Phase 4* — ingestion and manifests; a semantic index if the vault
-outgrows `find`.
+**Later:** *Phase 2* is the lab-wide rollout with the SOP, once the
+problems found in the pilot are fixed. *Phase 3* is the LabArchives bridge
+(needs institutional API access). *Phase 4* is ingestion and the record of
+which file came from which, and a search-by-meaning index if the notebooks
+outgrow `find`.
 
 ## Non-negotiables vs. flexible choices
 
@@ -245,9 +282,9 @@ outgrows `find`.
 location, protocol, results, interpretation, status; files named with the
 ID; raw data untouched.
 
-**Flexible:** daily-note style, prose vs. bullets, how many images, which
-editor, which analysis tool (R/Python/Prism/whatever), personal task
+**Flexible:** daily-note style, prose or bullets, how many images, which
+editor, which analysis tool (R, Python, Prism, or another), personal task
 management.
 
-The system standardizes the interface between experiments, not how any one
-person thinks or writes.
+The system fixes how experiments are named, laid out, and described. How a
+person thinks and writes is left to them.

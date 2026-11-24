@@ -1,34 +1,37 @@
 # Experiments
 
-One subfolder per experiment, created by `launchers/New Experiment` or
-`python3 scripts/eln.py new experiment`, never by hand.
+In a notebook, `Experiments/` holds one subfolder per experiment. The tools
+create each one: **New experiment** on the page, `launchers/New Experiment`, or
+`python3 scripts/eln.py new experiment`. Never make one by hand. An older
+folder becomes an experiment with **Adopt older folders** (`eln.py adopt`).
 
 ```
-{ID}_{slug-of-title}/
-├── 1-notes/          {ID}.md, plus {ID}_P_{Protocol}_{date}.md snapshots the tool copies in;
+{ID}_{short-title}/
+├── 1-notes/          {ID}.md, plus the protocol copies {ID}_P_{Protocol}_{date}.md that the tool puts in;
 │                     after Mark complete: {ID}_snapshot_{date}.html and {ID}_MANIFEST.sha256
-├── 2-data_raw/       untouched instrument output, original filenames, never edited
+├── 2-data_raw/       instrument output, original filenames, never edited
 ├── 3-code/           {ID}_analysis.R and the like
 ├── 4-data_processed/ {ID}_quantification.csv and the like
 └── 5-figures/        {ID}_R_{what-it-shows}_{YYYYMMDD}.png is the results summary
 ```
 
-Each subfolder starts with a one-paragraph `README.md` saying what belongs
-in it (and keeping the folder from disappearing in git, which ignores empty
-directories). `README.md` is exempt from the filename rule everywhere.
+The tool puts a one-paragraph `README.md` in each subfolder that says what
+belongs in it. The file also keeps the subfolder from disappearing in git,
+which ignores empty folders. `README.md` is exempt from the filename rule
+everywhere.
 
-This folder is empty in the tools repository. It is where experiments go if
-you use the tools folder itself as your notebook; with `init --root` they go
-into your own notebook folder instead. To see what filled-in experiments look like,
-open the fictional notebooks in [`sandbox/`](../sandbox/README.md)
-(`launchers/Try the Sandbox`); `sandbox/alex/Experiments/ALXe0002_*` is the
-best example.
+Large raw data (microscopy, sequencing, mass spec) is not kept in
+`2-data_raw/`. It stays on institutional storage, and the note's
+`raw_data_path` says where. You can also add a line to the `README.md` in
+`2-data_raw/` that says where the data is.
 
-Large raw data (microscopy, sequencing, mass spec) does not live in
-`2-data_raw/` here; it stays on institutional storage and the note's
-`raw_data_path` says where. A short `README.md` in `2-data_raw/` pointing
-there is welcome.
+This copy of the folder, in the tools folder, is empty. Experiments are
+written here only if you use the tools folder itself as your notebook.
+Once you have named your notebook folder with `eln.py init --root`, they
+go into its `Experiments/` folder; see
+[`docs/getting-started.md`](../docs/getting-started.md) §0 and §9. For
+filled-in examples, open the fictional notebooks in
+[`sandbox/`](../sandbox/README.md) (`launchers/Try the Sandbox`);
+`sandbox/alex/Experiments/ALXe0002_*` is the best example.
 
-This folder may live somewhere other than inside this repo; see
-`--root` / `init` in [`docs/getting-started.md`](../docs/getting-started.md) §0 and §9.
 Rules: [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md).
